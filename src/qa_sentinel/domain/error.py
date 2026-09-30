@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
 from .enums import ErrorType, ErrorSeverity, ErrorOwner
+from .references import ErrorSource
 from .types import NonBlank
 
 class ErrorRecord(BaseModel):
@@ -14,7 +15,7 @@ class ErrorRecord(BaseModel):
     owner: ErrorOwner
     retryable: bool
     blocking: bool
-    source: NonBlank
+    source: ErrorSource
     message: NonBlank
     evidence_refs: tuple[NonBlank, ...] = ()
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

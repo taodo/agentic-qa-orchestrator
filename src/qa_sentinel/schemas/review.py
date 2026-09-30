@@ -1,11 +1,12 @@
 from pydantic import BaseModel, ConfigDict
-from qa_sentinel.domain.enums import ReviewDecision, ReviewIssueSeverity
+from qa_sentinel.domain.enums import ReviewDecision, ReviewIssueSeverity, CoverageStatus
 from qa_sentinel.domain.types import NonBlank
 
 
 class RequirementCoverage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     acceptance_criterion_id: NonBlank
+    status: CoverageStatus
     summary: NonBlank
     evidence_refs: tuple[NonBlank, ...]
 

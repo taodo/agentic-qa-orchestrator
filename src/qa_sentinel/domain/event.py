@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from .references import ActorRef, CorrelationRef
 from .types import NonBlank
 
 class Event(BaseModel):
@@ -9,6 +10,6 @@ class Event(BaseModel):
     task_id: UUID
     event_type: NonBlank
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    actor: NonBlank
-    correlation: UUID
+    actor: ActorRef
+    correlation: CorrelationRef
     payload: dict[str, JsonValue]

@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID, uuid4
 from pydantic import BaseModel, ConfigDict, Field
-from .enums import TestRunStatus
+from .enums import TestExecutionStatus, TestOutcome
 from .types import NonBlank, Count
 
 class TestRun(BaseModel):
@@ -9,7 +9,8 @@ class TestRun(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     task_id: UUID
     implementation_artifact_id: UUID
-    status: TestRunStatus
+    execution_status: TestExecutionStatus
+    outcome: TestOutcome
     environment: NonBlank
     started_at: datetime
     finished_at: datetime
