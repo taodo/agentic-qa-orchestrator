@@ -1,7 +1,7 @@
 """SQLAlchemy storage only; no domain or workflow behavior."""
 from datetime import datetime
 from typing import Any
-from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint
+from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from .types import ISODateTime
 
@@ -175,7 +175,9 @@ class RequirementRow(Base):
 
 class AcceptanceCriterionRow(Base):
     __tablename__ = "acceptance_criteria"
-    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    __table_args__ = (UniqueConstraint("requirement_id", "id", name="uq_acceptance_requirement_id"),)
+    persistence_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    id: Mapped[str] = mapped_column(Text, nullable=False)
     requirement_id: Mapped[str] = mapped_column(String(36), ForeignKey("requirements.id", deferrable=True, initially="DEFERRED"), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     verification_method: Mapped[str] = mapped_column(Text, nullable=False)

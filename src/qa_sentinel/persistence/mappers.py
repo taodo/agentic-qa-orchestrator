@@ -400,6 +400,7 @@ def acceptance_criterion_to_orm(record: AcceptanceCriterionRecord) -> Acceptance
     record = AcceptanceCriterionRecord.model_validate(record.model_dump())
     data = record.model_dump(mode="json")
     return AcceptanceCriterionRow(
+        persistence_id=data["persistence_id"],
         id=data["id"],
         requirement_id=data["requirement_id"],
         text=data["text"],
@@ -409,6 +410,7 @@ def acceptance_criterion_to_orm(record: AcceptanceCriterionRecord) -> Acceptance
 
 def acceptance_criterion_from_orm(row: AcceptanceCriterionRow) -> AcceptanceCriterionRecord:
     return AcceptanceCriterionRecord.model_validate({
+        "persistence_id": row.persistence_id,
         "id": row.id,
         "requirement_id": row.requirement_id,
         "text": row.text,

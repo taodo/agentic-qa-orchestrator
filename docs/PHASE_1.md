@@ -1,10 +1,16 @@
-# Task 1 and Task 1.1 scope and assumptions
+# Phase 1 bootstrap status and assumptions
 
-Implemented: package skeleton, core enums, domain contracts, agent-output
-schemas, structural validation, and unit tests. Task 1.1 hardens these contracts.
-SQLAlchemy, Alembic, databases, runtime orchestration, gates, execution tools,
-CLI, model calls, and prompts remain outside scope. Empty packages reserve the
-specified structure only.
+Task 1 implements the package skeleton, enums, Pydantic domain/agent-output
+contracts, validation tests, and initial documentation. Task 1.1 hardens lifecycle,
+structured evidence, routing/coverage fields, and record references.
+
+Task 2 implements SQLite persistence with SQLAlchemy ORM, explicit mappers,
+repositories, Alembic revision 0001, and UnitOfWork. Task 2.1 repairs the invalid
+TaskRepository list method and acceptance criterion identity, adds persistence
+unit/integration tests, and verifies migrations and transactions. See DATABASE.md.
+
+Runtime orchestration, gates, retries, escalation, agents, model calls, execution
+services, CLI, and UI remain unimplemented. No Task 3 work is included.
 
 Contract hardening:
 
@@ -47,7 +53,8 @@ Retained assumptions:
 - Historical records, structured refs, and agent outputs are frozen; Task remains
   a mutable current snapshot. Frozen models do not deeply freeze nested JSON
   dictionaries/lists, and model_copy can construct a new record. Callers must
-  not mutate accepted content. Database immutability remains deferred.
+  not mutate accepted content. Database triggers are not implemented; append-only
+  repository APIs enforce the persistence boundary.
 - Default timestamps are UTC; supplied datetimes are accepted as given.
   Task timestamps are data only and are not updated automatically.
 - Secret handling, authorization, retry bounds, evidence-driven escalation,
@@ -56,6 +63,17 @@ Retained assumptions:
 
 Task 1.1 intentionally rejects former string-only steps, changed files, recorded
 commands, investigation actions, actor/source refs, and the removed TestRun.status.
-No persistence or runtime migration is introduced.
+Task 2 persists the hardened contracts; no runtime contract migration is introduced.
 
-Recommended next step: BOOTSTRAP TASK 2 — Persistence foundation.
+Persistence assumptions for Tasks 2/2.1:
+
+- UUIDs use portable string storage, enums retain canonical strings, JSON stores
+  structured payloads, and ISO datetime text preserves offsets/microseconds.
+- Foreign keys are deferred until commit to support cyclic references.
+- Acceptance criterion persistence_id is a UUID; logical id remains a string
+  unique within its requirement. Agent-facing IDs are unchanged.
+- Explicit commit is required; context exit rolls back uncommitted operations.
+- Revision 0001 is unreleased and repaired in place. Existing bootstrap databases
+  at that revision must be recreated; this is not a deployed-schema upgrade.
+
+Recommended next step: BOOTSTRAP TASK 3 — State Machine + Gates.

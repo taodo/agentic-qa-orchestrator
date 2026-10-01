@@ -37,10 +37,12 @@ def upgrade():
         sa.Column('text', sa.Text(), nullable=False),
     )
     op.create_table("acceptance_criteria",
-        sa.Column('id', sa.Text(), primary_key=True),
+        sa.Column('persistence_id', sa.String(36), primary_key=True),
+        sa.Column('id', sa.Text(), nullable=False),
         sa.Column('requirement_id', sa.String(36), sa.ForeignKey("requirements.id", deferrable=True, initially="DEFERRED"), nullable=False),
         sa.Column('text', sa.Text(), nullable=False),
         sa.Column('verification_method', sa.Text(), nullable=False),
+        sa.UniqueConstraint('requirement_id', 'id', name='uq_acceptance_requirement_id'),
     )
     op.create_table("invocations",
         sa.Column('id', sa.String(36), primary_key=True),

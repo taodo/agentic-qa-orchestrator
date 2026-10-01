@@ -31,12 +31,6 @@ class TaskRepository:
         row = self.session.get(models.TaskRow, str(record_id))
         return None if row is None else mappers.task_from_orm(row)
 
-    def list_by_task(self, task_id: UUID) -> list[Task]:
-        rows = self.session.scalars(select(models.TaskRow).where(
-            models.TaskRow.task_id == str(task_id)
-        ).order_by(models.TaskRow.id))
-        return [mappers.task_from_orm(row) for row in rows]
-
     def save(self, record: Task) -> None:
         row = self.session.get(models.TaskRow, str(record.id))
         if row is None:
@@ -139,8 +133,15 @@ class AcceptanceCriterionRepository:
         self.session.add(mappers.acceptance_criterion_to_orm(record))
         self.session.flush()
 
-    def get(self, record_id: str) -> AcceptanceCriterionRecord | None:
-        row = self.session.get(models.AcceptanceCriterionRow, str(record_id))
+    def get(self, persistence_id: UUID) -> AcceptanceCriterionRecord | None:
+        row = self.session.get(models.AcceptanceCriterionRow, str(persistence_id))
+        return None if row is None else mappers.acceptance_criterion_from_orm(row)
+
+    def get_by_logical_id(self, requirement_id: UUID, criterion_id: str) -> AcceptanceCriterionRecord | None:
+        row = self.session.scalar(select(models.AcceptanceCriterionRow).where(
+            models.AcceptanceCriterionRow.requirement_id == str(requirement_id),
+            models.AcceptanceCriterionRow.id == criterion_id,
+        ))
         return None if row is None else mappers.acceptance_criterion_from_orm(row)
 
     def list_by_requirement(self, requirement_id: UUID) -> list[AcceptanceCriterionRecord]:

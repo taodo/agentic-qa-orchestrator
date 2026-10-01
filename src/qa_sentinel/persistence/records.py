@@ -14,6 +14,7 @@ class Requirement(BaseModel):
 
 class AcceptanceCriterionRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+    persistence_id: UUID = Field(default_factory=uuid4)
     id: NonBlank
     requirement_id: UUID
     text: NonBlank
