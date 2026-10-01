@@ -1,4 +1,4 @@
-# Agent runtime — Bootstrap Tasks 5–7
+# Agent runtime — Bootstrap Tasks 5–8
 
 QA Sentinel coordinates one persisted task end to end with scenario-configured fake
 outputs. Agents receive no database/session handle or mutable Task. WorkflowRunner
@@ -18,7 +18,7 @@ separately; it is neither an LLM agent nor a command runner.
 | RESEARCHING | Researcher | ResearchOutput / RESEARCH artifact |
 | PLANNING | Planner | PlannerOutput / PLAN artifact |
 | IMPLEMENTING | Implementer | ImplementationOutput / IMPLEMENTATION artifact |
-| TESTING | Fake test-result provider | TestRun |
+| TESTING | Deterministic real or fake test-result provider | TestRun |
 | ANALYZING | Test Analyzer | TestAnalysisOutput / TEST_ANALYSIS artifact |
 | INVESTIGATING | Investigator | InvestigationOutput / INVESTIGATION artifact |
 | REVIEWING | Reviewer | ReviewOutput / REVIEW artifact |
@@ -170,7 +170,7 @@ and artifact linkage, bounded contexts, gate enforcement, retries, schema exhaus
 blocked stops, circuit breaking, and defect budgets. Injected failures verify atomic
 completion and counter rollback; pending outputs are reused after transition failure.
 
-Agent reports remain fake. Task 6 adds PytestTestResultProvider and TestExecutionService
+Task 5 agent reports are synthetic. Task 6 adds PytestTestResultProvider and TestExecutionService
 for controlled real pytest on prepared workspace files, while retaining the fake provider.
 Both satisfy execution/base.py's TestResultProvider boundary. Real results are already
 persisted by the service and verified by the runner; fake results are persisted by the
@@ -180,7 +180,41 @@ See EXECUTION.md for argv/path/environment policy, timeout cleanup, durable atte
 selection, start/completion transactions, and the unchanged TESTING stop limitation.
 No agent modifies calculator source. Task 7 adds a provider-neutral Responses API
 adapter, bounded repository-owned prompts, real Researcher/Planner, and explicit
-CompositeAgentRuntime routing. Later roles remain fake. See MODELS.md for no-tools
+CompositeAgentRuntime routing. Task 8 extends real reasoning to later roles while
+Implementer remains fake. See MODELS.md for no-tools
 requests, provenance, sanitized errors, stateless context, deterministic schema
-correction, disabled SDK retries, and offline tests. Playwright, API, CLI, UI,
-workers, and Task 8 remain unimplemented.
+correction, disabled SDK retries, and offline tests. Task 8 extends real reasoning
+to Test Analyzer, Investigator, and Reviewer. Implementer remains fake. Playwright,
+API, CLI, UI, workers, and Task 9 remain unimplemented.
+
+## Task 8 failure reasoning and explicit escalation
+
+Test Analyzer classifies observed failures and requests investigation; its prompt
+does not perform RCA or recommend edits. Investigator performs structured RCA
+and recommends one enum action without executing repair. Reviewer evaluates every
+required criterion against supplied evidence; only ReviewGate/WorkflowEngine can
+approve progression to DONE. Model requests stay tool-free and bounded.
+
+The routed Investigator runtime exposes primary/escalated model configuration.
+WorkflowRunner feeds primary results into Task 4 ReliabilityService, preserving
+thresholds and durable budget. A MODEL_ESCALATED reservation correlates primary
+invocation/artifact and failing TestRun. The next step builds an explicit escalated
+context and invokes AgentExecutor again, with independent lifecycle and artifact.
+The primary artifact remains history; the successful escalated result is the sole
+routing candidate. Gate failure or provider failure never selects primary as fallback.
+Retries use existing domains and remain on the reserved route. STARTED reconciliation,
+transaction rollback, circuit checks, defect bounds, and max_steps remain unchanged.
+
+No-trigger primary results use normal InvestigationGate routing. A later primary
+with required escalation and exhausted budget blocks. A completed escalated result
+is never recursively escalated. Reconstruction uses committed events and attempts,
+not mutable provider memory; a reopened runner uses the same reservation.
+
+Integration tests prove real pytest FAIL -> real classification -> real RCA -> fake
+Implementer -> real pytest PASS -> real Reviewer -> DONE through existing gates.
+The fixture harness independently switches prepared workspace state before retest;
+fake Implementer only returns synthetic structured evidence. Request-changes creates
+new implementation/test/review attempts. HUMAN_ACTION blocks at INVESTIGATING.
+Reviewer APPROVE with incomplete coverage fails ReviewGate. Analyzer refusal or
+exhausted recovery still cannot take an ANALYZING -> BLOCKED edge; it records errors
+and raises RunnerStoppedError while preserving ANALYZING.

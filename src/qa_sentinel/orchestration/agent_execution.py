@@ -33,11 +33,13 @@ class AgentExecutor:
         self.runtime = runtime
 
     @staticmethod
-    def _event(uow, invocation, event_type, artifact=None, metadata=None, schema_correction_planned=False):
+    def _event(uow, invocation, event_type, artifact=None, metadata=None, schema_correction_planned=False,
+               escalation_decision_id=None):
         uow.history.append_event(Event(task_id=invocation.task_id, event_type=event_type,
             actor=dict(type="ORCHESTRATOR", id="qa-sentinel"),
             correlation=dict(invocation_id=invocation.id, artifact_id=None if artifact is None else artifact.id),
             payload=dict(agent=invocation.agent.value, status=invocation.status.value,
+                **({"escalation_decision_id": str(escalation_decision_id)} if escalation_decision_id else {}),
                 **({"model_metadata": metadata.model_dump(mode="json")} if metadata is not None else {}),
                 **({"schema_correction_planned": True} if schema_correction_planned else {}))))
 
@@ -47,7 +49,7 @@ class AgentExecutor:
             raise ValueError("Execution requires the role's typed context")
         now = datetime.now(timezone.utc)
         describe = getattr(self.runtime, "describe", None)
-        model, effort = ("fake", "none") if describe is None else describe(agent)
+        model, effort = ("fake", "none") if describe is None else describe(agent, context)
         invocation = AgentInvocation(task_id=context.task_id, agent=agent, model=model,
             reasoning_effort=effort, attempt=context.attempt, status="STARTED", started_at=now,
             input_context_refs=context.evidence_refs)
@@ -71,7 +73,8 @@ class AgentExecutor:
             if agent == AgentName.REVIEWER:
                 task.review_cycle += 1
             uow.tasks.save(task)
-            self._event(uow, invocation, "AGENT_STARTED")
+            escalation_id = getattr(context, "escalation_decision_id", None)
+            self._event(uow, invocation, "AGENT_STARTED", escalation_decision_id=escalation_id)
             uow.commit()
         try:
             output = self.runtime.run(agent, context)
@@ -106,7 +109,8 @@ class AgentExecutor:
         with UnitOfWork(self.session_factory) as uow:
             uow.artifacts.add(artifact)
             uow.invocations.save(completed)
-            self._event(uow, completed, "AGENT_COMPLETED", artifact, metadata)
+            self._event(uow, completed, "AGENT_COMPLETED", artifact, metadata,
+                        escalation_decision_id=escalation_id)
             uow.commit()
         return AgentExecution(invocation=completed, output=output, artifact=artifact)
 

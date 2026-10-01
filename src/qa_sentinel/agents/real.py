@@ -1,5 +1,5 @@
-"""Reasoning-only real Researcher/Planner; stateless between invocations."""
-from .base import AgentContext, OUTPUT_TYPES
+"""Reasoning-only real roles; Implementer remains unsupported."""
+from .base import AgentContext, OUTPUT_TYPES, InvestigationContext
 from .prompts import build_request
 from qa_sentinel.models.base import ModelAdapter, ModelError, ProviderErrorCategory
 from qa_sentinel.models.config import RoleModelConfig
@@ -11,12 +11,22 @@ class RealAgentRuntime:
         self.adapter = adapter
         self.config = config or RoleModelConfig()
 
-    def describe(self, agent):
-        settings = self.config.for_role(agent)
+    def _settings(self, agent, context=None):
+        escalated = type(context) is InvestigationContext and context.escalation_decision_id is not None
+        settings = self.config.for_role(agent, escalated=escalated)
+        if escalated and settings.model != context.escalation_target_model:
+            raise ModelError(ProviderErrorCategory.INVALID_REQUEST)
+        return settings
+
+    def investigator_models(self):
+        return self.config.investigator.model, self.config.investigator_escalated.model
+
+    def describe(self, agent, context=None):
+        settings = self._settings(agent, context)
         return settings.model, settings.reasoning_effort or "none"
 
     def run(self, agent_name, context: AgentContext):
-        settings = self.config.for_role(agent_name)
+        settings = self._settings(agent_name, context)
         request = build_request(agent_name, context, settings)
         try:
             response = self.adapter.generate(request, OUTPUT_TYPES[agent_name])

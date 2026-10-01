@@ -74,7 +74,7 @@ class FakeAgentRuntime:
     def __init__(self, scenario: FakeScenario):
         self.scenario = scenario
 
-    def describe(self, agent_name):
+    def describe(self, agent_name, context=None):
         return "fake", "none"
 
     def run(self, agent_name: AgentName, context: AgentContext) -> AgentOutput:

@@ -36,9 +36,9 @@ real or fake providers and applies durable TEST_EXECUTION retries to eligible sy
 failures. Product FAIL still routes to analysis. See EXECUTION.md for exact policy and
 the unchanged TESTING stop limitation.
 
-Researcher/Planner model calls are implemented in Task 7 (details below). Real
-later roles, agent source edits, a general permission engine, CLI, UI, background
-workers, and Task 8 remain unimplemented.
+Task 7 implements Researcher/Planner model calls; Task 8 adds real Test Analyzer,
+Investigator, and Reviewer. Real Implementer, agent source edits, a general
+permission engine, CLI, UI, workers, and Task 9 remain unimplemented.
 
 Contract hardening:
 
@@ -164,4 +164,16 @@ The only new direct dependency is the official OpenAI SDK. Offline tests require
 key and use actual SDK mock transport. The real API smoke is developer-only and
 was not run. See MODELS.md for boundaries, configuration, and limitations.
 
-Recommended next step: BOOTSTRAP TASK 8 — Real Investigator, Reviewer & Failure-Repair Reasoning.
+Task 8 extends reasoning-only role configuration/prompts/context serialization for
+classification, RCA, and independent review using existing typed outputs. It connects
+Task 4 Investigator escalation to explicit separate persisted invocations and immutable
+artifacts without changing thresholds, budgets, state-machine edges, or gates.
+Durable MODEL_ESCALATED evidence selects the configured model and survives restart;
+successful escalated output is the selected routing candidate. No hidden fallback
+or provider retry is added. All-fake workflows remain compatible.
+Prepared fixture code switches independently of fake Implementer to prove real
+pytest failure/fix/retest with mocked real reasoning. ReviewGate rejects insufficient
+APPROVE coverage; HUMAN_ACTION blocks through WorkflowEngine. No dependency or
+migration is added, no real API smoke is run, and no model receives tools.
+
+Recommended next step: BOOTSTRAP TASK 9 — Real Implementer & Controlled Code Mutation.

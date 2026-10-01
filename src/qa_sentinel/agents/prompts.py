@@ -1,6 +1,6 @@
 """Repository-owned deterministic prompts. Context text is untrusted data."""
 import json
-from .base import ResearchContext, PlanContext
+from .base import ResearchContext, PlanContext, AnalysisContext, InvestigationContext, ReviewContext
 from qa_sentinel.models.base import ModelRequest, ModelSettings, ModelError, ProviderErrorCategory as C
 from qa_sentinel.domain.enums import AgentName
 
@@ -20,6 +20,67 @@ PLANNER = ("ROLE: Planner. Use only the requirement and accepted research suppli
 SCHEMA_CORRECTION = ("A prior invocation failed OUTPUT_SCHEMA_INVALID. Regenerate the structured output "
     "from the original context: include every required field, use the declared enums and types, "
     "omit extra fields, and satisfy nonblank/range constraints. No malformed prior content is supplied.")
+TEST_ANALYZER = ("ROLE: Test Analyzer. Classify observed failures, not root-cause analysis (RCA). "
+    "Group related failures using LIKELY_PRODUCT_DEFECT, LIKELY_TEST_DEFECT, "
+    "LIKELY_ENVIRONMENT_ISSUE, LIKELY_DATA_ISSUE, or UNKNOWN. Summarize observed behavior, "
+    "reference supplied evidence, give confidence, and state requires_investigation. "
+    "Do not perform RCA or recommend code changes. Deterministic TestRun evidence is authoritative. " + BOUNDARY)
+INVESTIGATOR = ("ROLE: Investigator. Perform structured root-cause analysis (RCA) from supplied evidence. "
+    "Return InvestigationOutput with ROOT_CAUSE_IDENTIFIED only when justified, otherwise "
+    "INSUFFICIENT_EVIDENCE or ESCALATION_RECOMMENDED. Preserve uncertainty, cite supplied evidence, "
+    "give confidence, alternative hypotheses, and additional evidence needed. Choose one "
+    "recommended_action: CODE_FIX, TEST_FIX, MORE_RESEARCH, or HUMAN_ACTION. "
+    "Do not execute repair, edit files, or execute commands. Escalation is chosen by deterministic "
+    "policy, never by your status or prose alone. " + BOUNDARY)
+REVIEWER = ("ROLE: Reviewer. Independently evaluate requirement coverage against every required "
+    "acceptance criterion, accepted plan, implementation, and deterministic test evidence. "
+    "Do not trust Implementer self-report without evidence. Return ReviewOutput with APPROVE, "
+    "REQUEST_CHANGES, NEEDS_EVIDENCE, or BLOCKED; give coverage evidence, issues, test gaps, "
+    "implementation risks, and unverified assumptions. Do not skip required acceptance criteria. "
+    "APPROVE is a recommendation; ReviewGate controls approval and the orchestrator controls DONE. "
+    + BOUNDARY.replace("approve implementation, ", ""))
+
+
+def _test_evidence(run):
+    return dict(test_run_ref=str(run.id), execution_status=run.execution_status.value,
+        outcome=run.outcome.value, passed_count=run.passed_count, failed_count=run.failed_count,
+        skipped_count=run.skipped_count,
+        report_artifact_ref=None if run.report_artifact_id is None else str(run.report_artifact_id))
+
+
+def _implementation(value):
+    # Command records, stdout/stderr, environment, and provider metadata are intentionally absent.
+    return dict(implementation_status=value.implementation_status.value,
+        plan_steps=[dict(step_id=s.step_id, status=s.status.value) for s in value.plan_steps],
+        changed_files=[dict(path=f.path, change_type=f.change_type.value, reason=f.reason) for f in value.changed_files],
+        tests_added_or_modified=list(value.tests_added_or_modified), assumptions=list(value.assumptions),
+        known_issues=list(value.known_issues),
+        deviations=[dict(description=d.description, requires_replan=d.requires_replan) for d in value.deviations])
+
+
+def _analysis(value):
+    return dict(overall_result=value.overall_result.value, failure_groups=[dict(tests=list(g.tests),
+        classification=g.classification.value, summary=g.summary, evidence=list(g.evidence),
+        confidence=g.confidence, requires_investigation=g.requires_investigation) for g in value.failure_groups])
+
+
+def _investigation(value):
+    return dict(status=value.status.value, root_cause=value.root_cause, evidence=list(value.evidence),
+        confidence=value.confidence, recommended_action=dict(type=value.recommended_action.type.value,
+        description=value.recommended_action.description), alternative_hypotheses=list(value.alternative_hypotheses),
+        additional_evidence_needed=list(value.additional_evidence_needed))
+
+
+def _plan(value):
+    return dict(decision=value.decision.value, summary=value.summary, assumptions=list(value.assumptions),
+        implementation_steps=[dict(id=s.id, description=s.description, files=list(s.files),
+        depends_on=list(s.depends_on)) for s in value.implementation_steps],
+        files_to_create=list(value.files_to_create), files_to_modify=list(value.files_to_modify),
+        acceptance_criteria=[dict(id=a.id, description=a.description, verification=a.verification)
+                             for a in value.acceptance_criteria],
+        test_strategy=[dict(description=s.description, acceptance_criteria_refs=list(s.acceptance_criteria_refs))
+                       for s in value.test_strategy], risks=list(value.risks),
+        rollback_considerations=list(value.rollback_considerations), open_questions=list(value.open_questions))
 
 
 def build_request(agent, context, settings: ModelSettings) -> ModelRequest:
@@ -38,6 +99,26 @@ def build_request(agent, context, settings: ModelSettings) -> ModelRequest:
         data = dict(requirement=context.requirement, accepted_research=research,
                     research_artifact_ref=str(context.research_artifact_id))
         instructions = PLANNER
+    elif agent == AgentName.TEST_ANALYZER and type(context) is AnalysisContext:
+        data = dict(test_evidence=_test_evidence(context.test_run), implementation=_implementation(context.implementation),
+            implementation_artifact_ref=str(context.implementation_artifact_id), evidence_refs=list(context.evidence_refs))
+        instructions = TEST_ANALYZER
+    elif agent == AgentName.INVESTIGATOR and type(context) is InvestigationContext:
+        data = dict(test_evidence=_test_evidence(context.test_run), implementation=_implementation(context.implementation),
+            implementation_artifact_ref=str(context.implementation_artifact_id), analysis=_analysis(context.analysis),
+            analysis_artifact_ref=str(context.analysis_artifact_id), evidence_refs=list(context.evidence_refs),
+            defect_cycle=context.defect_cycle, evidence_conflict=context.evidence_conflict)
+        if context.escalation_decision_id is not None:
+            data["escalation"] = dict(primary_investigation=_investigation(context.primary_investigation),
+                primary_artifact_ref=str(context.primary_investigation_artifact_id),
+                decision_ref=str(context.escalation_decision_id), reasons=list(context.escalation_reasons))
+        instructions = INVESTIGATOR
+    elif agent == AgentName.REVIEWER and type(context) is ReviewContext:
+        data = dict(requirement=context.requirement, accepted_plan=_plan(context.plan),
+            plan_artifact_ref=str(context.plan_artifact_id), implementation=_implementation(context.implementation),
+            implementation_artifact_ref=str(context.implementation_artifact_id),
+            test_evidence=_test_evidence(context.test_run), evidence_refs=list(context.evidence_refs))
+        instructions = REVIEWER
     else:
         raise ModelError(C.UNSUPPORTED_ROLE)
     if context.schema_correction:

@@ -1,8 +1,9 @@
-# Real model boundary — Bootstrap Task 7
+# Real model boundary — Bootstrap Tasks 7–8
 
 Agents reason over supplied context. Model adapters do not receive persistence,
 workflow state, commands, tools, or mutable Task objects. Deterministic gates and
-WorkflowEngine remain authoritative. Only Researcher and Planner become real.
+WorkflowEngine remain authoritative. Researcher, Planner, Test Analyzer,
+Investigator, and Reviewer are real reasoning roles. Implementer remains fake.
 
 ## Contracts and provider boundary
 
@@ -14,7 +15,8 @@ requests, exception messages, refusal text, and hidden reasoning are not persist
 
 The official SDK's `client.responses.parse(text_format=...)` requests native strict
 structured output. Both adapter and runtime revalidate the existing ResearchOutput
-or PlannerOutput contract, and AgentExecutor validates again before persistence.
+or PlannerOutput contract in Task 7, extended to TestAnalysisOutput,
+InvestigationOutput, and ReviewOutput in Task 8. AgentExecutor validates again before persistence.
 No free-form prose extraction or hidden repair call is implemented. Refusals,
 incomplete results, and schema errors cannot become accepted artifacts.
 
@@ -25,12 +27,16 @@ packages are installed normally. No agent, workflow, prompt, or retry framework 
 
 ## Role configuration and routing
 
-RoleModelConfig contains only two roles:
+RoleModelConfig contains five real roles and an explicit Investigator escalation setting:
 
 | Role | Default model | Reasoning effort |
 | --- | --- | --- |
 | RESEARCHER | gpt-5.6-luna | medium |
 | PLANNER | gpt-5.6-sol | high |
+| TEST_ANALYZER | gpt-5.6-luna | medium |
+| INVESTIGATOR primary | gpt-5.6-luna | high |
+| INVESTIGATOR escalated | gpt-5.6-sol | high |
+| REVIEWER | gpt-5.6-sol | high |
 
 These defaults were checked against official
 [Luna](https://developers.openai.com/api/docs/models/gpt-5.6-luna) and
@@ -53,12 +59,12 @@ roles to runtimes without modifying WorkflowRunner's role routing:
 real = RealAgentRuntime(OpenAIModelAdapter(), RoleModelConfig())
 fake = FakeAgentRuntime(scenario)
 runtime = CompositeAgentRuntime({
-    role: real if role in {AgentName.RESEARCHER, AgentName.PLANNER} else fake
+    role: fake if role == AgentName.IMPLEMENTER else real
     for role in AgentName
 })
 ```
 
-Implementer, Test Analyzer, Investigator, and Reviewer remain fake. Model calls
+Implementer remains fake and explicitly unsupported by RealAgentRuntime. Model calls
 never modify prepared workspace code; Task 6's deterministic pytest execution is
 configured independently. AgentRuntime.run retains fake typed outputs and also
 accepts a provider-neutral ModelResponse envelope for real invocation metadata.
@@ -79,6 +85,23 @@ Researcher. Callers can explicitly construct ResearchContext with bounded eviden
 Planner receives requirement, selected accepted ResearchOutput fields, and its
 artifact reference. No task snapshot, database history, full logs, environment,
 or configuration credentials are included. References are not model tools.
+
+Task 8 adds selected typed serializers. Test Analyzer receives conclusive failing
+TestRun counts/status/outcome/report reference, accepted implementation fields,
+and relevant evidence references. It classifies related failures using the existing
+taxonomy; its prompt forbids RCA and code-change recommendations. Investigator
+receives that evidence plus accepted analysis, artifact references, defect cycle,
+and a structured evidence-conflict signal. It performs RCA and reports uncertainty,
+alternatives, and one action enum; it does not execute repair. Reviewer receives
+requirement, accepted plan including required ACs, accepted implementation, and
+latest conclusive deterministic test evidence. It evaluates coverage independently;
+APPROVE remains a recommendation to ReviewGate, never DONE.
+
+Implementation command records, test environment labels, timestamps, provider
+metadata, and stdout/stderr are excluded from these prompts. Counts and references
+do not automatically expose underlying logs or source. Models must report insufficient
+evidence when supplied context cannot justify a diagnosis. Review context uses its
+core typed evidence; optional analysis/investigation is not needed in this slice.
 
 Serialized input is limited to 60000 characters and instructions to 8192. Oversize
 input raises CONTEXT_LIMIT without a provider request. Data is not silently
@@ -141,6 +164,50 @@ and stops under the unchanged Task 4 rule. Fake scenarios retain their existing
 explicit changed-input semantics. Merely receiving another response is never
 claimed as changed input.
 
+## Explicit Investigator escalation — Task 8
+
+The routed runtime exposes configured primary/escalated Investigator model IDs
+through a provider-neutral capability. WorkflowRunner aligns ReliabilityConfig's
+model labels with those IDs while preserving all configured thresholds and budgets.
+All-fake runtimes retain their behavior without activating model escalation.
+
+After a primary Investigator completes, WorkflowRunner supplies confidence,
+persisted role attempt, alternative-hypothesis count, authoritative defect cycle,
+and an explicitly supplied evidence-conflict boolean to the existing
+ReliabilityService.investigator_escalation operation. No threshold is duplicated.
+The model's ESCALATION_RECOMMENDED status alone is not an escalation trigger.
+
+If permitted, the service commits its existing decision and MODEL_ESCALATED event,
+correlated with the primary invocation/artifact and failing TestRun. The next runner
+step reconstructs an escalated context from that reservation: original bounded
+evidence, primary InvestigationOutput/reference, decision/reference, and reason codes.
+Evidence conflict is reconstructed from durable reason codes. A separate
+AgentExecutor invocation uses the configured escalated model, with its own attempt,
+timestamps, usage, and immutable Investigation artifact. Started/completed lifecycle
+events link escalation_decision_id. No adapter retry, hidden fallback, recursive
+prompt, or hidden repair call occurs.
+
+The **selected routing candidate** is the primary result when no escalation is
+reserved, otherwise the successful escalated result. Only this candidate passes
+through InvestigationGate and enum routing. Both artifacts remain queryable;
+neither is overwritten. Selected CODE_FIX/TEST_FIX routes to fake Implementer only
+with the unchanged gate and defect-cycle checks. MORE_RESEARCH routes to RESEARCHING;
+HUMAN_ACTION blocks with resume_state=INVESTIGATING.
+
+Reservations survive runner recreation/database reopening and consume the Task 4
+budget. A completed escalated candidate is not recursively escalated. Later primary
+investigations with an active trigger and exhausted budget stop/block; no-trigger
+results may still route under the existing gate. Transient/schema failure on an
+escalated call uses existing retry domains and stays on the escalated route. It never
+falls back to primary. Unresolved STARTED calls require explicit reconciliation.
+
+Configuration is trusted and must remain consistent across resume; changing the
+target model against a committed reservation is rejected explicitly. The optional
+WorkflowRunner.investigation_evidence_conflict is a boolean supplied by trusted
+context selection for the single-task run, never inferred from model prose.
+Primary no-escalation decisions are reused after interrupted routing without
+reserving another escalation. All retry, circuit, defect-cycle, and step bounds remain.
+
 ## Persistence and provenance
 
 AgentExecutor's existing lifecycle is retained: commit STARTED, run without a DB
@@ -166,7 +233,14 @@ SDK dependency), deterministic responses, and synthetic credentials. Tests inspe
 strict schemas, no-tools/stateless request options, typed errors, sanitized persistence,
 retry budgets, schema correction, transaction rollback, and reopened provenance.
 The hybrid integration executes prepared calculator tests through real local pytest
-and reaches DONE using existing gates. No real API calls or API costs are involved.
+and reaches DONE using existing gates. Task 8 also verifies FAIL -> real classification
+-> real RCA -> fake Implementer -> real pytest PASS -> real Reviewer -> gate-controlled
+DONE. A dedicated test harness switches the prepared calculator from failing integer
+division to passing division before retest. This is synthetic fixture control outside
+all agents; fake Implementer does not write source. Tests cover separate escalation
+invocations, durable budgets, immutable artifacts, insufficient review coverage,
+request-changes retesting, human action, refusals, malformed output, retry exhaustion,
+and reservation/completion rollback. No real API calls or API costs are involved.
 
 Install the project and test dependencies, then run `python -m pytest` as usual.
 The optional script is outside pytest discovery:
@@ -182,5 +256,6 @@ with low effort, 2048 output tokens, and a 60-second HTTP timeout, prints only
 high-level success/usage or a sanitized failure code, and persists nothing.
 This optional paid smoke is not part of CI and was not run during Task 7.
 
-Remaining scope: real later roles, tools, model fallback/escalation activation,
-provider memory, workers, UI, rate-limit scheduling, and Task 8 are not implemented.
+Remaining scope: real Implementer, source mutation by agents, tools, provider memory,
+workers, UI, rate-limit scheduling, and Task 9 are not implemented. Task 8 adds no
+dependency and does not run the optional paid smoke.

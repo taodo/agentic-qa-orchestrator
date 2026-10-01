@@ -23,6 +23,8 @@ from .gates import ResearchGate, PlanGate, ImplementationGate, TestGate, Analysi
 from .reliability import ReliabilityService
 from .reliability_policy import (
     ReliabilityConfig, RetryDomain, RecoveryAction, BlockerReason, FailureDisposition, can_start_another_defect_cycle,
+    InvestigatorContext as EscalationContext,
+    evaluate_investigator_escalation,
 )
 
 RETRY_DOMAINS = {
@@ -54,13 +56,23 @@ def review_target(output):
 
 class WorkflowRunner:
     def __init__(self, session_factory, runtime, test_provider, *, max_steps: int = 50,
-                 reliability_config: ReliabilityConfig | None = None):
+                 reliability_config: ReliabilityConfig | None = None,
+                 investigation_evidence_conflict: bool = False):
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
         self.session_factory = session_factory
         self.executor = AgentExecutor(session_factory, runtime)
         self.test_provider = test_provider
         self.workflow = WorkflowEngine(session_factory)
+        if type(investigation_evidence_conflict) is not bool:
+            raise ValueError("Evidence conflict must be a structured boolean signal")
+        self.investigation_evidence_conflict = investigation_evidence_conflict
+        # Optional runtime capability, not a provider/type branch. Fake workflows stay unchanged.
+        models = getattr(runtime, "investigator_models", lambda: None)()
+        self.investigator_escalation_enabled = models is not None
+        if models is not None:
+            reliability_config = (reliability_config or ReliabilityConfig()).model_copy(update={
+                "investigator_primary_model": models[0], "investigator_escalated_model": models[1]})
         self.reliability = ReliabilityService(session_factory, reliability_config)
         self.max_steps = max_steps
 
@@ -151,8 +163,27 @@ class WorkflowRunner:
                 return AnalysisContext(**base, **shared, evidence_refs=refs)
             if agent == AgentName.INVESTIGATOR:
                 analysis = self._artifact(uow, task.id, ArtifactType.TEST_ANALYSIS)
+                escalation = [e for e in events if e.event_type == "MODEL_ESCALATED" and
+                              e.correlation.test_run_id == run.id]
+                if len(escalation) > 1:
+                    raise RunnerStoppedError("Ambiguous Investigator escalation reservation")
+                selected = dict(defect_cycle=task.defect_cycle, evidence_conflict=self.investigation_evidence_conflict)
+                if escalation:
+                    event = escalation[0]
+                    primary = uow.artifacts.get(event.correlation.artifact_id)
+                    source = uow.invocations.get(event.correlation.invocation_id)
+                    if (primary is None or source is None or primary.task_id != task.id or
+                        primary.artifact_type != ArtifactType.INVESTIGATION or primary.invocation_id != source.id or
+                        source.status.value != "COMPLETED" or source.agent != AgentName.INVESTIGATOR):
+                        raise RunnerStoppedError("Escalation requires completed primary investigation evidence")
+                    selected.update(primary_investigation=self._output(primary),
+                        primary_investigation_artifact_id=primary.id, escalation_decision_id=event.correlation.decision_id,
+                        escalation_reasons=tuple(event.payload["reason_codes"]),
+                        escalation_target_model=event.payload["target_model"])
+                    selected["evidence_conflict"] = "EVIDENCE_CONFLICT" in event.payload["reason_codes"]
+                    refs = (*refs, str(primary.id), str(event.correlation.decision_id))
                 return InvestigationContext(**base, **shared, analysis=self._output(analysis),
-                    analysis_artifact_id=analysis.id, evidence_refs=(*refs, str(analysis.id)))
+                    analysis_artifact_id=analysis.id, evidence_refs=(*refs, str(analysis.id)), **selected)
             plan = self._artifact(uow, task.id, ArtifactType.PLAN)
             return ReviewContext(**base, **shared, requirement=task.requirement,
                 plan=self._output(plan), plan_artifact_id=plan.id, evidence_refs=(*refs, str(plan.id)))
@@ -192,6 +223,8 @@ class WorkflowRunner:
         if execution.error is not None:
             self._recover(task, agent, execution)
             return
+        if agent == AgentName.INVESTIGATOR and self._consider_investigator_escalation(task, execution):
+            return
         self._agent_route(task, agent, execution)
 
     def _pending(self, task, agent):
@@ -212,11 +245,55 @@ class WorkflowRunner:
                                for e in uow.history.list_events(task.id))
             if transitioned:
                 return None
+            if agent == AgentName.INVESTIGATOR and any(e.event_type == "MODEL_ESCALATED" and
+                e.correlation.invocation_id == invocation.id for e in uow.history.list_events(task.id)):
+                # Durable reservation selects a fresh explicit invocation, never reruns the primary.
+                return None
             artifacts = [a for a in uow.artifacts.list_by_task(task.id) if a.invocation_id == invocation.id]
             if len(artifacts) != 1:
                 raise RunnerStoppedError("Completed invocation has ambiguous output evidence")
             artifact = artifacts[0]
             return AgentExecution(invocation=invocation, artifact=artifact, output=self._output(artifact))
+
+    def _consider_investigator_escalation(self, task, execution):
+        if not self.investigator_escalation_enabled:
+            return False
+        with UnitOfWork(self.session_factory) as uow:
+            events = uow.history.list_events(task.id)
+            if any(e.event_type == "AGENT_STARTED" and e.correlation.invocation_id == execution.invocation.id and
+                   e.payload.get("escalation_decision_id") for e in events):
+                # This is already the escalated candidate. Never recursively escalate its output.
+                return False
+            prior = [d for d in uow.history.list_decisions(task.id) if d.decision_type.value == "ESCALATE_MODEL" and
+                     str(execution.invocation.id) in d.evidence_refs and str(execution.artifact.id) in d.evidence_refs]
+            implementation = self._artifact(uow, task.id, ArtifactType.IMPLEMENTATION)
+            run = self._run_for(uow, task.id, implementation.id)
+        correlation = CorrelationRef(invocation_id=execution.invocation.id,
+                                    artifact_id=execution.artifact.id, test_run_id=run.id)
+        output = execution.output
+        context = EscalationContext(confidence=output.confidence, attempt=execution.invocation.attempt,
+            alternative_hypotheses=len(output.alternative_hypotheses),
+            evidence_conflict=self.investigation_evidence_conflict, defect_cycle=task.defect_cycle,
+            evidence_refs=(str(execution.artifact.id),))
+        if prior:
+            if len(prior) != 1:
+                raise RunnerStoppedError("Ambiguous Investigator escalation evaluation")
+            result = evaluate_investigator_escalation(context.model_copy(update={
+                "escalation_count": sum(e.event_type == "MODEL_ESCALATED" for e in events)}), self.reliability.config)
+            required_but_exhausted = ("ESCALATION_BUDGET_EXHAUSTED" in result.reason_codes and
+                                     len(result.reason_codes) > 1)
+        else:
+            result = self.reliability.investigator_escalation(task_id=task.id,
+                context=context, correlation=correlation)
+            if result.escalate:
+                return True
+            required_but_exhausted = ("ESCALATION_BUDGET_EXHAUSTED" in result.reason_codes and
+                                     len(result.reason_codes) > 1)
+        if required_but_exhausted:
+            self._stop(task, "ESCALATION_BUDGET_EXHAUSTED", BlockerReason.RECOVERY_BUDGET_EXHAUSTED,
+                       correlation=correlation)
+            return True
+        return False
 
     def _recover(self, task, agent, execution):
         correlation = CorrelationRef(invocation_id=execution.invocation.id)

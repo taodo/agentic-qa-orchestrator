@@ -2,9 +2,9 @@
 from types import MappingProxyType
 from typing import Protocol
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from qa_sentinel.domain.enums import AgentName, ArtifactType, TaskState
-from qa_sentinel.domain.types import NonBlank, Attempt
+from qa_sentinel.domain.types import NonBlank, Attempt, Count
 from qa_sentinel.domain.test_run import TestRun
 from qa_sentinel.schemas.research import ResearchOutput
 from qa_sentinel.schemas.plan import PlannerOutput
@@ -53,6 +53,23 @@ class AnalysisContext(RuntimeContext):
 class InvestigationContext(AnalysisContext):
     analysis: TestAnalysisOutput
     analysis_artifact_id: UUID
+    defect_cycle: Count = 0
+    evidence_conflict: bool = Field(default=False, strict=True)
+    primary_investigation: InvestigationOutput | None = None
+    primary_investigation_artifact_id: UUID | None = None
+    escalation_decision_id: UUID | None = None
+    escalation_reasons: tuple[NonBlank, ...] = ()
+    escalation_target_model: NonBlank | None = None
+
+    @model_validator(mode="after")
+    def complete_escalation_context(self):
+        fields = (self.primary_investigation, self.primary_investigation_artifact_id, self.escalation_target_model)
+        if self.escalation_decision_id is not None:
+            if any(value is None for value in fields) or not self.escalation_reasons:
+                raise ValueError("Escalation requires primary evidence, decision, target, and reasons")
+        elif any(value is not None for value in fields) or self.escalation_reasons:
+            raise ValueError("Primary context cannot carry an unreserved escalation")
+        return self
 
 
 class ReviewContext(RuntimeContext):

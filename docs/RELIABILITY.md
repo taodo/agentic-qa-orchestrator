@@ -133,12 +133,32 @@ future runtime work.
 
 ## Verification and unimplemented scope
 
+Task 8 connects this policy to explicit real Investigator invocations. WorkflowRunner
+uses the existing service with confidence, durable attempt, alternative-hypothesis
+count, structured evidence-conflict signal, and authoritative task defect cycle.
+Runtime role configuration supplies actual primary/escalated model labels; every
+threshold and budget above stays unchanged. The adapter does not implement escalation.
+
+MODEL_ESCALATED remains a reservation. Its primary invocation/artifact/TestRun
+correlation reconstructs the next bounded context after restart. A separate
+AgentInvocation records the escalated model, effort, attempt, timestamps, usage,
+and immutable Investigation artifact. Both artifacts remain history; only the
+selected candidate is routed through InvestigationGate. A failed escalated call
+uses existing retry policy without falling back. Completed escalated output is not
+recursively escalated. Later triggered escalation with exhausted budget stops safely.
+The primary no-escalation evaluation is reused after interrupted routing.
+
+Task 8 introduces no duplicated thresholds, retries, sleeps, or provider fallbacks.
+Circuit, defect-cycle, schema-correction, and step bounds remain authoritative.
+See MODELS.md and RUNTIME.md for selected-candidate and transaction boundaries.
+
 Unit tests cover retry rules, immutable configuration, invalid inputs, fingerprints,
 boundaries, defect budgets, error mapping, blockers, and gate independence. Tests on
 Alembic-migrated SQLite cover transient retry, durable independent budgets, three
 matching failures, Investigator escalation, WorkflowEngine blocked/resume, cross-task
 rejection, and injected audit/commit failures with rollback of all intended writes.
 
-Unimplemented: agents/model clients, fake-agent vertical slice (Task 5), commands,
-test runner, autonomous loops, CLI/API/UI, background workers, runtime attempt/cycle
-increments, and full execution idempotency.
+Tasks 5–8 implement bounded runtime loops, model reasoning, and deterministic pytest
+execution separately from these policy functions. Still unimplemented: real
+Implementer/source mutation, model tools, CLI/API/UI, workers, concurrent scheduling,
+and full execution idempotency.
