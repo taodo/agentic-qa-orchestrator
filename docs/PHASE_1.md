@@ -9,8 +9,13 @@ repositories, Alembic revision 0001, and UnitOfWork. Task 2.1 repairs the invali
 TaskRepository list method and acceptance criterion identity, adds persistence
 unit/integration tests, and verifies migrations and transactions. See DATABASE.md.
 
-Runtime orchestration, gates, retries, escalation, agents, model calls, execution
-services, CLI, and UI remain unimplemented. No Task 3 work is included.
+Task 3 implements the canonical state machine, seven deterministic gate evaluators,
+and WorkflowEngine atomic transition persistence with decisions/events, forward
+PASS-gate requirements, terminal protection, and BLOCKED resume handling. See
+STATE_MACHINE.md for exact rules and contract assumptions.
+
+Retries, escalation policy, agents/model calls, execution services, permission
+engine, CLI, and UI remain unimplemented. No Task 4 work is included.
 
 Contract hardening:
 
@@ -35,7 +40,8 @@ Contract hardening:
   and outcome (PASS, FAIL, UNKNOWN). COMPLETED + FAIL represents completed
   execution with failing product tests; FAILED + UNKNOWN represents an execution
   failure without a test conclusion. These are independent contract fields;
-  no combinations, counts, or workflow consequences are semantically inferred.
+  the contracts infer no combinations or workflow consequences. Task 3 TestGate
+  uses execution_status and outcome for deterministic gate results.
 
 Retained assumptions:
 
@@ -57,9 +63,9 @@ Retained assumptions:
   repository APIs enforce the persistence boundary.
 - Default timestamps are UTC; supplied datetimes are accepted as given.
   Task timestamps are data only and are not updated automatically.
-- Secret handling, authorization, retry bounds, evidence-driven escalation,
-  atomic transitions, and resume/idempotency remain architecture requirements
-  without implementation in these contracts.
+- Secret handling, authorization, retry bounds, escalation, and full runtime
+  idempotency remain architecture requirements beyond the contracts. Task 3
+  implements atomic transitions and stored BLOCKED resume targets.
 
 Task 1.1 intentionally rejects former string-only steps, changed files, recorded
 commands, investigation actions, actor/source refs, and the removed TestRun.status.
@@ -76,4 +82,18 @@ Persistence assumptions for Tasks 2/2.1:
 - Revision 0001 is unreleased and repaired in place. Existing bootstrap databases
   at that revision must be recreated; this is not a deployed-schema upgrade.
 
-Recommended next step: BOOTSTRAP TASK 3 — State Machine + Gates.
+Task 3 assumptions:
+
+- NEEDS_RESEARCH is PlanGate FAIL for readiness; structured failing analysis can
+  PASS AnalysisGate for sufficiency. Insufficient investigation with explicit
+  additional_evidence_needed can PASS for research routing, not root-cause proof.
+- Required SKIPPED steps fail because existing data cannot associate a justification
+  with a particular step without interpreting prose. General dependency cycles
+  are not evaluated; direct self-dependency and missing refs are rejected.
+- Only five forward edges mandate PASS gates. Other routes accept relevant optional
+  evaluations; the caller requests the route. Approved plans/gate provenance are
+  trusted caller inputs, not a new permission or agent-runtime API.
+- Gate IDs use transition/decision links because CorrelationRef lacks a gate field.
+- Task timestamps may tie; no sequence column or reliability framework is added.
+
+Recommended next step: BOOTSTRAP TASK 4 — Retry, Escalation, Events & Reliability.

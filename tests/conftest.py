@@ -104,3 +104,36 @@ def migrated_factory(tmp_path):
     engine=create_engine("sqlite+pysqlite:///"+db.as_posix())
     yield create_session_factory(engine),engine,config
     engine.dispose()
+
+
+@pytest.fixture
+def workflow_outputs():
+    from qa_sentinel.schemas.research import ResearchOutput
+    from qa_sentinel.schemas.plan import PlannerOutput
+    from qa_sentinel.schemas.implementation import ImplementationOutput
+    from qa_sentinel.schemas.review import ReviewOutput
+    from qa_sentinel.schemas.test_result import TestAnalysisOutput
+    from qa_sentinel.schemas.investigation import InvestigationOutput
+    plan=PlannerOutput(decision="READY_FOR_IMPLEMENTATION",summary="Plan",assumptions=[],
+                       implementation_steps=[dict(id="step-1",description="Implement",files=["app.py"],depends_on=[])],
+                       files_to_create=[],files_to_modify=["app.py"],
+                       acceptance_criteria=[dict(id="AC-1",description="Expected behavior",verification="Assert result")],
+                       test_strategy=[dict(description="Assert behavior",acceptance_criteria_refs=["AC-1"])],
+                       risks=[],rollback_considerations=[],open_questions=[])
+    research=ResearchOutput(summary="Research",findings=[],dependencies=[],constraints=[],risks=[],
+                            unknowns=[],recommendations=[],research_complete=True)
+    implementation=ImplementationOutput(implementation_status="COMPLETED",
+        plan_steps=[dict(step_id="step-1",status="COMPLETED")],
+        changed_files=[dict(path="app.py",change_type="MODIFIED",reason="Implement")],
+        tests_added_or_modified=[],commands_executed=[],deviations=[],assumptions=[],known_issues=[])
+    review=ReviewOutput(decision="APPROVE",requirement_coverage=[dict(acceptance_criterion_id="AC-1",
+                        status="COVERED",summary="Verified",evidence_refs=["report:1"])],
+                        issues=[],test_gaps=[],implementation_risks=[],unverified_assumptions=[])
+    analysis=TestAnalysisOutput(overall_result="FAIL",failure_groups=[dict(tests=["test_example"],
+        classification="LIKELY_PRODUCT_DEFECT",summary="Mismatch",evidence=["report:1"],
+        confidence=0.8,requires_investigation=True)])
+    investigation=InvestigationOutput(status="ROOT_CAUSE_IDENTIFIED",root_cause="Condition mismatch",
+        evidence=["report:1"],confidence=0.8,recommended_action=dict(type="CODE_FIX",description="Fix condition"),
+        alternative_hypotheses=[],additional_evidence_needed=[])
+    return dict(plan=plan,research=research,implementation=implementation,review=review,
+                analysis=analysis,investigation=investigation)
