@@ -28,8 +28,16 @@ for progression, and integrates durable retries, circuit breaking, and defect bu
 Happy-path and repair/retest workflows complete on migrated SQLite. See RUNTIME.md
 for lifecycle, recovery boundaries, and graph-preserving safety stops.
 
-Real agents/model calls, real command/test execution, permission engine, CLI, UI,
-background workers, and Task 6 remain unimplemented.
+Task 6 adds policy-controlled local Python/pytest execution, canonical cwd/target
+boundaries, controlled child environment, finite timeout and process-tree cleanup,
+bounded output, and built-in JUnit counts without new dependencies. TestExecutionService
+persists started reservations and atomic completion evidence; WorkflowRunner accepts
+real or fake providers and applies durable TEST_EXECUTION retries to eligible system
+failures. Product FAIL still routes to analysis. See EXECUTION.md for exact policy and
+the unchanged TESTING stop limitation.
+
+Real agents/model calls, agent source edits, a general permission engine, CLI, UI,
+background workers, and Task 7 remain unimplemented.
 
 Contract hardening:
 
@@ -131,4 +139,15 @@ Task 5 assumptions:
   no graph edges are invented. Full crash reconciliation/concurrent runtime is deferred.
 - All implementation reports and test results are synthetic; no source/tool execution.
 
-Recommended next step: BOOTSTRAP TASK 6 — Deterministic Test Runner & Command Policy.
+Task 6 assumptions:
+
+- Prepared workspace tests/conftest are trusted Python code; command policy is not
+  an OS sandbox. Interpreter/dependency paths are trusted configuration.
+- Built-in pytest JUnit reporting supplies counts; invalid/missing/oversized reports
+  produce conservative zero counts with explicit reliability metadata.
+- Raw output/environment values are not persisted; no new dependency or schema is added.
+- Started execution without a completed TestRun requires explicit reconciliation.
+- TESTING cannot enter BLOCKED; denied/exhausted recovery records evidence and raises
+  RunnerStoppedError without routing infrastructure failures to product analysis.
+
+Recommended next step: BOOTSTRAP TASK 7 — Real Model Adapter & First LLM Agents.

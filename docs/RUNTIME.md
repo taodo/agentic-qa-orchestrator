@@ -47,8 +47,9 @@ Context selection uses artifacts from COMPLETED invocations whose outputs receiv
 a PASS gate on an actual WorkflowEngine transition/event. The highest persisted
 invocation attempt selects the latest accepted output for that role, independent of
 UUID repository ordering. A newer unapproved plan cannot replace the approved plan.
-JSON outputs are revalidated. This slice uses one TestRun per implementation artifact;
-missing or ambiguous evidence stops explicitly.
+JSON outputs are revalidated. Task 6 allows multiple infrastructure attempts per
+implementation artifact, selecting the latest by durable execution events. Missing
+or ambiguously ordered evidence stops explicitly.
 
 ## Invocation and artifact lifecycle
 
@@ -86,8 +87,10 @@ TEST_RESULT_RECORDED. It performs no failure classification or command execution
 COMPLETED + PASS passes TestGate and routes to REVIEWING. COMPLETED + FAIL routes
 to ANALYZING with a FAIL TestGate. Sufficient FAIL analysis passes AnalysisGate and
 routes to INVESTIGATING. A PASS/no-groups analysis cannot override failed test evidence.
-Inconclusive test execution or exhausted test scenarios records workflow errors and
-stops; it is not treated as a product defect.
+Inconclusive test execution uses the Task 6 provider's structured reliability disposition.
+Eligible transient failures retry within TEST_EXECUTION budget; denied recovery stops
+with workflow/block evidence. It is never treated as a product defect. Exhausted fake
+test scenarios still stop explicitly.
 
 Planner: READY_FOR_IMPLEMENTATION requires PlanGate PASS; NEEDS_RESEARCH routes
 to RESEARCHING; BLOCKED stops. Investigator: CODE_FIX/TEST_FIX require identified
@@ -165,7 +168,13 @@ and artifact linkage, bounded contexts, gate enforcement, retries, schema exhaus
 blocked stops, circuit breaking, and defect budgets. Injected failures verify atomic
 completion and counter rollback; pending outputs are reused after transition failure.
 
-All agent reports and test evidence remain fake. No calculator source is modified by
-the runtime. Real LLMs, model adapters, prompts, command execution, pytest runner,
-Playwright, API, CLI, UI, workers, and Task 6 are unimplemented. Task 6 will introduce
-the deterministic test runner and command policy.
+Agent reports remain fake. Task 6 adds PytestTestResultProvider and TestExecutionService
+for controlled real pytest on prepared workspace files, while retaining the fake provider.
+Both satisfy execution/base.py's TestResultProvider boundary. Real results are already
+persisted by the service and verified by the runner; fake results are persisted by the
+runner. No provider-type branching or duplicate TestRun insertion is needed.
+
+See EXECUTION.md for argv/path/environment policy, timeout cleanup, durable attempt
+selection, start/completion transactions, and the unchanged TESTING stop limitation.
+No agent modifies calculator source. Real LLMs, model adapters, prompts, Playwright,
+API, CLI, UI, workers, and Task 7 remain unimplemented.

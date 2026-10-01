@@ -5,6 +5,7 @@ from qa_sentinel.agents.base import (
     ImplementationContext, AnalysisContext, InvestigationContext, ReviewContext, TestContext,
 )
 from qa_sentinel.agents.fake import ScenarioExhaustedError
+from qa_sentinel.execution.base import TestExecutionPendingError
 from qa_sentinel.domain.enums import (
     TaskState as S, AgentName, ArtifactType, GateResult as G, ErrorType,
     PlannerDecision, ReviewDecision, InvestigationActionType, InvestigationStatus,
@@ -21,7 +22,7 @@ from .state_machine import can_transition
 from .gates import ResearchGate, PlanGate, ImplementationGate, TestGate, AnalysisGate, InvestigationGate, ReviewGate
 from .reliability import ReliabilityService
 from .reliability_policy import (
-    ReliabilityConfig, RetryDomain, RecoveryAction, BlockerReason, can_start_another_defect_cycle,
+    ReliabilityConfig, RetryDomain, RecoveryAction, BlockerReason, FailureDisposition, can_start_another_defect_cycle,
 )
 
 RETRY_DOMAINS = {
@@ -93,11 +94,25 @@ class WorkflowRunner:
         return OUTPUT_TYPES[artifact.producer_agent].model_validate(artifact.content)
 
     @staticmethod
+    def _latest_run(uow, task_id, runs):
+        if not runs:
+            return None
+        if len(runs) == 1:
+            return runs[0]
+        attempts = {e.correlation.test_run_id: e.payload["attempt"]
+                    for e in uow.history.list_events(task_id)
+                    if e.event_type in {"TEST_RESULT_RECORDED", "TEST_EXECUTION_STARTED"} and "attempt" in e.payload}
+        if any(r.id not in attempts for r in runs) or len({attempts[r.id] for r in runs}) != len(runs):
+            raise RunnerStoppedError("Test evidence has ambiguous durable attempt ordering")
+        return max(runs, key=lambda r: attempts[r.id])
+
+    @staticmethod
     def _run_for(uow, task_id, implementation_id):
         runs = [r for r in uow.history.list_test_runs(task_id) if r.implementation_artifact_id == implementation_id]
-        if len(runs) != 1:
-            raise RunnerStoppedError("This vertical slice requires one test run per implementation artifact")
-        return runs[0]
+        run = WorkflowRunner._latest_run(uow, task_id, runs)
+        if run is None:
+            raise RunnerStoppedError("Required test evidence is missing")
+        return run
 
     def build_context(self, task, agent):
         with UnitOfWork(self.session_factory) as uow:
@@ -262,11 +277,14 @@ class WorkflowRunner:
             implementation = self._artifact(uow, task.id, ArtifactType.IMPLEMENTATION)
             runs = uow.history.list_test_runs(task.id)
             matching = [r for r in runs if r.implementation_artifact_id == implementation.id]
-            if len(matching) > 1:
-                raise RunnerStoppedError("Ambiguous test evidence")
+            previous = self._latest_run(uow, task.id, matching)
+            retry_reserved = previous is not None and any(
+                e.event_type == "RETRY_SCHEDULED" and e.correlation.test_run_id == previous.id
+                for e in uow.history.list_events(task.id))
             context = TestContext(task_id=task.id, attempt=len(runs) + 1,
                 implementation_artifact_id=implementation.id, evidence_refs=(str(implementation.id),))
-        new = not matching
+        new = previous is None or (retry_reserved and
+            (previous.execution_status != TestExecutionStatus.COMPLETED or previous.outcome == TestOutcome.UNKNOWN))
         if new:
             try:
                 run = self.test_provider.run(context)
@@ -274,25 +292,41 @@ class WorkflowRunner:
                 self._workflow_error(task.id, "TEST_SCENARIO_EXHAUSTED")
                 self._stop(task, "TEST_SCENARIO_EXHAUSTED", BlockerReason.EXTERNAL_DEPENDENCY)
                 return
+            except TestExecutionPendingError:
+                self._workflow_error(task.id, "TEST_EXECUTION_RECONCILIATION_REQUIRED")
+                self._stop(task, "TEST_EXECUTION_RECONCILIATION_REQUIRED", BlockerReason.EXTERNAL_DEPENDENCY)
+                return
             if type(run) is not TestRun:
                 raise RunnerStoppedError("Test provider must return a typed TestRun")
             run = TestRun.model_validate(run.model_dump())
             if run.task_id != task.id or run.implementation_artifact_id != implementation.id:
                 raise RunnerStoppedError("Test provider returned unrelated evidence")
             with UnitOfWork(self.session_factory) as uow:
-                uow.history.append_test_run(run)
-                uow.history.append_event(Event(task_id=task.id, event_type="TEST_RESULT_RECORDED",
-                    actor=dict(type="ORCHESTRATOR", id="qa-sentinel"),
-                    correlation=dict(test_run_id=run.id, artifact_id=implementation.id),
-                    payload=dict(execution_status=run.execution_status.value, outcome=run.outcome.value)))
+                persisted = uow.history.get_test_run(run.id)
+                if persisted is None:
+                    uow.history.append_test_run(run)
+                    uow.history.append_event(Event(task_id=task.id, event_type="TEST_RESULT_RECORDED",
+                        actor=dict(type="ORCHESTRATOR", id="qa-sentinel"),
+                        correlation=dict(test_run_id=run.id, artifact_id=implementation.id),
+                        payload=dict(execution_status=run.execution_status.value, outcome=run.outcome.value,
+                                     attempt=context.attempt)))
+                elif persisted != run:
+                    raise RunnerStoppedError("Provider returned evidence different from its persisted record")
                 uow.commit()
         else:
-            run = matching[0]
+            run = previous
         gate = TestGate.evaluate(task.id, run)
         correlation = CorrelationRef(test_run_id=run.id, artifact_id=implementation.id)
         if run.execution_status != TestExecutionStatus.COMPLETED or run.outcome == TestOutcome.UNKNOWN:
-            self._workflow_error(task.id, "TEST_PROVIDER_INCONCLUSIVE")
-            self._stop(task, "TEST_PROVIDER_INCONCLUSIVE", BlockerReason.EXTERNAL_DEPENDENCY, gate, correlation)
+            failure = self.test_provider.execution_failure(run)
+            decision = self.reliability.retry(task_id=task.id, domain=RetryDomain.TEST_EXECUTION,
+                disposition=FailureDisposition.STRUCTURAL if failure is None else failure.disposition,
+                changed_input=False if failure is None else failure.changed_input,
+                evidence_refs=(str(run.id),) if failure is None else failure.evidence_refs, correlation=correlation)
+            if not decision.allowed:
+                self._workflow_error(task.id, "TEST_PROVIDER_INCONCLUSIVE")
+                self._stop(task, decision.reason_code, BlockerReason.EXTERNAL_DEPENDENCY, gate, correlation,
+                           terminal=decision.action == RecoveryAction.FAIL)
             return
         if new and run.outcome == TestOutcome.FAIL:
             identity = self.test_provider.failure_identity(context)
@@ -301,7 +335,7 @@ class WorkflowRunner:
         self.workflow.transition(task_id=task.id, to_state=S.REVIEWING if gate.result == G.PASS else S.ANALYZING,
             gate_evaluation=gate, test_run_id=run.id, artifact_id=implementation.id,
             reason_code="TESTS_PASSED" if gate.result == G.PASS else "TESTS_FAILED",
-            reason_details="Deterministic fake test evidence controls routing")
+            reason_details="Deterministic test evidence controls routing")
 
     def _circuit_tripped(self, task):
         with UnitOfWork(self.session_factory) as uow:

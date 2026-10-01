@@ -1,6 +1,5 @@
 """Separate deterministic test evidence provider. No commands or classification."""
 from datetime import datetime, timezone
-from typing import Protocol
 from pydantic import BaseModel, ConfigDict
 from qa_sentinel.agents.base import TestContext
 from qa_sentinel.agents.fake import ScenarioExhaustedError
@@ -8,6 +7,7 @@ from qa_sentinel.domain.test_run import TestRun
 from qa_sentinel.domain.enums import TestExecutionStatus, TestOutcome
 from qa_sentinel.domain.types import Count
 from qa_sentinel.orchestration.reliability_policy import FailureIdentity
+from .base import TestResultProvider
 
 
 class FakeTestResult(BaseModel):
@@ -18,11 +18,6 @@ class FakeTestResult(BaseModel):
     failed_count: Count = 0
     skipped_count: Count = 0
     failure_identity: FailureIdentity | None = None
-
-
-class TestResultProvider(Protocol):
-    def run(self, context: TestContext) -> TestRun: ...
-    def failure_identity(self, context: TestContext) -> FailureIdentity | None: ...
 
 
 class FakeTestResultProvider:
@@ -52,3 +47,6 @@ class FakeTestResultProvider:
 
     def failure_identity(self, context: TestContext) -> FailureIdentity | None:
         return self._result(context).failure_identity
+
+    def execution_failure(self, run: TestRun):
+        return None

@@ -137,3 +137,23 @@ def workflow_outputs():
         alternative_hypotheses=[],additional_evidence_needed=[])
     return dict(plan=plan,research=research,implementation=implementation,review=review,
                 analysis=analysis,investigation=investigation)
+
+
+@pytest.fixture
+def calculator_workspace(tmp_path):
+    """Prepared real test code; no agent modifies these files."""
+    def prepare(*, failing=False, extra=""):
+        root = tmp_path / "calculator-project"
+        (root / "tests").mkdir(parents=True, exist_ok=True)
+        root.joinpath("calculator.py").write_text(
+            "def add(a, b):\n    return a + b\n\n"
+            "def divide(a, b):\n    if b == 0:\n        raise ValueError('zero divisor')\n"
+            + ("    return a // b\n" if failing else "    return a / b\n"), encoding="utf-8")
+        root.joinpath("tests", "test_calculator.py").write_text(
+            "import pytest\nfrom calculator import add, divide\n"
+            "def test_add():\n    assert add(2, 3) == 5\n"
+            "def test_divide():\n    assert divide(5, 2) == 2.5\n"
+            "def test_divide_by_zero():\n    with pytest.raises(ValueError):\n        divide(1, 0)\n" + extra,
+            encoding="utf-8")
+        return root
+    return prepare
