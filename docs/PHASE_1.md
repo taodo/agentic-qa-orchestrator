@@ -14,8 +14,15 @@ and WorkflowEngine atomic transition persistence with decisions/events, forward
 PASS-gate requirements, terminal protection, and BLOCKED resume handling. See
 STATE_MACHINE.md for exact rules and contract assumptions.
 
-Retries, escalation policy, agents/model calls, execution services, permission
-engine, CLI, and UI remain unimplemented. No Task 4 work is included.
+Task 4 implements deterministic failure dispositions, per-domain retry budgets,
+structured retry/block recommendations, normalized fingerprints and circuit
+breaking, defect-cycle checks, and Investigator-only model escalation policy.
+ReliabilityService atomically records decisions/events and fingerprint occurrences;
+committed scheduling events track retry/escalation reservations without changing
+workflow state. See RELIABILITY.md for defaults, attempt semantics, and audit behavior.
+
+Agents/model calls, execution services, permission engine, CLI, UI, autonomous
+workflow loops, and Task 5 remain unimplemented.
 
 Contract hardening:
 
@@ -63,8 +70,8 @@ Retained assumptions:
   repository APIs enforce the persistence boundary.
 - Default timestamps are UTC; supplied datetimes are accepted as given.
   Task timestamps are data only and are not updated automatically.
-- Secret handling, authorization, retry bounds, escalation, and full runtime
-  idempotency remain architecture requirements beyond the contracts. Task 3
+- Secret handling, authorization, and full runtime idempotency remain architecture
+  requirements beyond the contracts. Task 4 adds retry bounds and escalation policy. Task 3
   implements atomic transitions and stored BLOCKED resume targets.
 
 Task 1.1 intentionally rejects former string-only steps, changed files, recorded
@@ -94,6 +101,16 @@ Task 3 assumptions:
   evaluations; the caller requests the route. Approved plans/gate provenance are
   trusted caller inputs, not a new permission or agent-runtime API.
 - Gate IDs use transition/decision links because CorrelationRef lacks a gate field.
-- Task timestamps may tie; no sequence column or reliability framework is added.
+- Task timestamps may tie; no sequence column is added.
 
-Recommended next step: BOOTSTRAP TASK 4 — Retry, Escalation, Events & Reliability.
+Task 4 assumptions:
+
+- Retry budgets count scheduled retries, excluding the initial execution.
+- Committed events track reservations independently per task/domain; runtime
+  implementation_attempt/review_cycle counters are not changed by scheduling.
+- Defect-cycle checks are pure; no runtime loop increments defect_cycle yet.
+- Reliability events record recommendations/reservations, marked explicitly in
+  payloads. Actual blocking/resume uses WorkflowEngine.
+- Execution idempotency and concurrent worker scheduling remain future runtime work.
+
+Recommended next step: BOOTSTRAP TASK 5 — Fake-Agent Vertical Slice.
