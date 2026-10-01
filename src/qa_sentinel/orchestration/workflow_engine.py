@@ -36,12 +36,16 @@ class WorkflowEngine:
                    gate_evaluation: GateEvaluation | None = None,
                    evidence_refs: tuple[str, ...] = (), resume_state: S | None = None,
                    allow_same_state: bool = False, invocation_id: UUID | None = None,
-                   artifact_id: UUID | None = None, test_run_id: UUID | None = None) -> Transition:
+                   artifact_id: UUID | None = None, test_run_id: UUID | None = None,
+                   increment_defect_cycle: bool = False) -> Transition:
         with UnitOfWork(self.session_factory) as uow:
             task = uow.tasks.get(task_id)
             if task is None:
                 raise KeyError(task_id)
             from_state = task.state
+            if type(increment_defect_cycle) is not bool or (increment_defect_cycle and
+                    (from_state, to_state) != (S.INVESTIGATING, S.IMPLEMENTING)):
+                raise ValueError("Defect cycle increment requires an INVESTIGATING -> IMPLEMENTING transition")
             if resume_state is not None and to_state != S.BLOCKED:
                 raise ResumeStateError("resume_state may only be supplied when entering BLOCKED")
             effective_resume = task.resume_state if from_state == S.BLOCKED else resume_state
@@ -96,12 +100,15 @@ class WorkflowEngine:
                           correlation=dict(decision_id=decision.id, invocation_id=invocation_id,
                                            artifact_id=artifact_id, test_run_id=test_run_id),
                           payload=dict(from_state=from_state.value, to_state=to_state.value,
-                                       reason_code=decision.reason_code))
+                                       reason_code=decision.reason_code,
+                                       **({"defect_cycle": task.defect_cycle + 1} if increment_defect_cycle else {})))
             if gate_evaluation is not None:
                 uow.history.append_gate_evaluation(gate_evaluation)
             uow.history.append_decision(decision)
             uow.history.append_transition(transition)
             task.state = to_state
+            if increment_defect_cycle:
+                task.defect_cycle += 1
             task.updated_at = now
             if to_state == S.BLOCKED:
                 task.resume_state = resume_state

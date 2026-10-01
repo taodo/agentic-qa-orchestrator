@@ -21,8 +21,15 @@ ReliabilityService atomically records decisions/events and fingerprint occurrenc
 committed scheduling events track retry/escalation reservations without changing
 workflow state. See RELIABILITY.md for defaults, attempt semantics, and audit behavior.
 
-Agents/model calls, execution services, permission engine, CLI, UI, autonomous
-workflow loops, and Task 5 remain unimplemented.
+Task 5 adds a bounded single-task WorkflowRunner, typed agent contexts, deterministic
+scenario-driven fake agents, and a separate fake TestRun provider. It persists
+invocation lifecycles and new immutable artifacts, uses existing gates/WorkflowEngine
+for progression, and integrates durable retries, circuit breaking, and defect budgets.
+Happy-path and repair/retest workflows complete on migrated SQLite. See RUNTIME.md
+for lifecycle, recovery boundaries, and graph-preserving safety stops.
+
+Real agents/model calls, real command/test execution, permission engine, CLI, UI,
+background workers, and Task 6 remain unimplemented.
 
 Contract hardening:
 
@@ -35,7 +42,7 @@ Contract hardening:
   reasons, and command text/integer exit codes. Strict integers reject booleans,
   floats, and numeric strings. Exit codes are stored without semantic interpretation.
 - Investigation actions have a canonical type and explanatory description;
-  routing does not depend on interpreting the description. No routing is implemented.
+  routing does not depend on interpreting the description. Task 5 routes on its enum.
 - Review coverage includes COVERED, NOT_COVERED, or UNVERIFIED for each criterion.
 - Event and audit actors use ActorRef (type, id). Actor IDs are nonblank strings
   because agents, tools, systems, and humans may use named identifiers.
@@ -108,9 +115,20 @@ Task 4 assumptions:
 - Retry budgets count scheduled retries, excluding the initial execution.
 - Committed events track reservations independently per task/domain; runtime
   implementation_attempt/review_cycle counters are not changed by scheduling.
-- Defect-cycle checks are pure; no runtime loop increments defect_cycle yet.
+- Defect-cycle checks are pure; Task 4 itself adds no runtime counter increment.
 - Reliability events record recommendations/reservations, marked explicitly in
   payloads. Actual blocking/resume uses WorkflowEngine.
 - Execution idempotency and concurrent worker scheduling remain future runtime work.
 
-Recommended next step: BOOTSTRAP TASK 5 — Fake-Agent Vertical Slice.
+Task 5 assumptions:
+
+- Fake scenario sequences use persisted per-role attempts; contexts contain bounded
+  accepted evidence, never mutable Task or persistence handles.
+- Actual fake Implementer/Reviewer calls increment implementation_attempt/review_cycle;
+  starting a defect repair increments defect_cycle atomically with its transition.
+- Schema retries require explicit changed-input/evidence scenario metadata.
+- Unsupported BLOCKED edges record errors/recommendations and raise RunnerStoppedError;
+  no graph edges are invented. Full crash reconciliation/concurrent runtime is deferred.
+- All implementation reports and test results are synthetic; no source/tool execution.
+
+Recommended next step: BOOTSTRAP TASK 6 — Deterministic Test Runner & Command Policy.
