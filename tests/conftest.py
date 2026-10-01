@@ -42,6 +42,8 @@ def mock_openai():
             calls.append(json.loads(request.content))
             assert queue, "Unexpected extra provider request (hidden retry)"
             item = queue.popleft()
+            if callable(item):
+                item = item(calls[-1])
             if item == "timeout":
                 raise httpx.ReadTimeout("synthetic-sensitive-provider-error", request=request)
             if item == "connection":

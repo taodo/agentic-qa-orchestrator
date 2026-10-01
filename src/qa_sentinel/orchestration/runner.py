@@ -6,6 +6,7 @@ from qa_sentinel.agents.base import (
 )
 from qa_sentinel.agents.fake import ScenarioExhaustedError
 from qa_sentinel.execution.base import TestExecutionPendingError
+from qa_sentinel.mutation.contracts import MutationReconciliationRequired
 from qa_sentinel.domain.enums import (
     TaskState as S, AgentName, ArtifactType, GateResult as G, ErrorType,
     PlannerDecision, ReviewDecision, InvestigationActionType, InvestigationStatus,
@@ -57,11 +58,11 @@ def review_target(output):
 class WorkflowRunner:
     def __init__(self, session_factory, runtime, test_provider, *, max_steps: int = 50,
                  reliability_config: ReliabilityConfig | None = None,
-                 investigation_evidence_conflict: bool = False):
+                 investigation_evidence_conflict: bool = False, mutation_service=None):
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
         self.session_factory = session_factory
-        self.executor = AgentExecutor(session_factory, runtime)
+        self.executor = AgentExecutor(session_factory, runtime, mutation_service=mutation_service)
         self.test_provider = test_provider
         self.workflow = WorkflowEngine(session_factory)
         if type(investigation_evidence_conflict) is not bool:
@@ -195,8 +196,10 @@ class WorkflowRunner:
                 return task
             try:
                 self._step(task)
-            except RunnerStoppedError:
+            except (RunnerStoppedError, MutationReconciliationRequired) as failure:
                 self._workflow_error(task.id, "RUNTIME_EVIDENCE_UNAVAILABLE")
+                if isinstance(failure, MutationReconciliationRequired):
+                    raise RunnerStoppedError(str(failure)) from None
                 raise
         task = self._task(task_id)
         if task.state not in {S.DONE, S.FAILED, S.BLOCKED}:
@@ -249,11 +252,14 @@ class WorkflowRunner:
                 e.correlation.invocation_id == invocation.id for e in uow.history.list_events(task.id)):
                 # Durable reservation selects a fresh explicit invocation, never reruns the primary.
                 return None
-            artifacts = [a for a in uow.artifacts.list_by_task(task.id) if a.invocation_id == invocation.id]
+            artifacts = [a for a in uow.artifacts.list_by_task(task.id) if a.invocation_id == invocation.id and
+                         a.artifact_type == ARTIFACT_TYPES[agent]]
             if len(artifacts) != 1:
                 raise RunnerStoppedError("Completed invocation has ambiguous output evidence")
             artifact = artifacts[0]
-            return AgentExecution(invocation=invocation, artifact=artifact, output=self._output(artifact))
+        if agent == AgentName.IMPLEMENTER:
+            self.executor.verify_implementation(invocation.id)
+        return AgentExecution(invocation=invocation, artifact=artifact, output=self._output(artifact))
 
     def _consider_investigator_escalation(self, task, execution):
         if not self.investigator_escalation_enabled:
@@ -367,6 +373,7 @@ class WorkflowRunner:
                 for e in uow.history.list_events(task.id))
             context = TestContext(task_id=task.id, attempt=len(runs) + 1,
                 implementation_artifact_id=implementation.id, evidence_refs=(str(implementation.id),))
+        self.executor.verify_implementation(implementation.invocation_id)
         new = previous is None or (retry_reserved and
             (previous.execution_status != TestExecutionStatus.COMPLETED or previous.outcome == TestOutcome.UNKNOWN))
         if new:

@@ -139,8 +139,8 @@ def test_runtime_revalidates_independent_adapter_and_unsupported_roles(workflow_
     with pytest.raises(ModelError) as corrected:
         runtime.run(A.RESEARCHER, context(A.RESEARCHER, workflow_outputs, schema_correction=True))
     assert not corrected.value.changed_input
-    with pytest.raises(ModelError, match="UNSUPPORTED_ROLE"):
-        runtime.describe(A.IMPLEMENTER)
+    assert runtime.describe(A.IMPLEMENTER) == (runtime.config.implementer.model, "high")
+    assert runtime.implementation_proposals()
     with pytest.raises(ModelError, match="UNSUPPORTED_ROLE"):
         CompositeAgentRuntime({A.RESEARCHER: runtime}).run(A.PLANNER, context(A.PLANNER, workflow_outputs))
 

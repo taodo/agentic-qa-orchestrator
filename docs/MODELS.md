@@ -1,9 +1,10 @@
-# Real model boundary — Bootstrap Tasks 7–8
+# Real model boundary — Bootstrap Tasks 7–9
 
 Agents reason over supplied context. Model adapters do not receive persistence,
 workflow state, commands, tools, or mutable Task objects. Deterministic gates and
 WorkflowEngine remain authoritative. Researcher, Planner, Test Analyzer,
-Investigator, and Reviewer are real reasoning roles. Implementer remains fake.
+Investigator, Reviewer and Implementer are real reasoning roles. Implementer returns
+a structured proposal; deterministic code alone reads and applies target files.
 
 ## Contracts and provider boundary
 
@@ -16,7 +17,8 @@ requests, exception messages, refusal text, and hidden reasoning are not persist
 The official SDK's `client.responses.parse(text_format=...)` requests native strict
 structured output. Both adapter and runtime revalidate the existing ResearchOutput
 or PlannerOutput contract in Task 7, extended to TestAnalysisOutput,
-InvestigationOutput, and ReviewOutput in Task 8. AgentExecutor validates again before persistence.
+InvestigationOutput and ReviewOutput in Task 8, and ImplementationProposal in
+Task 9. AgentExecutor validates again before persistence.
 No free-form prose extraction or hidden repair call is implemented. Refusals,
 incomplete results, and schema errors cannot become accepted artifacts.
 
@@ -27,12 +29,13 @@ packages are installed normally. No agent, workflow, prompt, or retry framework 
 
 ## Role configuration and routing
 
-RoleModelConfig contains five real roles and an explicit Investigator escalation setting:
+RoleModelConfig contains six real roles and an explicit Investigator escalation setting:
 
 | Role | Default model | Reasoning effort |
 | --- | --- | --- |
 | RESEARCHER | gpt-5.6-luna | medium |
 | PLANNER | gpt-5.6-sol | high |
+| IMPLEMENTER | gpt-5.6-luna | high |
 | TEST_ANALYZER | gpt-5.6-luna | medium |
 | INVESTIGATOR primary | gpt-5.6-luna | high |
 | INVESTIGATOR escalated | gpt-5.6-sol | high |
@@ -57,16 +60,17 @@ roles to runtimes without modifying WorkflowRunner's role routing:
 
 ```python
 real = RealAgentRuntime(OpenAIModelAdapter(), RoleModelConfig())
-fake = FakeAgentRuntime(scenario)
 runtime = CompositeAgentRuntime({
-    role: fake if role == AgentName.IMPLEMENTER else real
+    role: real
     for role in AgentName
 })
 ```
 
-Implementer remains fake and explicitly unsupported by RealAgentRuntime. Model calls
-never modify prepared workspace code; Task 6's deterministic pytest execution is
-configured independently. AgentRuntime.run retains fake typed outputs and also
+Pass a separately configured MutationService to WorkflowRunner for controlled real
+implementation, alongside Task 6's independently configured pytest provider. Explicit
+composite mappings may retain fake Implementer. Model calls never write files;
+see MUTATION.md for authorization, application, rollback and reconciliation.
+AgentRuntime.run retains fake typed outputs and also
 accepts a provider-neutral ModelResponse envelope for real invocation metadata.
 
 ## Prompts and bounded context
@@ -106,6 +110,14 @@ core typed evidence; optional analysis/investigation is not needed in this slice
 Serialized input is limited to 60000 characters and instructions to 8192. Oversize
 input raises CONTEXT_LIMIT without a provider request. Data is not silently
 truncated. Character bounds are deterministic rather than tokenizer estimates.
+
+Task 9 Implementer context contains accepted plan, explicitly authorized path sets,
+fresh typed source snapshots with exact UTF-8/SHA-256/byte size, previous implementation
+reference, selected investigation and relevant refs. Source is untrusted user-role
+data, never system instructions. MutationConfig adds explicit byte/file/write bounds;
+the existing model character/token ceilings can reject earlier. The prompt forbids
+DELETE, diffs, unrelated rewrites and claims of applied changes/test/command execution.
+Caller-selected source must exclude secrets; arbitrary source is not secretly scanned.
 
 Requirement/research text is untrusted data, not policy authority. Instructions
 forbid invented tool use, source modification, approvals, and workflow decisions.
@@ -190,7 +202,7 @@ prompt, or hidden repair call occurs.
 The **selected routing candidate** is the primary result when no escalation is
 reserved, otherwise the successful escalated result. Only this candidate passes
 through InvestigationGate and enum routing. Both artifacts remain queryable;
-neither is overwritten. Selected CODE_FIX/TEST_FIX routes to fake Implementer only
+neither is overwritten. Selected CODE_FIX/TEST_FIX routes to the configured Implementer
 with the unchanged gate and defect-cycle checks. MORE_RESEARCH routes to RESEARCHING;
 HUMAN_ACTION blocks with resume_state=INVESTIGATING.
 
@@ -224,6 +236,10 @@ correlated AGENT_COMPLETED event's model_metadata. Missing usage remains null.
 There is no schema migration: existing event JSON represents this metadata.
 No raw provider response or reasoning text is stored. Gate PASS still determines
 artifact acceptance and progression; COMPLETED only means contract-valid output.
+For real Implementer, COMPLETED additionally requires policy validation and successful
+deterministic application. Proposal and source manifest are reserved before writes;
+completion stores canonical applied facts separately. Unresolved successful writes
+require explicit reconciliation, not another model call. See MUTATION.md.
 
 ## Offline tests and optional smoke
 
@@ -256,6 +272,8 @@ with low effort, 2048 output tokens, and a 60-second HTTP timeout, prints only
 high-level success/usage or a sanitized failure code, and persists nothing.
 This optional paid smoke is not part of CI and was not run during Task 7.
 
-Remaining scope: real Implementer, source mutation by agents, tools, provider memory,
-workers, UI, rate-limit scheduling, and Task 9 are not implemented. Task 8 adds no
-dependency and does not run the optional paid smoke.
+Task 9 adds actual proposal-driven mutation and real fail/repair/retest integration,
+with fresh hashes, rollback, immutable proposal/canonical evidence and restart stops.
+No fixture changes source to perform repair. Normal tests remain zero-network; no
+paid smoke was run and no Task 9 dependency was added. Model tools, provider memory,
+workers, UI, rate-limit scheduling and Task 10 remain outside this implementation.

@@ -1,7 +1,7 @@
-# Agent runtime — Bootstrap Tasks 5–8
+# Agent runtime — Bootstrap Tasks 5–9
 
-QA Sentinel coordinates one persisted task end to end with scenario-configured fake
-outputs. Agents receive no database/session handle or mutable Task. WorkflowRunner
+QA Sentinel coordinates one persisted task using fake or reasoning-only real
+roles. Agents receive no database/session handle or mutable Task. WorkflowRunner
 selects routes; WorkflowEngine validates and atomically records every state change
 with gate, decision, transition, and event evidence.
 
@@ -178,14 +178,13 @@ runner. No provider-type branching or duplicate TestRun insertion is needed.
 
 See EXECUTION.md for argv/path/environment policy, timeout cleanup, durable attempt
 selection, start/completion transactions, and the unchanged TESTING stop limitation.
-No agent modifies calculator source. Task 7 adds a provider-neutral Responses API
+Task 7 adds a provider-neutral Responses API
 adapter, bounded repository-owned prompts, real Researcher/Planner, and explicit
-CompositeAgentRuntime routing. Task 8 extends real reasoning to later roles while
-Implementer remains fake. See MODELS.md for no-tools
+CompositeAgentRuntime routing. Task 8 extends real reasoning to later roles. See MODELS.md for no-tools
 requests, provenance, sanitized errors, stateless context, deterministic schema
-correction, disabled SDK retries, and offline tests. Task 8 extends real reasoning
-to Test Analyzer, Investigator, and Reviewer. Implementer remains fake. Playwright,
-API, CLI, UI, workers, and Task 9 remain unimplemented.
+correction, disabled SDK retries, and offline tests. Task 9 adds reasoning-only real
+Implementer proposals and deterministic MutationService. Playwright, API, CLI, UI,
+workers and Task 10 remain unimplemented.
 
 ## Task 8 failure reasoning and explicit escalation
 
@@ -218,3 +217,28 @@ new implementation/test/review attempts. HUMAN_ACTION blocks at INVESTIGATING.
 Reviewer APPROVE with incomplete coverage fails ReviewGate. Analyzer refusal or
 exhausted recovery still cannot take an ANALYZING -> BLOCKED edge; it records errors
 and raises RunnerStoppedError while preserving ANALYZING.
+
+## Task 9 controlled implementation
+
+RealAgentRuntime advertises proposal capability; composite routing delegates this
+to its Implementer runtime. AgentExecutor uses ControlledImplementationExecution
+with an explicitly configured MutationService, while fake Implementer remains
+unchanged. The real path commits STARTED, captures current accepted-plan-authorized
+source, calls the model, validates and reserves the proposal, applies files, then
+commits canonical ImplementationOutput and COMPLETED with actual applied evidence.
+No DB transaction spans the model call or project writes. Source snapshots use fresh
+SHA-256 preconditions on every attempt, including repair.
+
+IMPLEMENTATION_PROPOSAL is separate immutable evidence. Canonical pending-output
+selection filters by output ArtifactType because a real Implementer invocation has
+two artifacts. On restart, completed canonical output is hash-verified and reused
+without another call/apply; it is verified again before TESTING. Failed application
+does not publish success. Successful writes followed by persistence failure or
+failed rollback remain unresolved STARTED and require explicit reconciliation.
+The graph, gates, retries, escalation, defect and circuit budgets remain unchanged.
+
+Task 9 tests apply actual calculator mutations in temporary targets: first proposal
+omits the guard, real pytest fails, Analyzer/Investigator diagnose, second Implementer
+proposal fixes current code, real pytest passes, Reviewer and ReviewGate reach DONE.
+No fixture switches source state. See MUTATION.md for configuration, protected paths,
+size/encoding limits, rollback, reconciliation and trusted-workspace/TOCTOU limits.

@@ -24,5 +24,9 @@ class CompositeAgentRuntime:
         describe = getattr(runtime, "investigator_models", None)
         return None if describe is None else describe()
 
+    def implementation_proposals(self):
+        runtime = self.routes.get(AgentName.IMPLEMENTER)
+        return getattr(runtime, "implementation_proposals", lambda: False)()
+
     def run(self, agent_name, context):
         return self._route(agent_name).run(agent_name, context)

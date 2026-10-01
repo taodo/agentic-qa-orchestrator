@@ -97,14 +97,13 @@ def test_malicious_evidence_is_data_and_only_selected_fields_are_sent(workflow_o
         build_request(role, huge, ModelSettings(model="test"))
 
 
-def test_classification_rca_review_boundaries_and_implementer_unsupported():
+def test_classification_rca_review_boundaries_and_implementer_configured():
     assert "Do not perform RCA or recommend code changes" in TEST_ANALYZER
     assert "Perform structured root-cause analysis" in INVESTIGATOR
     assert "Do not execute repair" in INVESTIGATOR
     assert "Do not trust Implementer self-report without evidence" in REVIEWER
     assert "ReviewGate controls approval" in REVIEWER
-    with pytest.raises(ModelError, match="UNSUPPORTED_ROLE"):
-        RoleModelConfig().for_role(A.IMPLEMENTER)
+    assert RoleModelConfig().for_role(A.IMPLEMENTER).reasoning_effort == "high"
 
 
 @pytest.mark.parametrize("updates,expected", [({"confidence": 0.1}, "LOW_CONFIDENCE"),

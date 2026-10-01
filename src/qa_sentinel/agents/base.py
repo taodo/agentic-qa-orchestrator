@@ -13,6 +13,7 @@ from qa_sentinel.schemas.test_result import TestAnalysisOutput
 from qa_sentinel.schemas.investigation import InvestigationOutput
 from qa_sentinel.schemas.review import ReviewOutput
 from qa_sentinel.models.base import ModelResponse
+from qa_sentinel.schemas.mutation import SourceFileSnapshot
 
 AgentOutput = ResearchOutput | PlannerOutput | ImplementationOutput | TestAnalysisOutput | InvestigationOutput | ReviewOutput
 
@@ -42,6 +43,7 @@ class ImplementationContext(RuntimeContext):
     plan_artifact_id: UUID
     previous_implementation_ref: UUID | None = None
     investigation: InvestigationOutput | None = None
+    source_files: tuple[SourceFileSnapshot, ...] = ()
 
 
 class AnalysisContext(RuntimeContext):

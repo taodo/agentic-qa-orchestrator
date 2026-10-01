@@ -37,8 +37,9 @@ failures. Product FAIL still routes to analysis. See EXECUTION.md for exact poli
 the unchanged TESTING stop limitation.
 
 Task 7 implements Researcher/Planner model calls; Task 8 adds real Test Analyzer,
-Investigator, and Reviewer. Real Implementer, agent source edits, a general
-permission engine, CLI, UI, workers, and Task 9 remain unimplemented.
+Investigator and Reviewer. Task 9 adds real Implementer proposals and deterministic
+controlled mutation. A general permission engine, CLI, UI, workers and Task 10
+remain unimplemented. Models never directly edit source.
 
 Contract hardening:
 
@@ -176,4 +177,23 @@ pytest failure/fix/retest with mocked real reasoning. ReviewGate rejects insuffi
 APPROVE coverage; HUMAN_ACTION blocks through WorkflowEngine. No dependency or
 migration is added, no real API smoke is run, and no model receives tools.
 
-Recommended next step: BOOTSTRAP TASK 9 — Real Implementer & Controlled Code Mutation.
+Task 9 adds frozen source/proposal contracts, configurable real Implementer, bounded
+plan-authorized UTF-8 snapshots, complete-set mutation policy, CREATE/MODIFY apply,
+SHA-256 stale protection, rollback and explicit persistence reconciliation stops.
+The minimal IMPLEMENTATION_PROPOSAL artifact is separate from canonical actual-file
+evidence; existing database string storage needs no migration. No model tools,
+new dependency, Git rollback, shell mutation or state-machine/gate/reliability change
+is added. Fake Implementer stays compatible. Temporary-workspace integration applies
+the actual first implementation and repair, running real pytest FAIL then PASS and
+real mocked review through ReviewGate. No fixture switches source for repair.
+
+Task 9 assumptions: trusted exclusive target access; existing parent directories;
+UTF-8 exact-byte newline preservation; same-directory hardlink support for exclusive
+CREATE; practical mode preservation for MODIFY; caller-selected source excludes
+secrets; model character/token limits apply in addition to filesystem byte limits.
+Filesystem/DB completion is not distributed atomic: unresolved STARTED requires
+manual reconciliation and process death may lose original in-memory backups.
+Portable filesystem checks have TOCTOU limits, not hostile-code sandbox guarantees.
+See MUTATION.md for full policy, error mapping and recovery boundaries.
+
+Recommended next step: BOOTSTRAP TASK 10 — Repository Research Tools & Read-Only Agent Tooling.
