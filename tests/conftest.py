@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 import pytest
+import json
+from types import SimpleNamespace
+from collections import deque
 from qa_sentinel.domain.task import Task
 from qa_sentinel.domain.artifact import Artifact
 from qa_sentinel.domain.invocation import AgentInvocation
@@ -14,6 +17,54 @@ from qa_sentinel.domain.test_run import TestRun as RunRecord
 from qa_sentinel.persistence.records import Requirement, AcceptanceCriterionRecord, FailureFingerprint
 from qa_sentinel.persistence.database import create_engine, create_session_factory
 from qa_sentinel.persistence.models import Base
+
+
+@pytest.fixture(autouse=True)
+def offline_provider_guard(monkeypatch):
+    """Normal pytest never has provider credentials or a live HTTP transport."""
+    import httpx
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Live provider HTTP transport is forbidden in automated tests")
+    monkeypatch.setattr(httpx.HTTPTransport, "handle_request", forbidden)
+
+
+@pytest.fixture
+def mock_openai():
+    """Real SDK with deterministic mock HTTP responses; captures requests only in test memory."""
+    import httpx
+    from openai import OpenAI
+    clients = []
+    def make(outputs):
+        queue = deque(outputs)
+        calls = []
+        def respond(request):
+            calls.append(json.loads(request.content))
+            assert queue, "Unexpected extra provider request (hidden retry)"
+            item = queue.popleft()
+            if item == "timeout":
+                raise httpx.ReadTimeout("synthetic-sensitive-provider-error", request=request)
+            if item == "connection":
+                raise httpx.ConnectError("synthetic-sensitive-provider-error", request=request)
+            if isinstance(item, int):
+                return httpx.Response(item, json={"error": {"message": "synthetic-sensitive-provider-error",
+                    "type": "synthetic", "code": "synthetic"}})
+            refusal = item == "refusal"
+            content = ({"type": "refusal", "refusal": "synthetic-sensitive-refusal"} if refusal else
+                {"type": "output_text", "text": json.dumps(item.model_dump(mode="json")
+                    if hasattr(item, "model_dump") else item), "annotations": []})
+            return httpx.Response(200, json={"id": "resp_mock_1", "object": "response", "created_at": 1,
+                "status": "completed", "model": json.loads(request.content)["model"],
+                "output": [{"id": "msg_mock_1", "type": "message", "role": "assistant",
+                            "status": "completed", "content": [content]}],
+                "usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}})
+        client = OpenAI(api_key="synthetic-test-credential", max_retries=0,
+            http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+        clients.append(client)
+        return SimpleNamespace(client=client, calls=calls, queue=queue)
+    yield make
+    for client in clients:
+        client.close()
 
 
 @pytest.fixture

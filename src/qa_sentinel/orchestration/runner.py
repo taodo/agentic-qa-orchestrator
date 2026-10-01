@@ -118,6 +118,13 @@ class WorkflowRunner:
         with UnitOfWork(self.session_factory) as uow:
             attempt = 1 + sum(i.agent == agent for i in uow.invocations.list_by_task(task.id))
             base = dict(task_id=task.id, attempt=attempt)
+            events = uow.history.list_events(task.id)
+            invocations = {i.id: i for i in uow.invocations.list_by_task(task.id) if i.agent == agent}
+            reserved = {e.correlation.invocation_id for e in events if e.event_type == "RETRY_SCHEDULED"}
+            base["schema_correction"] = any(e.event_type == "AGENT_FAILED" and
+                e.payload.get("schema_correction_planned") is True and
+                e.correlation.invocation_id in invocations and e.correlation.invocation_id in reserved
+                for e in events)
             if agent == AgentName.RESEARCHER:
                 prior = self._artifact(uow, task.id, ArtifactType.RESEARCH, optional=True)
                 refs = () if prior is None else (str(prior.id),)

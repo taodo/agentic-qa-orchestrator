@@ -1,4 +1,4 @@
-# Fake-agent vertical slice — Bootstrap Task 5
+# Agent runtime — Bootstrap Tasks 5–7
 
 QA Sentinel coordinates one persisted task end to end with scenario-configured fake
 outputs. Agents receive no database/session handle or mutable Task. WorkflowRunner
@@ -68,7 +68,9 @@ means valid output was produced; gates still control approval.
 
 Simulated failures atomically append ErrorRecord, set invocation FAILED or BLOCKED,
 set finished_at/error_id, and record the lifecycle event. Required model/reasoning
-fields use "fake" / "none". No tokens, costs, or provider calls are implemented.
+fields use "fake" / "none" for fake roles. Task 7 records configured model/reasoning
+for real Researcher/Planner, with usage and bounded provider response metadata in
+correlated lifecycle events; no cost fields or schema migration is added.
 Errors use fixed concise messages. Raw malformed payloads, exception text, and
 input-bearing Pydantic validation details are not persisted.
 
@@ -176,5 +178,9 @@ runner. No provider-type branching or duplicate TestRun insertion is needed.
 
 See EXECUTION.md for argv/path/environment policy, timeout cleanup, durable attempt
 selection, start/completion transactions, and the unchanged TESTING stop limitation.
-No agent modifies calculator source. Real LLMs, model adapters, prompts, Playwright,
-API, CLI, UI, workers, and Task 7 remain unimplemented.
+No agent modifies calculator source. Task 7 adds a provider-neutral Responses API
+adapter, bounded repository-owned prompts, real Researcher/Planner, and explicit
+CompositeAgentRuntime routing. Later roles remain fake. See MODELS.md for no-tools
+requests, provenance, sanitized errors, stateless context, deterministic schema
+correction, disabled SDK retries, and offline tests. Playwright, API, CLI, UI,
+workers, and Task 8 remain unimplemented.

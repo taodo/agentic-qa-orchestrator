@@ -36,8 +36,9 @@ real or fake providers and applies durable TEST_EXECUTION retries to eligible sy
 failures. Product FAIL still routes to analysis. See EXECUTION.md for exact policy and
 the unchanged TESTING stop limitation.
 
-Real agents/model calls, agent source edits, a general permission engine, CLI, UI,
-background workers, and Task 7 remain unimplemented.
+Researcher/Planner model calls are implemented in Task 7 (details below). Real
+later roles, agent source edits, a general permission engine, CLI, UI, background
+workers, and Task 8 remain unimplemented.
 
 Contract hardening:
 
@@ -150,4 +151,17 @@ Task 6 assumptions:
 - TESTING cannot enter BLOCKED; denied/exhausted recovery records evidence and raises
   RunnerStoppedError without routing infrastructure failures to product analysis.
 
-Recommended next step: BOOTSTRAP TASK 7 — Real Model Adapter & First LLM Agents.
+Task 7 provides a provider-neutral model boundary, the official OpenAI Responses
+API adapter, native structured-output parsing with repeated contract validation,
+bounded deterministic prompts, and real Researcher/Planner. Explicit composite
+routing keeps all other roles fake. Calls have no tools or provider conversation
+state. SDK retries are disabled; existing reliability owns application retries.
+One explicit schema correction adds instructions to the next reserved invocation;
+repeat malformed output without further changed input stops safely.
+Configured model/reasoning/attempt/timestamps remain on AgentInvocation; safe usage,
+response ID, and latency metadata use existing correlated events, without migration.
+The only new direct dependency is the official OpenAI SDK. Offline tests require no
+key and use actual SDK mock transport. The real API smoke is developer-only and
+was not run. See MODELS.md for boundaries, configuration, and limitations.
+
+Recommended next step: BOOTSTRAP TASK 8 — Real Investigator, Reviewer & Failure-Repair Reasoning.

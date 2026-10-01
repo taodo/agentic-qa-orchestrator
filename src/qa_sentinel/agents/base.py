@@ -12,6 +12,7 @@ from qa_sentinel.schemas.implementation import ImplementationOutput
 from qa_sentinel.schemas.test_result import TestAnalysisOutput
 from qa_sentinel.schemas.investigation import InvestigationOutput
 from qa_sentinel.schemas.review import ReviewOutput
+from qa_sentinel.models.base import ModelResponse
 
 AgentOutput = ResearchOutput | PlannerOutput | ImplementationOutput | TestAnalysisOutput | InvestigationOutput | ReviewOutput
 
@@ -21,11 +22,13 @@ class RuntimeContext(BaseModel):
     task_id: UUID
     attempt: Attempt
     evidence_refs: tuple[NonBlank, ...] = ()
+    schema_correction: bool = False
 
 
 class ResearchContext(RuntimeContext):
     requirement: NonBlank
     prior_research_ref: UUID | None = None
+    repository_evidence: tuple[NonBlank, ...] = ()
 
 
 class PlanContext(RuntimeContext):
@@ -92,4 +95,4 @@ ARTIFACT_TYPES = MappingProxyType({
 
 
 class AgentRuntime(Protocol):
-    def run(self, agent_name: AgentName, context: AgentContext) -> AgentOutput: ...
+    def run(self, agent_name: AgentName, context: AgentContext) -> AgentOutput | ModelResponse: ...
