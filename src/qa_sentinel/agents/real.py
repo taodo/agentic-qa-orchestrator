@@ -6,12 +6,19 @@ from qa_sentinel.models.config import RoleModelConfig
 from pydantic import ValidationError
 from qa_sentinel.domain.enums import AgentName
 from qa_sentinel.schemas.mutation import ImplementationProposal
+from qa_sentinel.schemas.repository import ResearchTurn, PlannerTurn
 
 
 class RealAgentRuntime:
-    def __init__(self, adapter: ModelAdapter, config: RoleModelConfig | None = None):
+    def __init__(self, adapter: ModelAdapter, config: RoleModelConfig | None = None, *, repository_tools=False):
+        if type(repository_tools) is not bool:
+            raise ValueError("Repository capability must be an explicit boolean")
         self.adapter = adapter
         self.config = config or RoleModelConfig()
+        self.repository_tools = repository_tools
+
+    def repository_turns(self, agent):
+        return self.repository_tools and agent in {AgentName.RESEARCHER, AgentName.PLANNER}
 
     def _settings(self, agent, context=None):
         escalated = type(context) is InvestigationContext and context.escalation_decision_id is not None
@@ -32,9 +39,12 @@ class RealAgentRuntime:
 
     def run(self, agent_name, context: AgentContext):
         settings = self._settings(agent_name, context)
-        request = build_request(agent_name, context, settings)
+        repository = self.repository_turns(agent_name)
+        request = build_request(agent_name, context, settings, repository_tools=repository)
         try:
             expected = ImplementationProposal if agent_name == AgentName.IMPLEMENTER else OUTPUT_TYPES[agent_name]
+            if repository:
+                expected = ResearchTurn if agent_name == AgentName.RESEARCHER else PlannerTurn
             response = self.adapter.generate(request, expected)
             if type(response.parsed_output) is not expected:
                 raise ModelError(ProviderErrorCategory.MALFORMED_RESPONSE)

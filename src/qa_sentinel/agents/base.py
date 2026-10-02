@@ -14,6 +14,7 @@ from qa_sentinel.schemas.investigation import InvestigationOutput
 from qa_sentinel.schemas.review import ReviewOutput
 from qa_sentinel.models.base import ModelResponse
 from qa_sentinel.schemas.mutation import SourceFileSnapshot
+from qa_sentinel.schemas.repository import RepositoryEvidence
 
 AgentOutput = ResearchOutput | PlannerOutput | ImplementationOutput | TestAnalysisOutput | InvestigationOutput | ReviewOutput
 
@@ -30,12 +31,14 @@ class ResearchContext(RuntimeContext):
     requirement: NonBlank
     prior_research_ref: UUID | None = None
     repository_evidence: tuple[NonBlank, ...] = ()
+    repository_results: tuple[RepositoryEvidence, ...] = ()
 
 
 class PlanContext(RuntimeContext):
     requirement: NonBlank
     research: ResearchOutput
     research_artifact_id: UUID
+    repository_results: tuple[RepositoryEvidence, ...] = ()
 
 
 class ImplementationContext(RuntimeContext):

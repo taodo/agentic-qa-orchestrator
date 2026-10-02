@@ -7,6 +7,7 @@ from qa_sentinel.agents.base import (
 from qa_sentinel.agents.fake import ScenarioExhaustedError
 from qa_sentinel.execution.base import TestExecutionPendingError
 from qa_sentinel.mutation.contracts import MutationReconciliationRequired
+from .repository_execution import RepositoryReconciliationRequired
 from qa_sentinel.domain.enums import (
     TaskState as S, AgentName, ArtifactType, GateResult as G, ErrorType,
     PlannerDecision, ReviewDecision, InvestigationActionType, InvestigationStatus,
@@ -58,11 +59,12 @@ def review_target(output):
 class WorkflowRunner:
     def __init__(self, session_factory, runtime, test_provider, *, max_steps: int = 50,
                  reliability_config: ReliabilityConfig | None = None,
-                 investigation_evidence_conflict: bool = False, mutation_service=None):
+                 investigation_evidence_conflict: bool = False, mutation_service=None, repository_service=None):
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
         self.session_factory = session_factory
-        self.executor = AgentExecutor(session_factory, runtime, mutation_service=mutation_service)
+        self.executor = AgentExecutor(session_factory, runtime, mutation_service=mutation_service,
+                                      repository_service=repository_service)
         self.test_provider = test_provider
         self.workflow = WorkflowEngine(session_factory)
         if type(investigation_evidence_conflict) is not bool:
@@ -196,9 +198,9 @@ class WorkflowRunner:
                 return task
             try:
                 self._step(task)
-            except (RunnerStoppedError, MutationReconciliationRequired) as failure:
+            except (RunnerStoppedError, MutationReconciliationRequired, RepositoryReconciliationRequired) as failure:
                 self._workflow_error(task.id, "RUNTIME_EVIDENCE_UNAVAILABLE")
-                if isinstance(failure, MutationReconciliationRequired):
+                if isinstance(failure, (MutationReconciliationRequired, RepositoryReconciliationRequired)):
                     raise RunnerStoppedError(str(failure)) from None
                 raise
         task = self._task(task_id)
@@ -236,8 +238,12 @@ class WorkflowRunner:
             invocation = None if task.current_invocation_id is None else uow.invocations.get(task.current_invocation_id)
             if invocation is None or invocation.agent != agent:
                 return None
-            if invocation.status.value == "STARTED":
-                raise RunnerStoppedError("An unfinished invocation requires explicit reconciliation")
+        if invocation.status.value == "STARTED":
+            if self.executor.repository_enabled(agent) and self.executor.repository.has_session(invocation):
+                context = self.build_context(task, agent).model_copy(update={"attempt": invocation.attempt})
+                return self.executor.resume_repository(invocation.id, context)
+            raise RunnerStoppedError("An unfinished invocation requires explicit reconciliation")
+        with UnitOfWork(self.session_factory) as uow:
             if invocation.status.value != "COMPLETED":
                 scheduled = any(e.event_type == "RETRY_SCHEDULED" and e.correlation.invocation_id == invocation.id
                                 for e in uow.history.list_events(task.id))

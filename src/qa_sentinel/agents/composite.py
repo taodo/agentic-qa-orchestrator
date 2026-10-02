@@ -28,5 +28,9 @@ class CompositeAgentRuntime:
         runtime = self.routes.get(AgentName.IMPLEMENTER)
         return getattr(runtime, "implementation_proposals", lambda: False)()
 
+    def repository_turns(self, agent):
+        runtime = self.routes.get(agent)
+        return getattr(runtime, "repository_turns", lambda role: False)(agent)
+
     def run(self, agent_name, context):
         return self._route(agent_name).run(agent_name, context)

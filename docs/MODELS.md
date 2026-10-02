@@ -1,4 +1,4 @@
-# Real model boundary — Bootstrap Tasks 7–9
+# Real model boundary — Bootstrap Tasks 7–10
 
 Agents reason over supplied context. Model adapters do not receive persistence,
 workflow state, commands, tools, or mutable Task objects. Deterministic gates and
@@ -275,5 +275,22 @@ This optional paid smoke is not part of CI and was not run during Task 7.
 Task 9 adds actual proposal-driven mutation and real fail/repair/retest integration,
 with fresh hashes, rollback, immutable proposal/canonical evidence and restart stops.
 No fixture changes source to perform repair. Normal tests remain zero-network; no
-paid smoke was run and no Task 9 dependency was added. Model tools, provider memory,
-workers, UI, rate-limit scheduling and Task 10 remain outside this implementation.
+paid smoke was run and no Task 9 dependency was added. Provider-side tools, provider
+memory, workers, UI and rate-limit scheduling remain outside this implementation.
+
+## Task 10 repository turns
+
+Researcher and Planner optionally return ResearchTurn/PlannerTurn through native
+structured output. TOOL_REQUEST contains a typed read-only repository request;
+FINAL_OUTPUT contains the unchanged ResearchOutput/PlannerOutput. RealAgentRuntime
+enables this explicitly with repository_tools=True. Composite routing delegates
+capability by role. Implementer still uses Task 9 source snapshots, while Reviewer,
+Analyzer and Investigator retain supplied context without repository tools.
+
+The unchanged Responses adapter still sends tools=[], tool_choice="none" and
+store=False with SDK retries disabled. ControlledRepositoryExecution owns each
+explicit call, bounded deterministic reads, ordered evidence and durable model-turn
+metadata. Existing schema correction and ReliabilityService retain retry ownership.
+Repository text stays in bounded user context, never system policy. There is no
+provider function calling, filesystem capability or hidden provider memory.
+See REPOSITORY_TOOLS.md for limits, evidence accounting and reconciliation rules.
