@@ -1,4 +1,4 @@
-# Frontend foundation (Task 14)
+# Frontend operator dashboard (Tasks 14–15)
 
 The Web is a local operator/control dashboard over the accepted Task 13 API.
 React, TypeScript and Vite live in the separate `frontend/` workspace. Python/core
@@ -62,7 +62,7 @@ The UI shows safe API errors when no backend is listening.
 | --- | --- |
 | /projects | Project registry → GET /projects?limit=50 |
 | /projects/:projectId | Project metadata and tasks → GET /projects/{id}, GET /projects/{id}/tasks?limit=50 |
-| /tasks/:taskId | Task metadata and persisted timeline → GET /tasks/{id}, GET /tasks/{id}/timeline?limit=100 |
+| /tasks/:taskId?view=overview | Task operator console → GET /tasks/{id}, GET /tasks/{id}/timeline?limit=100; evidence loads on section open |
 
 All API paths above have the `/api/v1` prefix. Sidebar navigation contains only
 the implemented Projects destination. Detail screens link to related persisted
@@ -77,7 +77,7 @@ during submission and use an immediate in-flight guard. Server validation remain
 authoritative. Success does not create local IDs or optimistic workflow state.
 
 Task Detail shows requirement, canonical state, IDs/timestamps, resume target,
-implementation/defect/review counters and terminal reason. Timeline displays only
+current invocation, implementation/defect/review counters and terminal reason. Timeline displays only
 returned persisted entries, in exactly API order, with timestamps/type/summary,
 actor and approved compact details. It never sorts UUIDs or invents events.
 Truncated collections explicitly disclose that more records exist; there is no
@@ -88,8 +88,8 @@ unbounded download or generalized pagination in this phase.
 Run posts once to `/tasks/{id}/run` and waits for synchronous completion. Both
 execution controls are disabled while it is pending, with a clear waiting status.
 An immediate ref guard prevents repeated same-action requests before React renders.
-After either success or a safe stop, Task and timeline are re-fetched so committed
-state/evidence is visible. Backend responses remain the authority; returned state
+After either success or a safe stop, Task, timeline and already-opened evidence
+panels are re-fetched so committed state/evidence is visible. Backend responses remain the authority; returned state
 is never optimistically assigned in the browser.
 
 BLOCKED with a persisted resume_state exposes Resume, posting only `/resume`.
@@ -133,8 +133,75 @@ uses intercepted in-memory API fixtures to inspect desktop screens and the
 390-pixel layout; those fixtures are not part of the product or a backend bootstrap.
 The full Python regression suite remains required.
 
+## Task Detail operator console (Task 15)
+
+Task Detail uses semantic section links, with the selected section in `?view=...`.
+The choices are Overview, Timeline, Artifacts, Invocations, Test Runs, Errors,
+Decisions and Gates. Links are keyboard accessible and expose `aria-current`.
+Direct URLs, reload and Back/Forward retain the selection; invalid values show
+Overview. Run/Resume and their feedback remain above the sections on every view.
+
+Overview and Timeline load initially, including on a deep-linked evidence view.
+Other sections mount only when first opened and retain in-memory data while the
+operator switches sections within that Task. There is no eager evidence fetch,
+automatic retry, polling or workflow state simulation.
+
+| Section / query value | Existing Task 13 endpoint | Presentation |
+| --- | --- | --- |
+| Overview / overview | GET /tasks/{id} | Requirement, state, IDs, timestamps, counters and persisted reasons |
+| Timeline / timeline | GET /tasks/{id}/timeline?limit=100 | API order, actor, details, correlation IDs |
+| Artifacts / artifacts | GET /tasks/{id}/artifacts?limit=100 | Metadata, producer, schema, supersession and expandable JSON |
+| Invocations / invocations | GET /tasks/{id}/invocations?limit=100 | Agent, model, reasoning effort, attempt, status, times and error ID |
+| Test Runs / test-runs | GET /tasks/{id}/test-runs?limit=100 | Separate outcome/execution status, counts, environment and artifact IDs |
+| Errors / errors | GET /tasks/{id}/errors?limit=100 | Persisted type/severity/owner, flags, message, references and approved source fields |
+| Decisions / decisions | GET /tasks/{id}/decisions?limit=100 | Persisted routing type/source/reason and evidence references |
+| Gates / gates | GET /tasks/{id}/gates?limit=100 | Persisted result, individual check results/reasons and blocking reasons |
+
+All paths have `/api/v1` prepended by the shared typed request helper. API calls
+remain in `api/tasks.ts`. `EvidencePanel` reuses the latest-request-wins read hook,
+with independent loading/error/empty states, explicit Refresh and an opened-panel
+refresh registry. Refresh updates only the selected collection and is disabled
+while pending. After Run **or** Resume, Task/Timeline and registered panels refresh,
+including after safe-stop errors. Unopened panels are never fetched merely because
+an action completed. Both execution controls remain disabled through the refresh.
+Task route identity remounts the console; late reads are discarded and an action
+that completes after navigation does not start reads against the old Task.
+
+All collections are bounded prefixes. `truncated: true` displays an explicit
+notice; `total_returned` does not claim the database total. No unbounded load-all
+or pagination is implemented. Returned list/timeline order is preserved.
+
+Record renderers select public DTO fields explicitly. No prompt, input context,
+raw provider response, stdout/stderr or hidden reasoning fields are displayed.
+Artifact `content` is the approved public JSON supplied by the API: a short
+collapsed preview appears by default and Expand/Collapse reveals the complete
+pretty-printed structure. Controls expose `aria-expanded`/`aria-controls`.
+React escapes all JSON, reasons and messages as text; no raw HTML renderer,
+JSON editor, local file read, evidence logging or mutation control exists.
+
+Each enum domain has its own typed presentation helper; Task states, invocation
+statuses, test outcomes/execution statuses, gate results and error severities are
+not mapped into new workflow states. Correlation IDs use wrapping monospace text.
+There is no inferred relationship lookup or optional clipboard behavior.
+
+Compact semantic lists and definition lists wrap at narrow widths; JSON has a
+bounded visual height and internal scrolling. Section links wrap, focus remains
+visible, and loading/empty/error feedback uses status/alert semantics. Desktop
+remains primary and no accessibility certification is claimed.
+
+Task 15 tests additionally cover lazy/isolated evidence requests, section URL and
+history, metadata/status fields, JSON expansion, literal malicious-looking text,
+private-field exclusion, truncation, stale route reads and action refresh of only
+opened panels. Fetch/XHR remain mocked/forbidden and tests make no real network or
+provider calls. Python backend contracts and dependencies remain unchanged.
+
 Current limits: trusted local/dev API without auth, separately composed backend,
-bounded collection prefixes and basic Task timeline only. Task 15 can add richer
-artifact/invocation/test/error/decision/gate inspection after review and approval.
-No Task 15 observability tabs, source editor/diff viewer, terminal, analytics,
-notifications, global state framework, settings, deployment or auth is implemented.
+bounded prefixes, manual freshness and in-memory per-Task evidence. No source
+editor/diff engine, terminal, analytics, notifications, global state framework,
+settings, deployment or auth is implemented. Task 16 is not implemented.
+
+The required `npm ci` audit reports two moderate entries in the existing Vitest
+3.2.7 development dependency chain (`vitest` and `@vitest/mocker`, advisory
+GHSA-82fw-gwwq-j7x9). Task 15 does not change the accepted dependency lockfile or
+add a test server/UI. A future dependency maintenance change can assess the major
+version upgrade separately; the production bundle does not include Vitest.
