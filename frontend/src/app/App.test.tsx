@@ -41,7 +41,9 @@ describe('routing and Projects', () => {
   });
   it('never renders raw sensitive unknown response bodies', async () => {
     vi.mocked(fetch).mockResolvedValue(response({ stack: 'synthetic-sensitive-body' }, 500)); open();
-    expect(await screen.findByText('HTTP_ERROR')).toBeInTheDocument(); expect(document.body).not.toHaveTextContent('synthetic');
+    expect(await screen.findByText('HTTP_ERROR')).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('synthetic-sensitive-body');
+    expect(screen.getByRole('alert')).not.toHaveTextContent('synthetic');
   });
   it('creates a Project and refetches server IDs without ownership fields', async () => {
     let created = false;

@@ -1,5 +1,21 @@
 # Architecture
 
+## Implemented product boundary (Tasks 1–17)
+
+The operator frontend uses the API, which delegates to QASentinelApplication
+above the core. **External callers use Application Services, not orchestration
+internals or persistence repositories directly.** Trusted hosts explicitly
+compose Project-owned runtimes; request/model data cannot select workspace roots.
+The loopback real host executes against trusted local workspaces. The protected
+Render preview uses only deterministic synthetic demo evidence. See
+[PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md), [Hosting](HOSTING.md) and
+[Deployment](DEPLOYMENT.md) for current scope and limits.
+
+The original invariant list below expresses the architectural intent. Task 1's
+schema-only scope is historical; later tasks implement the accepted boundaries
+described in [Phase 1](PHASE_1.md). It is not a claim of full distributed
+idempotency, hostile-workspace sandboxing or general content secret detection.
+
 Agents reason. Tools act. Evidence records reality.
 The Orchestrator controls progression.
 
