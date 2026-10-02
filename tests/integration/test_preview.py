@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
-from qa_sentinel.host import cli, composition, container
+from qa_sentinel.host import cli, composition, container, preflight
 from qa_sentinel.host.config import HostConfig, HostError, LocalProjectConfig
 from qa_sentinel.host.preview import preview_credentials
 from qa_sentinel.host.web import create_host_app
@@ -68,8 +68,8 @@ def test_any_provider_key_is_forbidden_in_preview(config, monkeypatch, key):
 def test_preview_can_only_compose_fake_runtime(config, monkeypatch):
     def forbidden(*args, **kwargs): raise AssertionError('Physical/real composition forbidden')
     monkeypatch.setattr(composition, 'real_components', forbidden)
-    for cls in (composition.RealAgentRuntime, composition.OpenAIModelAdapter, composition.RepositoryReadService,
-        composition.MutationService, composition.TestExecutionService, composition.PytestTestResultProvider):
+    for cls in (composition.RealAgentRuntime, composition.OpenAIModelAdapter, preflight.RepositoryReadService,
+        preflight.MutationService, composition.TestExecutionService, composition.PytestTestResultProvider):
         monkeypatch.setattr(cls, '__init__', forbidden)
     app = create_host_app(preview(config))
     with TestClient(app) as client:

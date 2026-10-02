@@ -42,6 +42,6 @@ it('keeps the preview notice and Project routing, with no additional request whe
   expect(projectLink).toHaveAttribute('href', '/projects/project-a');
   fireEvent.click(projectLink);
   expect(await screen.findByRole('heading', { name: project.name })).toBeVisible();
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(4));
   expect(screen.getByRole('button', { name: 'Create Task' })).toBeVisible();
 });

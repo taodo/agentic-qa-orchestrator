@@ -104,6 +104,22 @@ executable code; policies are not an OS sandbox. Read the
 [operator guide](docs/PRODUCT_GUIDE.md#real-local-mode) and
 [configuration instructions](docs/HOSTING.md#real-local-mode) before running.
 
+## Real Project onboarding
+
+Create/select a logical Project in the same database through the UI/API, then stop
+the host. Use `qa-sentinel local init` with explicit absolute database, frontend,
+workspace paths, Project key and repeatable pytest targets to generate nonsecret
+host configuration. `qa-sentinel local validate --config ...` checks existing
+identity and accepted policies read-only, with no model calls, test execution or
+source mutation. OPENAI_API_KEY stays in the local environment and is only
+presence-checked. Start `serve --config ...`, inspect **Runtime readiness** on
+Project Detail, then create a Task and Run. Project persistence never gains a
+workspace path. [Exact commands and safe write semantics](docs/HOSTING.md#real-project-onboarding).
+
+Preview remains deterministic synthetic demo only; only Demo Calculator has a
+fake runtime. Readiness is a manual snapshot, and backend execution checks remain
+authoritative. No automatic repository/test discovery or Project creation occurs.
+
 ## Documentation index
 
 | Start here | Implementation reference |

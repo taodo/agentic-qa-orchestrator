@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     envPrefix: 'PUBLIC_',
-    server: { host: '127.0.0.1', proxy: { '/api/v1': { target, changeOrigin: true } } },
+    server: { host: '127.0.0.1', proxy: { '/api/v1': { target, changeOrigin: true }, '/host/runtime-status': { target, changeOrigin: true } } },
     test: { environment: 'jsdom', setupFiles: ['./src/test/setup.ts'], restoreMocks: true },
   };
 });

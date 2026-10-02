@@ -3,7 +3,7 @@
 For first-time operation, start with [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md). Earlier task-specific startup/scope statements
 below describe their checkpoint; Tasks 16–17 provide local and protected demo
-hosting, and Task 18 adds only static onboarding/copy.
+hosting, Task 18 adds static onboarding/copy, and Task 19 adds host readiness.
 
 The Web is a local operator/control dashboard over the accepted Task 13 API.
 React, TypeScript and Vite live in the separate `frontend/` workspace. Python/core
@@ -38,7 +38,8 @@ npm run dev
 ```
 
 For reproducible installs use `npm ci`. Vite binds to localhost and proxies
-`/api/v1/*` to `http://127.0.0.1:8000` by default. Configure only the proxy origin
+`/api/v1/*` to `http://127.0.0.1:8000` by default. Task 19 also proxies the narrow
+`/host/runtime-status/*` read namespace to the same host. Configure the origin
 through `VITE_API_PROXY_TARGET`, for example in your shell or a local ignored
 `.env.local`. The Vite configuration loads this value on the host and uses a
 different browser env prefix so the proxy variable is not bundled into client
@@ -259,3 +260,27 @@ Supplementary checks against the production SPA use mocked API fixtures at
 1280px and 390px widths, verifying native Enter/Space activation, no horizontal
 overflow, unchanged routing and no help-triggered request. No screenshot assets
 or screenshot-automation tooling are added.
+
+## Real Project onboarding
+
+Project Detail reads `GET /host/runtime-status/{project_id}` once after Project
+identity loads, then offers native **Refresh runtime**. A typed allowlist retains
+only mode, Project UUID and readiness flags, checks response ownership and discards
+unknown fields. The host also returns the immutable key, which readiness does not
+display. No workspace, database path, test target text, environment value or key
+value is displayed. API v1 contracts and Task Run/Resume controls are unchanged.
+
+Configured local status shows key **Present (not verified with provider)** or
+**Missing**, Tests Configured and trusted workspace ownership guidance. Missing
+configuration explains persisted identity vs host runtime and init/validate/restart.
+Configured demo/preview is explicitly deterministic synthetic only; arbitrary
+Projects remain unconfigured based on the host's resolution, never frontend key
+matching. The preview shell notice and Basic gate are unchanged.
+
+Status is nonblocking and manually refreshed, without polling or auto-retry.
+Backend Run remains authoritative. An unavailable standalone host endpoint shows
+fixed safe guidance without hiding Task controls or rendering server failure
+bodies. Route identity resets readiness; late responses after navigation are
+discarded by the existing read hook. No new storage, dependency or provisioning
+UI is added. Tests cover safe fields, modes, unavailable status, explicit refresh
+and stale navigation. [Setup](HOSTING.md#real-project-onboarding).
