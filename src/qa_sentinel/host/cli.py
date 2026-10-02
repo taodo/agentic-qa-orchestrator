@@ -1,4 +1,4 @@
-"""One explicit local serving command; no import-time server or environment dump."""
+"""Explicit serving and inert local onboarding; no import-time server or env dump."""
 import argparse
 from pathlib import Path
 import sys
@@ -21,6 +21,22 @@ def parser():
     serve.add_argument("--port", type=int, default=None, help="TCP port (default: 8000)")
     serve.add_argument("--database", type=Path, help="File-backed SQLite path")
     serve.add_argument("--frontend-dist", type=Path, help="Built Vite directory (demo default: frontend/dist)")
+    local = commands.add_parser("local", help="Generate or validate explicit trusted local configuration")
+    setup = local.add_subparsers(dest="local_command", required=True)
+    init = setup.add_parser("init", help="Write one Project binding; no model calls or execution",
+        description="Requires existing Project identity and absolute database/frontend/workspace paths. No API key needed.")
+    init.add_argument("--database", type=Path, required=True)
+    init.add_argument("--frontend-dist", type=Path, required=True)
+    init.add_argument("--project-key", required=True)
+    init.add_argument("--workspace", type=Path, required=True)
+    init.add_argument("--pytest-target", action="append", required=True)
+    init.add_argument("--config", type=Path, required=True)
+    init.add_argument("--host", choices=("127.0.0.1", "::1"), default="127.0.0.1")
+    init.add_argument("--port", type=int, default=8000)
+    init.add_argument("--overwrite", action="store_true", help="Explicitly replace an entire valid local config with this one Project binding")
+    init.add_argument("--create-parent", action="store_true", help="Explicitly create the selected safe config parent")
+    validate = setup.add_parser("validate", help="Read-only readiness; no server, provider, pytest or source writes")
+    validate.add_argument("--config", type=Path, required=True)
     return value
 
 
@@ -40,6 +56,9 @@ def configuration(args) -> HostConfig:
 def main(argv=None):
     command_parser = parser()
     args = command_parser.parse_args(argv)
+    if args.command == "local":
+        from .onboarding import local_command
+        return local_command(args)
     if args.host == "0.0.0.0" and not args.preview_demo:
         command_parser.error("External bind requires --preview-demo")
     app = None

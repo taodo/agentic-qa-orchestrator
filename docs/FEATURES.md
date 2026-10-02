@@ -1,6 +1,7 @@
 # QA Sentinel feature reference
 
-Implemented Tasks 1–17. Task 18 adds static product onboarding only.
+Implemented Tasks 1–17; Task 18 adds static product onboarding, and Task 19 adds
+explicit trusted local setup and safe host readiness.
 [Product Guide](PRODUCT_GUIDE.md) provides interpretation/walkthrough;
 [PRD](PRD.md) explains boundaries. Backend ownership below identifies existing
 layers, not new endpoints or services.
@@ -35,6 +36,20 @@ Decision = why routing happened; Gate = deterministic acceptance check;
 Invocation = agent execution record; Test Run = deterministic test execution
 record (synthetic in demo); Error = classified failure evidence. These are
 separate types. [Interpretation/refs](PRODUCT_GUIDE.md#mental-model).
+
+## Real Project onboarding
+
+| Feature | Purpose | Ownership | Operator action | Limits |
+| --- | --- | --- | --- | --- |
+| local init | Generate one nonsecret host JSON binding | Trusted host CLI; existing Project identity read | Supply explicit paths/key/targets/output | No Project creation, discovery, key storage or execution; explicit overwrite replaces entire valid config |
+| local validate | Report prerequisites safely | Shared HostConfig/service/CommandPolicy checks; read-only existing DB | Validate selected config; set environment key and revalidate | Zero provider/test/mutation actions; key presence only; no migrations; snapshot not Run guarantee |
+| Runtime readiness | Explain configured vs unconfigured | Host-only /host/runtime-status/{project_id}, outside API v1 | Inspect Project Detail / Refresh runtime | No paths/secrets; no polling or frontend Run gate; demo/preview synthetic only |
+
+Project identity remains persisted; workspace/runtime remains host-owned. Local
+mode requires a prepared trusted workspace, loopback bind and existing Project
+in the selected database. [Exact flow](HOSTING.md#real-project-onboarding),
+[operator interpretation](PRODUCT_GUIDE.md#real-project-onboarding). Public preview
+only configures Demo Calculator's fake runtime; arbitrary Projects stay unconfigured.
 
 ## Implementation references
 

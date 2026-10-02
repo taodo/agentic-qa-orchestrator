@@ -13,8 +13,13 @@ function isEnvelope(value: unknown): value is ApiErrorEnvelope {
 }
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  return requestPath<T>(`/api/v1${path}`, options);
+}
+
+// Explicit same-origin transport for the host namespace; API v1 stays unchanged.
+export async function requestPath<T>(path: string, options: RequestInit = {}): Promise<T> {
   let response: Response;
-  try { response = await fetch(`/api/v1${path}`, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } }); }
+  try { response = await fetch(path, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } }); }
   catch { throw new ApiError('NETWORK_ERROR', 'Unable to reach QA Sentinel API.'); }
   let payload: unknown;
   try { payload = await response.json(); }

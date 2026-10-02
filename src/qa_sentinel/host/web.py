@@ -9,22 +9,11 @@ from starlette.staticfiles import StaticFiles
 from qa_sentinel.api import create_api_app
 from qa_sentinel.api.errors import application_error_handler
 from qa_sentinel.application import ApplicationError, ApplicationErrorCode
-from .config import HostConfig, HostError, canonical_path, overlaps
+from .config import HostConfig, HostError
 from .composition import compose
 from .preview import PreviewAccess, preview_credentials
-
-
-def validate_frontend(config: HostConfig):
-    try:
-        root = canonical_path(config.frontend_dist, exists=True)
-        index = canonical_path(root / "index.html", exists=True)
-        if not root.is_dir() or not index.is_file():
-            raise ValueError("Missing frontend")
-        if config.mode in {"demo", "preview-demo"} and overlaps(root, canonical_path(config.database.parent / "demo-workspace")):
-            raise ValueError("Overlapping host directories")
-        return root
-    except (ValueError, OSError, RuntimeError):
-        raise HostError("HOST_FRONTEND_BUILD_MISSING") from None
+from .preflight import validate_frontend
+from .status import add_runtime_status
 
 
 class FrontendFiles(StaticFiles):
@@ -37,7 +26,7 @@ class FrontendFiles(StaticFiles):
         parts = path.split("/")
         if "\\" in path or "%" in path or "\x00" in path or any(part.startswith(".") for part in parts if part):
             raise HTTPException(404)
-        if parts[1:2] and parts[1] in {"api", "health", "openapi.json", "docs", "redoc"}:
+        if parts[1:2] and parts[1] in {"api", "host", "health", "openapi.json", "docs", "redoc"}:
             raise HTTPException(404)
         await super().__call__(scope, receive, send)
 
@@ -84,6 +73,7 @@ def create_host_app(config: HostConfig):
         app.add_middleware(ExclusiveExecution)
         if credentials is not None:
             app.add_middleware(PreviewAccess, credentials=credentials)
+        add_runtime_status(app, composed, config.mode)
         app.mount("/", FrontendFiles(directory=root, follow_symlink=False), name="frontend")
         app.state.host_composition = composed
         app.state.host_mode = config.mode

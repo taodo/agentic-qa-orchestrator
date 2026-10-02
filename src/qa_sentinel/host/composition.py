@@ -8,11 +8,6 @@ from qa_sentinel.projects import ProjectRuntimeRegistry, ProjectWorkspaceBinding
 from qa_sentinel.agents.real import RealAgentRuntime
 from qa_sentinel.models.openai_adapter import OpenAIModelAdapter
 from qa_sentinel.models.config import RoleModelConfig
-from qa_sentinel.repository.config import RepositoryReadConfig
-from qa_sentinel.repository.service import RepositoryReadService
-from qa_sentinel.mutation.contracts import MutationConfig
-from qa_sentinel.mutation.service import MutationService
-from qa_sentinel.execution.command_policy import ExecutionConfig, CommandPolicy, CommandRequest
 from qa_sentinel.execution.command_runner import CommandRunner
 from qa_sentinel.execution.pytest_runner import PytestRunner
 from qa_sentinel.execution.service import TestExecutionService, PytestTestResultProvider
@@ -20,17 +15,7 @@ from .config import HostConfig, HostError
 from .database import bootstrap_database
 from .demo import demo_bundle
 from .preview import preview_credentials
-
-
-def real_components(project):
-    # Accepted policies validate paths, host overlap and targets before database mutation.
-    reader = RepositoryReadService(RepositoryReadConfig(project.workspace_root))
-    mutation = MutationService(MutationConfig(project.workspace_root))
-    execution = ExecutionConfig(project.workspace_root)
-    request = CommandRequest(cwd=str(project.workspace_root), args=("-m", "pytest", *project.pytest_targets))
-    if not CommandPolicy(execution).evaluate(request).allowed:
-        raise HostError("HOST_TEST_POLICY_REJECTED")
-    return reader, mutation, execution, request
+from .preflight import real_components
 
 
 @dataclass(frozen=True)

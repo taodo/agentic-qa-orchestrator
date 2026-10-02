@@ -6,8 +6,9 @@ Implemented Tasks 1–17 provide the evidence-driven core, trusted real local
 execution, Project isolation, application/API boundary, operator frontend,
 loopback local host and protected deterministic synthetic Render preview path.
 Task 18 adds product documentation and lightweight static frontend onboarding
-only. No workflow, backend/API, migration, model, dependency or deployment
-behavior changes. Read [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
+only. Task 19 adds explicit local init/validate and host-only readiness status/UI;
+no core/API v1, migration, model, dependency or preview execution boundary changes.
+Read [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md) first. Entries below describe historical task
 checkpoints; their then-unimplemented scope is not a current capability inventory.
 
@@ -304,3 +305,28 @@ contributor reading order. Projects has compact inline help; form/execution copy
 clarifies configuration and inspection. No backend/core/API, schema, dependency,
 runtime or security behavior changes. Wait for ChatGPT review and user approval
 before Task 19; Task 19 is not implemented.
+
+## Real Project onboarding
+
+Task 19 supplies narrow argparse `local init`/`local validate` commands. Existing
+Project identity is read from SQLite mode=ro at accepted schema 0002; all workspace,
+read/mutation and pytest-target prerequisites reuse the serving policy path.
+Init publishes one nonsecret host binding with explicit safe UTF-8 atomic/exclusive
+write semantics. Validate performs no provider construction/call, pytest/subprocess,
+source write, Task/Project creation, database creation or migration; API key readiness
+is presence-only. Missing keys can produce a valid config but NOT READY validation.
+
+Typed `/host/runtime-status/{project_id}` remains outside API v1, returns no paths,
+secrets or runtime objects and uses the composed resolver without execution.
+Project Detail shows a manually refreshed nonblocking snapshot with stale-route
+protection. Preview remains Basic-protected fake-only, with synthetic seeded
+Demo Calculator status and other Projects unconfigured. Local real mode remains
+trusted loopback execution; all accepted gates, budgets and isolation hold.
+
+Assumptions: stopped host/exclusive trusted access while configuring, existing
+current-schema database, explicit prepared targets, filesystem support for atomic
+replace/exclusive hardlinks, no provider validity or collection/permission guarantee
+from readiness. Multi-Project JSON remains supported; init overwrite replaces the
+whole valid config with one binding. [HOSTING.md](HOSTING.md#real-project-onboarding)
+documents exact inputs, codes and scope. Wait for ChatGPT review and user approval
+before Task 20; Task 20 is not implemented.

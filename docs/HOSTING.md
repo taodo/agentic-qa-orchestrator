@@ -59,6 +59,9 @@ are rejected in ordinary demo and real local modes. Task 17 adds a separate expl
 
 ## Real local mode
 
+For repeatable setup, use [Real Project onboarding](#real-project-onboarding).
+The explicit JSON format below remains supported for multiple Project bindings.
+
 Create the logical Project first through the existing API (for example during a
 demo session against the same DB). Stop that server, prepare a separate trusted
 target workspace with tests, and provide a private JSON configuration:
@@ -182,3 +185,116 @@ normal API evidence, static containment, config, CLI defaults and admission.
   bypass host-source protection or reconciliation.
 - HOST_DATABASE_STARTUP_FAILED: check a private writable DB parent and migrations;
   stop other hosts before migrating. No exception details/secrets are printed.
+
+## Real Project onboarding
+
+**Project identity is persisted. Workspace/runtime configuration is host-owned.**
+The CLI connects an existing immutable Project key to its persisted UUID in the
+selected database. It never creates a missing Project or stores workspace paths
+in Project rows. API/UI/model inputs cannot choose workspaces.
+
+Canonical flow (replace each absolute path with an explicitly selected path):
+
+1. Install/build the prerequisites above. Start a loopback demo host using the
+   database you will reuse, for example:
+   `qa-sentinel serve --demo --database /absolute/private/state.sqlite3 --frontend-dist /absolute/qa-sentinel/frontend/dist`.
+2. Open http://127.0.0.1:8000. Create/select your logical Project in the UI, for
+   example key `my-project`. Demo mode configures only Demo Calculator.
+3. Stop the host. Prepare a separate **trusted local workspace** and explicit
+   pytest targets. Prepared tests/conftest are executable trusted Python code;
+   these policies are not an OS sandbox.
+4. Generate a config with all trust-bearing paths explicit and absolute:
+
+   ```shell
+   qa-sentinel local init --database /absolute/private/state.sqlite3 --frontend-dist /absolute/qa-sentinel/frontend/dist --project-key my-project --workspace /absolute/prepared-project --pytest-target tests --config /absolute/private/qa-sentinel.local.json
+   ```
+
+   On Windows use absolute drive paths such as `C:/private/state.sqlite3`,
+   `C:/qa-sentinel/frontend/dist` and `C:/work/my-project`. Repeat
+   `--pytest-target` to select more prepared targets. No targets are discovered.
+5. Run `qa-sentinel local validate --config /absolute/private/qa-sentinel.local.json`.
+   Without a local key, the policy/identity checks can pass while the report says
+   `OPENAI_API_KEY: MISSING`, `Overall: NOT READY`, exit code 1. This is expected.
+6. Supply OPENAI_API_KEY securely through the local process environment, never
+   chat, JSON, frontend variables, source or command flags. Validate again:
+   a nonblank key yields PRESENT/READY if other checks pass, exit code 0. This
+   checks presence only, not validity, model availability, billing or connectivity.
+7. Start `qa-sentinel serve --config /absolute/private/qa-sentinel.local.json`.
+   Default bind is **127.0.0.1:8000**; optional `::1` stays loopback-only.
+8. Open Project Detail and inspect **Runtime readiness**. Configured means the
+   host composed the accepted binding; key presence is not provider verification.
+9. Create a Project-owned Task, open it and explicitly Run. Execution can call
+   models, read bounded repository evidence, apply authorized CREATE/MODIFY and
+   run configured pytest. The backend remains authoritative.
+
+### Generation and validation semantics
+
+`local init --help` and `local validate --help` list the narrow argparse flags.
+Init writes one Project binding, with deterministic UTF-8 JSON and only database,
+frontend_dist, projects (key/workspace_root/pytest_targets), loopback host and port.
+It can succeed without a model key; it performs the same inert prerequisites as
+validate before publishing configuration. No arbitrary command, executable,
+environment, provider object, credential or secret field is supported.
+
+Existing output fails with HOST_CONFIG_EXISTS. `--overwrite` explicitly replaces
+the **entire existing valid local host config** with this one binding; it does
+not merge multiple bindings. Unrelated/invalid JSON is rejected even with that
+flag. Maintain multi-Project configuration manually using the accepted JSON format
+and validate the complete file. Missing output parents are created only with
+`--create-parent`. Output must be .json, outside target workspaces, frontend assets,
+platform source/tests/migrations and protected credential/Git/environment paths.
+Links/junctions and hardlinked existing destinations fail closed. Publication uses
+a same-directory temporary file, exclusive hardlink for new files and atomic
+replace for explicit overwrite; failure leaves the original intact and cleans
+the temporary file. Filesystem support for these operations and trusted exclusive
+access are required; portable path checks do not provide hostile-race isolation.
+
+Validation reuses HostConfig, frontend checks, RepositoryReadConfig/Service,
+MutationConfig/Service and CommandPolicy from real startup. It performs bounded
+metadata inspection of **explicitly selected** targets, not test discovery or
+source-content reading. It opens existing SQLite with `mode=ro`, requires accepted
+schema 0002, and resolves all configured keys through existing persistence reads.
+No migration, database creation, Project/Task creation, server start, model adapter
+construction, provider call, pytest/subprocess execution or source write occurs.
+Missing/old databases must first be initialized/upgraded through normal host
+startup. Startup still fails closed for unknown Project keys.
+
+Success reports Project identity FOUND, Workspace/Repository read boundary/Mutation
+boundary/Pytest targets VALID, Frontend build FOUND, Database READY, key presence
+and Overall READY/NOT READY. Failed checks print only a fixed safe code and
+NOT READY, exit 1; argparse usage errors exit 2. Reports contain no source contents,
+paths, environment dump or key values. A readiness check is a snapshot, not an
+execution guarantee: missing packages, pytest collection behavior, filesystem
+permissions/drift and provider failures can still stop Run.
+
+### Host status and UI
+
+`GET /host/runtime-status/{project_id}` is a typed host-only projection **outside
+/api/v1**, for one persisted Project UUID. Fields are mode, project_id,
+project_key, runtime_configured, model_ready (presence boolean, or null when
+unconfigured/synthetic), test_targets_configured. It resolves the composed host
+binding without executing it. No workspace, DB/frontend path, target text,
+environment value, credential or runtime object is returned. Unknown Projects
+keep the existing safe error envelope; the standalone API has no host endpoint.
+
+Project Detail loads this snapshot once and offers **Refresh runtime**. No polling,
+automatic retry, provisioning or frontend-owned Run gate is added. Unconfigured
+Projects show guidance to init/validate/restart; unavailable status on a standalone
+API leaves normal Task controls and safe backend checks unchanged. Local key
+presence can be refreshed; targets/configured binding reflect startup composition.
+
+Demo/preview status is synthetic-only: only the seeded Demo Calculator UUID is
+configured; model_ready is null and real test targets are false. Arbitrary Projects
+remain unconfigured. Preview never inspects real key readiness; the endpoint is
+behind the unchanged Basic gate, with only exact GET /health public. No preview
+workspace/mutation/test/provider capability is introduced.
+
+Additional safe codes:
+
+- HOST_LOCAL_PATHS_MUST_BE_ABSOLUTE: supply explicit absolute DB/frontend paths.
+- HOST_LOCAL_DATABASE_NOT_READY: select the existing initialized 0002 database.
+- HOST_RUNTIME_POLICY_REJECTED: workspace violates accepted service boundaries.
+- HOST_CONFIG_PARENT_MISSING: select an existing parent or explicitly use --create-parent.
+- HOST_CONFIG_OUTPUT_UNSAFE: select a separate ordinary .json output outside protected paths.
+- HOST_LOCAL_INIT_FAILED / HOST_LOCAL_VALIDATION_FAILED: check explicit inputs,
+  filesystem support/access and the accepted config; no raw failure details are printed.

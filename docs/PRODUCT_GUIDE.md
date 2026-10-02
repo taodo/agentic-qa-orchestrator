@@ -1,6 +1,6 @@
 # QA Sentinel product guide
 
-For technical Operators using implemented Tasks 1–17. Start with the
+For technical Operators using implemented Tasks 1–19. Start with the
 [demo walkthrough](#demo-mode); use the evidence sections as a reference.
 [PRD](PRD.md) explains intent; [Features](FEATURES.md) summarizes ownership/limits.
 
@@ -253,6 +253,33 @@ full-file UTF-8 CREATE/MODIFY sets and exact hashes before applying. Ordinary
 partial application failure rolls back; stale source or uncertain write/persistence
 completion requires reconciliation. DELETE, arbitrary shell, Git rollback and
 model-owned file tools are unsupported. [Mutation](MUTATION.md), [Execution](EXECUTION.md).
+
+## Real Project onboarding
+
+Creating a Project stores logical identity; it does not provision a workspace.
+In a local demo session using your intended database, create/select the Project
+and stop the host. Run `qa-sentinel local init` with its key, the database and
+frontend build, explicit absolute workspace and prepared pytest targets. The
+generated JSON holds only nonsecret host configuration, never workspace data in
+Project persistence. [Canonical commands](HOSTING.md#real-project-onboarding).
+
+Use `qa-sentinel local validate --config ...` before serving real mode. It checks
+identity, boundaries, selected targets and existing database/build read-only;
+no model/provider call, pytest/subprocess or source mutation occurs. Missing
+OPENAI_API_KEY produces NOT READY. Supply it securely through the local shell
+environment and revalidate; PRESENT checks only a nonblank value, not the provider.
+Start `serve --config ...` and open the Project at http://127.0.0.1:8000.
+
+**Runtime readiness** on Project Detail shows configured/unconfigured status,
+presence-only model key and test configuration. Refresh runtime is explicit;
+the status is a snapshot, not permission or a success guarantee. An unconfigured
+Project needs host configuration and restart, not another Project row. Create a
+Task and Run only after checking the intended trusted workspace. Run retains
+backend checks and all existing gates/reconciliation rules.
+
+Local demo and public preview mark configured Demo Calculator as **Synthetic demo**;
+no live AI, source mutation or real pytest is introduced. Other Projects remain
+unconfigured. Public preview is not a real-workspace onboarding host.
 
 ## Reading a completed Task
 
