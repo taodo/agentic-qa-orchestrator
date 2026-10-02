@@ -1,5 +1,6 @@
 """Trusted host composition above API/application/core. No global instances."""
 import os
+import threading
 from dataclasses import dataclass
 from sqlalchemy import Engine
 from qa_sentinel.application import QASentinelApplication, ProjectExecutionResolver, ProjectExecutionBundle
@@ -16,6 +17,8 @@ from .database import bootstrap_database
 from .demo import demo_bundle
 from .preview import preview_credentials
 from .preflight import real_components
+from .admission import ExecutionAdmission
+from .worker import ExecutionWorker
 
 
 @dataclass(frozen=True)
@@ -23,9 +26,13 @@ class HostComposition:
     application: QASentinelApplication
     engine: Engine
     resolver: ProjectExecutionResolver
+    worker: ExecutionWorker
 
     def close(self):
-        self.engine.dispose()
+        # Do not dispose while a live worker may still persist completion. If the
+        # bounded join expires, its daemon thread disposes on eventual exit instead.
+        if self.worker.close():
+            self.engine.dispose()
 
 
 def compose(config: HostConfig) -> HostComposition:
@@ -54,7 +61,10 @@ def compose(config: HostConfig) -> HostComposition:
                     RealAgentRuntime(OpenAIModelAdapter(), RoleModelConfig(), repository_tools=True),
                     PytestTestResultProvider(service, request), reader, mutation))
         resolver = ProjectExecutionResolver(ProjectRuntimeRegistry([b.binding for b in bundles]), bundles)
-        return HostComposition(QASentinelApplication(factory, resolver), engine, resolver)
+        admission, wake = ExecutionAdmission(), threading.Event()
+        application = QASentinelApplication(factory, resolver, execution_admission=admission, execution_notify=wake.set)
+        worker = ExecutionWorker(application, admission, wake, on_exit=engine.dispose)
+        return HostComposition(application, engine, resolver, worker)
     except Exception as exc:
         if engine is not None:
             engine.dispose()

@@ -1,6 +1,6 @@
 # QA Sentinel product guide
 
-For technical Operators using implemented Tasks 1–19. Start with the
+For technical Operators using implemented Tasks 1–20. Start with the
 [demo walkthrough](#demo-mode); use the evidence sections as a reference.
 [PRD](PRD.md) explains intent; [Features](FEATURES.md) summarizes ownership/limits.
 
@@ -281,6 +281,26 @@ Local demo and public preview mark configured Demo Calculator as **Synthetic dem
 no live AI, source mutation or real pytest is introduced. Other Projects remain
 unconfigured. Public preview is not a real-workspace onboarding host.
 
+## Execution requests and workflow truth
+
+Task 20 adds backend async requests. Browser Run remains synchronous and Resume
+stays separate; no job UI/polling is added. API callers can POST
+`/api/v1/tasks/{task_id}/executions` for a 202 job record, then inspect that record
+and the Task through GET. One active job per Task and one active workflow globally
+are allowed in the single host process. Different Tasks can wait durably.
+
+**TaskState describes QA truth. ExecutionJobStatus describes one request.** QUEUED
+waits; RUNNING means a durable claim; SUCCEEDED means application Run returned
+normally, not QA reached DONE. STOPPED/FAILED still need Task/evidence inspection.
+Terminal Tasks reject async requests but retain the synchronous terminal check.
+Resume restores BLOCKED state without execution or reconciliation.
+
+Restart stops uncertain RUNNING jobs with EXECUTION_INTERRUPTED and never silently
+reruns them. QUEUED jobs can recover in FIFO order, including real local work.
+Do not assume exactly-once execution; reconcile unresolved core evidence and
+workspace writes before explicitly continuing. Demo/preview stays synthetic only.
+[Contract and recovery limits](EXECUTION_JOBS.md).
+
 ## Reading a completed Task
 
 Confirm Overview is DONE, then trace PLAN criteria to canonical IMPLEMENTATION,
@@ -320,7 +340,8 @@ UI/API. [Safe stops](RUNTIME.md#run-loop-limits-and-safe-stops).
 
 SQLite, synchronous Run, one host process/worker and one admitted Run/Resume at a
 time. Views are bounded prefixes, evidence loads on section open and Refresh is
-explicit. No polling, search, queue, distributed execution or streaming. Preview
+explicit. Backend async requests use one durable local queue; there is no frontend
+job UX/polling, search, distributed execution or streaming. Preview
 state is ephemeral and Basic is a temporary shared gate, not product users/RBAC.
 Local execution trusts prepared source/tests and local access; it is not an OS
 sandbox or cloud workspace. No remote clone, arbitrary shell, human approval UI,

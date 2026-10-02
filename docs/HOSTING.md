@@ -120,7 +120,7 @@ executable code; this host is not an OS sandbox.
 ## Database and migration lifetime
 
 Startup creates the configured DB parent after canonical path validation, uses
-the accepted engine/session factory, and upgrades to Alembic head (`0002`) on an
+the accepted engine/session factory, and upgrades to Alembic head (`0003`) on an
 explicit idle connection. It never calls metadata.create_all or edits migrations.
 The helper uses checkout migrations for editable installs; wheel distributions
 include the unchanged migration assets under `share/qa-sentinel/alembic`.
@@ -151,9 +151,10 @@ optional pages are not needed for the offline demo/frontend workflow.
 Uvicorn 0.41 runs with one worker, no reload, asyncio/h11, no WebSocket, no proxy
 header trust and no access logging. CLI settings explicitly override environment
 worker/bind defaults. A host-owned nonblocking admission lock covers Run/Resume
-across all Projects: an overlapping execution receives the existing safe 409
-RUNTIME_STOPPED envelope without entering core. Reads remain available; there is
-no queue, background job, new workflow decision, auto-retry or concurrent mutation.
+across all Projects and the Task 20 worker: overlap receives the safe 409
+RUNTIME_STOPPED envelope without entering core. Reads remain available; explicit
+async requests can queue different Tasks, with no new workflow decision, auto-retry
+or concurrent mutation. Same-Task active requests fail safely.
 CLI logs mode/bind only; no key, environment dump, request body, source or evidence.
 
 **Local modes have no authentication.** The API can expose bounded persisted source/evidence;
@@ -253,7 +254,7 @@ Validation reuses HostConfig, frontend checks, RepositoryReadConfig/Service,
 MutationConfig/Service and CommandPolicy from real startup. It performs bounded
 metadata inspection of **explicitly selected** targets, not test discovery or
 source-content reading. It opens existing SQLite with `mode=ro`, requires accepted
-schema 0002, and resolves all configured keys through existing persistence reads.
+schema 0003, and resolves all configured keys through existing persistence reads.
 No migration, database creation, Project/Task creation, server start, model adapter
 construction, provider call, pytest/subprocess execution or source write occurs.
 Missing/old databases must first be initialized/upgraded through normal host
@@ -292,9 +293,33 @@ workspace/mutation/test/provider capability is introduced.
 Additional safe codes:
 
 - HOST_LOCAL_PATHS_MUST_BE_ABSOLUTE: supply explicit absolute DB/frontend paths.
-- HOST_LOCAL_DATABASE_NOT_READY: select the existing initialized 0002 database.
+- HOST_LOCAL_DATABASE_NOT_READY: select the existing initialized 0003 database.
 - HOST_RUNTIME_POLICY_REJECTED: workspace violates accepted service boundaries.
 - HOST_CONFIG_PARENT_MISSING: select an existing parent or explicitly use --create-parent.
 - HOST_CONFIG_OUTPUT_UNSAFE: select a separate ordinary .json output outside protected paths.
 - HOST_LOCAL_INIT_FAILED / HOST_LOCAL_VALIDATION_FAILED: check explicit inputs,
   filesystem support/access and the accepted config; no raw failure details are printed.
+
+## Task 20 worker lifespan
+
+After migration/runtime composition, lifespan reconciles stale RUNNING jobs to
+STOPPED/EXECUTION_INTERRUPTED before accepting execution, then starts one daemon
+worker. QUEUED jobs recover in ascending durable insertion order; real local queued
+jobs can perform trusted model/tool/test work on restart. Inspect/reconcile old
+Task evidence before restarting a real host with pending jobs. Validation still
+starts no worker, performs no migration and executes no provider/test/mutation work.
+
+One coordinator covers background execution and synchronous Run/Resume; it replaces
+the old HTTP-only admission middleware. The worker commits RUNNING, closes that
+transaction, delegates existing application Run, and separately commits terminal
+job status. Task state/evidence stays authoritative. Preview jobs remain fake-only
+and Basic-protected; only exact GET /health is public. One process/Uvicorn worker
+and one host per DB/workspace remain required.
+
+Shutdown stops claims and waits a bounded join, leaving in-flight RUNNING work
+recoverable rather than pretending completion; engine disposal waits for the live
+worker to exit. Claim/completion uncertainty stops worker/execution admission,
+without retry. Fixed host codes are HOST_EXECUTION_WORKER_START_FAILED,
+HOST_EXECUTION_WORKER_INVALID_STATE and HOST_EXECUTION_PERSISTENCE_UNCERTAIN.
+No cancellation, external broker, multi-host lease or exactly-once guarantee is
+added. [Execution jobs](EXECUTION_JOBS.md).

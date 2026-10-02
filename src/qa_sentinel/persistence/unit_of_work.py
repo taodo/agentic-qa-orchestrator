@@ -1,6 +1,7 @@
 """Explicit commit; otherwise all pending changes roll back on context exit."""
 from sqlalchemy.orm import Session, sessionmaker
 from .read_queries import ReadQueries
+from .execution_jobs import ExecutionJobRepository
 from .repositories import (
     TaskRepository, ArtifactRepository, InvocationRepository, HistoryRepository,
     FailureFingerprintRepository, RequirementRepository, AcceptanceCriterionRepository,
@@ -19,6 +20,7 @@ class UnitOfWork:
         self.session = self.session_factory()
         self.tasks = TaskRepository(self.session)
         self.projects = ProjectRepository(self.session)
+        self.execution_jobs = ExecutionJobRepository(self.session)
         self.reads = ReadQueries(self.session)
         self.artifacts = ArtifactRepository(self.session)
         self.invocations = InvocationRepository(self.session)

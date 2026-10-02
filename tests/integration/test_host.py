@@ -13,7 +13,9 @@ from pydantic import ValidationError
 from sqlalchemy import text
 from qa_sentinel.host import cli, composition, database
 from qa_sentinel.host.config import HostConfig, HostError, LocalProjectConfig, load_local_config
-from qa_sentinel.host.web import create_host_app, ExclusiveExecution
+from qa_sentinel.host.web import create_host_app
+from qa_sentinel.host.admission import ExecutionAdmission
+from qa_sentinel.application import ApplicationError
 from qa_sentinel.models.openai_adapter import OpenAIModelAdapter
 from qa_sentinel.agents.real import RealAgentRuntime
 from qa_sentinel.models.config import RoleModelConfig
@@ -142,7 +144,7 @@ def test_restart_migrates_to_head_preserves_operator_data_and_demo_identity(conf
         assert len(projects) == 2 and [p for p in projects if p["key"] == "demo-calculator"][0]["id"] == project["id"]
         assert client.get(f"/api/v1/tasks/{created['id']}").json()["title"] == "Keep task"
         with app.state.host_composition.engine.connect() as connection:
-            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0002"
+            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0003"
 
 
 @pytest.mark.parametrize("path", ["/", "/projects", "/projects/project-a", "/tasks/task-a?view=artifacts", "/index.html"])
@@ -281,24 +283,23 @@ def test_static_symlink_escape_is_denied(config, tmp_path):
 
 
 def test_exclusive_execution_rejects_overlap_without_calling_core():
-    async def verify():
-        entered, release = asyncio.Event(), asyncio.Event()
-        calls, messages = [], []
-        async def app(scope, receive, send):
-            calls.append(scope); entered.set(); await release.wait()
-        guard = ExclusiveExecution(app)
-        scope = {"type": "http", "method": "POST", "path": "/api/v1/tasks/task-a/run"}
-        async def receive(): return {"type": "http.request", "body": b""}
-        async def send(message): messages.append(message)
-        first = asyncio.create_task(guard(scope, receive, send))
-        await entered.wait()
-        await guard({**scope, "path": "/api/v1/tasks/task-b/resume"}, receive, send)
-        assert len(calls) == 1 and messages[0]["status"] == 409
-        assert json.loads(messages[1]["body"])["error"]["code"] == "RUNTIME_STOPPED"
-        release.set(); await first
-        await guard(scope, receive, send)
-        assert len(calls) == 2
-    asyncio.run(verify())
+    import threading
+    entered, release = threading.Event(), threading.Event()
+    guard = ExecutionAdmission()
+    def first():
+        with guard.task("task-a"):
+            entered.set(); assert release.wait(5)
+    thread = threading.Thread(target=first)
+    thread.start()
+    try:
+        assert entered.wait(5)
+        with pytest.raises(ApplicationError, match="RUNTIME_STOPPED"):
+            with guard.task("task-b"):
+                pytest.fail("Overlapping workflow entered core")
+    finally:
+        release.set(); thread.join(5)
+    with guard.task("task-b"):
+        pass
 
 
 def test_host_dependency_direction():

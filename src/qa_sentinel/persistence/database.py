@@ -25,7 +25,9 @@ def create_engine(url: str = "sqlite+pysqlite:///:memory:") -> Engine:
 
     @event.listens_for(engine, "begin")
     def begin(connection):
-        connection.exec_driver_sql("BEGIN")
+        # Job lifecycle writes reserve SQLite's writer before reads, preventing
+        # read-then-write upgrade races. Default core transactions are unchanged.
+        connection.exec_driver_sql("BEGIN IMMEDIATE" if connection.get_execution_options().get("qa_job_write") else "BEGIN")
 
     return engine
 

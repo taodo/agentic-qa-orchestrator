@@ -3,12 +3,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import os
 import re
-import threading
 from starlette.exceptions import HTTPException
 from starlette.staticfiles import StaticFiles
 from qa_sentinel.api import create_api_app
-from qa_sentinel.api.errors import application_error_handler
-from qa_sentinel.application import ApplicationError, ApplicationErrorCode
 from .config import HostConfig, HostError
 from .composition import compose
 from .preview import PreviewAccess, preview_credentials
@@ -44,33 +41,12 @@ class FrontendFiles(StaticFiles):
         return await super().get_response(path, scope)
 
 
-class ExclusiveExecution:
-    """Single-process fail-fast admission; no workflow, queue or retry logic."""
-    def __init__(self, app):
-        self.app = app
-        self.lock = threading.Lock()
-
-    async def __call__(self, scope, receive, send):
-        execution = scope["type"] == "http" and scope["method"] == "POST" and re.fullmatch(
-            r"/api/v1/tasks/[^/]+/(run|resume)/?", scope["path"])
-        if not execution:
-            return await self.app(scope, receive, send)
-        if not self.lock.acquire(blocking=False):
-            response = await application_error_handler(None, ApplicationError(ApplicationErrorCode.RUNTIME_STOPPED))
-            return await response(scope, receive, send)
-        try:
-            await self.app(scope, receive, send)
-        finally:
-            self.lock.release()
-
-
 def create_host_app(config: HostConfig):
     credentials = preview_credentials() if config.mode == "preview-demo" else None
     root = validate_frontend(config)  # Full-stack readiness before migration/seed IO.
     composed = compose(config)
     try:
         app = create_api_app(composed.application)
-        app.add_middleware(ExclusiveExecution)
         if credentials is not None:
             app.add_middleware(PreviewAccess, credentials=credentials)
         add_runtime_status(app, composed, config.mode)
@@ -81,6 +57,7 @@ def create_host_app(config: HostConfig):
         @asynccontextmanager
         async def lifespan(app):
             try:
+                composed.worker.start()
                 yield
             finally:
                 composed.close()

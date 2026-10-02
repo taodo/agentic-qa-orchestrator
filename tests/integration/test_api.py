@@ -101,6 +101,7 @@ def test_health_openapi_and_no_unversioned_domain_routes(api):
         "/api/v1/tasks/{task_id}", "/api/v1/tasks/{task_id}/run", "/api/v1/tasks/{task_id}/resume"}
     expected |= {"/api/v1/tasks/{task_id}/" + suffix for suffix in
                  ("timeline", "artifacts", "test-runs", "errors", "decisions", "gates", "invocations")}
+    expected |= {"/api/v1/tasks/{task_id}/executions", "/api/v1/executions/{execution_id}"}
     assert set(schema["paths"]) == expected | {"/health"}
     assert schema["paths"]["/api/v1/projects"]["post"]["responses"]["201"]
     error_schema = schema["paths"]["/api/v1/projects"]["get"]["responses"]["422"]["content"]["application/json"]["schema"]

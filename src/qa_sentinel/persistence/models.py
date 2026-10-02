@@ -1,13 +1,41 @@
 """SQLAlchemy storage only; no domain or workflow behavior."""
 from datetime import datetime
 from typing import Any
-from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint
+from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from .types import ISODateTime
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class ExecutionJobRow(Base):
+    __tablename__ = "execution_jobs"
+    __table_args__ = (
+        UniqueConstraint("id", name="uq_execution_jobs_id"),
+        CheckConstraint("status IN ('QUEUED','RUNNING','SUCCEEDED','STOPPED','FAILED')", name="ck_execution_jobs_status"),
+        CheckConstraint("(status = 'QUEUED' AND started_at IS NULL AND finished_at IS NULL AND safe_error_code IS NULL) OR "
+            "(status = 'RUNNING' AND started_at IS NOT NULL AND finished_at IS NULL AND safe_error_code IS NULL) OR "
+            "(status = 'SUCCEEDED' AND started_at IS NOT NULL AND finished_at IS NOT NULL AND safe_error_code IS NULL) OR "
+            "(status = 'STOPPED' AND started_at IS NOT NULL AND finished_at IS NOT NULL AND safe_error_code IS NOT NULL AND safe_error_code IN ('RUNTIME_STOPPED','EXECUTION_INTERRUPTED')) OR "
+            "(status = 'FAILED' AND started_at IS NOT NULL AND finished_at IS NOT NULL AND safe_error_code IS NOT NULL AND safe_error_code = 'EXECUTION_FAILED')",
+            name="ck_execution_jobs_lifecycle"),
+        Index("ix_execution_jobs_queue", "status", "sequence"),
+        Index("ix_execution_jobs_task", "task_id", "sequence"),
+        Index("uq_execution_jobs_active_task", "task_id", unique=True, sqlite_where=text("status IN ('QUEUED','RUNNING')")),
+        Index("uq_execution_jobs_running", "status", unique=True, sqlite_where=text("status = 'RUNNING'")),
+        {"sqlite_autoincrement": True},
+    )
+    sequence: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[str] = mapped_column(String(36), nullable=False)
+    task_id: Mapped[str] = mapped_column(String(36), ForeignKey("tasks.id", deferrable=True, initially="DEFERRED"), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", deferrable=True, initially="DEFERRED"), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
+    safe_error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class ProjectRow(Base):

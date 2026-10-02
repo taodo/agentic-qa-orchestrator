@@ -4,7 +4,8 @@ The backend is a thin HTTP transport: **API → QASentinelApplication → core**
 Each domain route validates transport input, calls one application use case and
 serializes its frozen DTO. Routes have no ORM, repositories, workflow engines,
 model calls, tools or transaction ownership. Core and application code do not
-depend on API contracts. No database migration or core policy change is required.
+depend on API contracts. Task 13 required no migration; Task 20 adds an operational
+job table through 0003 without changing core workflow policies.
 
 ## Application factory and host composition
 
@@ -45,6 +46,9 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/tasks/{task_id} | get_task_detail → TaskDetail |
 | POST /api/v1/tasks/{task_id}/run | run_task → TaskDetail |
 | POST /api/v1/tasks/{task_id}/resume | resume_task → TaskDetail |
+| POST /api/v1/tasks/{task_id}/executions | request_task_execution → ExecutionJobView (202) |
+| GET /api/v1/tasks/{task_id}/executions | list_task_execution_jobs → CollectionPage[ExecutionJobView] |
+| GET /api/v1/executions/{execution_id} | get_execution_job → ExecutionJobView |
 | GET /api/v1/tasks/{task_id}/timeline | get_task_timeline → CollectionPage[TimelineEntry] |
 | GET /api/v1/tasks/{task_id}/artifacts | get_task_artifacts → CollectionPage[ArtifactView] |
 | GET /api/v1/tasks/{task_id}/test-runs | get_task_test_runs → CollectionPage[TestRunView] |
@@ -80,8 +84,9 @@ from persisted Task identity and expose no optional Project-scope parameter.
 
 Run is synchronous: the request waits for the existing WorkflowRunner to finish
 or safely stop. Long-running model/test/mutation work occupies that request's
-worker until completion. There are no queues, jobs, polling IDs or background
-workers. Concurrent execution for the same Task remains unsupported by the core;
+worker until completion. Task 20 separately adds durable execution requests and
+one host worker; /run retains its original response and synchronous semantics.
+Concurrent execution for the same Task remains unsupported by the core;
 hosts must serialize such execution and provide exclusive trusted workspaces.
 
 DONE/FAILED returns current durable state under existing guard semantics; BLOCKED
@@ -168,3 +173,21 @@ frontend on the same loopback origin. Real local composition uses persisted Proj
 keys and accepted workspace services. Host code does not change this API contract,
 CORS or runtime semantics; it admits only one Run/Resume request at a time and
 returns the existing RUNTIME_STOPPED conflict for overlap. See [HOSTING.md](HOSTING.md).
+
+## Task 20 durable execution requests
+
+POST `/tasks/{task_id}/executions` accepts no body or `{}` and returns 202 with the
+committed QUEUED snapshot. Extra owner/workspace/status fields are rejected. GET
+`/executions/{execution_id}` returns persisted operational status; GET
+`/tasks/{task_id}/executions` returns newest insertion first with existing bounded
+limit/truncation rules. All paths use `/api/v1`. ExecutionJobView contains only id,
+task_id, project_id, status, created_at, started_at, finished_at, safe_error_code.
+
+TaskState remains QA truth. SUCCEEDED means normal application return, not DONE.
+Unknown jobs return EXECUTION_JOB_NOT_FOUND (404); duplicate active requests
+TASK_EXECUTION_ALREADY_ACTIVE (409); terminal async requests TASK_EXECUTION_TERMINAL
+(409); invalid trusted lifecycle transitions EXECUTION_JOB_INVALID_STATE (409).
+Global execution overlap retains safe RUNTIME_STOPPED. /run never enqueues; Resume
+remains synchronous and separate. Host lifespan owns the worker; a standalone API
+only persists requests unless its embedding explicitly supplies a worker. Preview
+job routes stay Basic-protected. [Ordering/restart limits](EXECUTION_JOBS.md).
