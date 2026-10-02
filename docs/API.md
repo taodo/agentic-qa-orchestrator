@@ -152,3 +152,10 @@ added. There is no CORS middleware or wildcard origin policy.
 
 Frontend, auth/users/RBAC, queues/workers, WebSocket/SSE, schedulers, deployment,
 Docker/HTTPS, uploads, Git/GitHub automation, CLI and Task 14 remain out of scope.
+
+## Task 14 frontend consumer
+
+The dedicated React/Vite workspace consumes these unchanged API contracts via
+same-origin `/api/v1` requests and a configurable development proxy. Backend
+startup remains explicit; no wildcard CORS or unsafe runtime defaults were added.
+See [FRONTEND.md](FRONTEND.md) for operator screens and development commands.

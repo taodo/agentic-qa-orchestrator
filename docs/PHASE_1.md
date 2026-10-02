@@ -243,3 +243,13 @@ generated OpenAPI. Controlled error envelopes omit internal details. Run is
 synchronous and resume remains separate. No auth/frontend/background worker or
 migration is introduced. ASGI HTTP tests use no real API/provider connections.
 See [API.md](API.md). Wait for ChatGPT review and user approval before Task 14.
+
+## Task 14 frontend foundation
+
+A separate React/TypeScript/Vite workspace now consumes API v1 through a shared
+typed client. The operator shell includes Projects and creation, Project Detail
+with owned Tasks and creation, and Task Detail with basic persisted timeline and
+explicit synchronous Run/separate Resume. API error/truncation feedback and
+responsive accessible controls are included. No backend contract/CORS/persistence
+changes, fake runtime bootstrap, polling, auth or Task 15 tabs were added.
+See [FRONTEND.md](FRONTEND.md). Wait for review and approval before Task 15.
