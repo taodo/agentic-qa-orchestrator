@@ -159,3 +159,12 @@ The dedicated React/Vite workspace consumes these unchanged API contracts via
 same-origin `/api/v1` requests and a configurable development proxy. Backend
 startup remains explicit; no wildcard CORS or unsafe runtime defaults were added.
 See [FRONTEND.md](FRONTEND.md) for operator screens and development commands.
+
+## Task 16 local host
+
+`qa-sentinel serve --demo` now explicitly composes the existing factory/application
+with migrated file-backed SQLite and offline fake runtime, then serves the built
+frontend on the same loopback origin. Real local composition uses persisted Project
+keys and accepted workspace services. Host code does not change this API contract,
+CORS or runtime semantics; it admits only one Run/Resume request at a time and
+returns the existing RUNTIME_STOPPED conflict for overlap. See [HOSTING.md](HOSTING.md).

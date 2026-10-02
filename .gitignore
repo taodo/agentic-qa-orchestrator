@@ -5,6 +5,9 @@ __pycache__/
 task4-test-deps/
 task7-sdk-deps/
 task13-api-deps/
+task16-host-deps/
+.qa-sentinel/
+qa-sentinel.local.json
 node_modules/
 *.tsbuildinfo
 frontend/.vite/

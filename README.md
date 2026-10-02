@@ -11,9 +11,25 @@ python -m pip install -e ".[test]"
 python -m pytest
 ```
 
-Backend startup requires trusted host runtime composition; installing the package
-does not start a server or select a workspace. See docs/API.md and docs/PHASE_1.md
-for composition, contract assumptions and current scope.
+Installing the package does not start a server or select a workspace.
+
+## First-run offline demo (Task 16)
+
+```shell
+python -m pip install -e ".[test]"
+cd frontend
+npm ci
+npm run build
+cd ..
+qa-sentinel serve --demo
+```
+
+Open http://127.0.0.1:8000. Select Demo Calculator, create a division Task and Run.
+Demo agent/test evidence is synthetic: no API key, network, source writes or real
+test process is needed. Default file-backed state is `~/.qa-sentinel/demo/`.
+The host binds only to loopback and has no authentication. Real local mode can
+mutate explicitly configured trusted workspaces; see [docs/HOSTING.md](docs/HOSTING.md)
+for JSON configuration, boundaries and troubleshooting. No public deployment is included.
 
 ## Frontend development (Task 14)
 
@@ -25,5 +41,5 @@ npm run dev
 
 Run `npm test -- --run` and `npm run build` for frontend checks. Vite proxies
 `/api/v1` to `http://127.0.0.1:8000`; configure `VITE_API_PROXY_TARGET` for a
-different separately composed backend host. There is no automatic backend
-startup or production deployment. See [docs/FRONTEND.md](docs/FRONTEND.md).
+different local backend host. `qa-sentinel serve` serves built assets directly;
+Vite development remains separate. See [docs/FRONTEND.md](docs/FRONTEND.md).
