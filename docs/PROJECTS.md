@@ -153,10 +153,12 @@ verify task-scoped artifacts, reopen ownership and safe restart, and reject bind
 drift without repeated model/read operations. Existing Task 9/10 fixtures use explicit
 Projects/bindings; normal provider tests keep zero network/key requirements/API cost.
 
-No dependency, prompt/model role, provider tool, state edge or reliability framework
-was added. Multi-repository Projects, Application Services, Backend API, Frontend,
-auth/organizations/RBAC, deletion, provisioning and workers remain future work.
-Task 12 is not implemented; wait for review and explicit user approval.
+Task 11 added no dependency, prompt/model role, provider tool, state edge or
+reliability framework. Its historical scope excluded Application Services,
+Backend API and Frontend; Tasks 12–17 now provide those surfaces and hosting.
+Multi-repository Projects, product auth/organizations/RBAC, deletion, automatic
+workspace provisioning and workers remain unimplemented. See
+[Product Guide](PRODUCT_GUIDE.md#projects) for the current Operator interpretation.
 
 ## Task 12 host composition
 

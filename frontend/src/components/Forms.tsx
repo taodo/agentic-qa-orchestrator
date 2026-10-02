@@ -21,7 +21,7 @@ export function ProjectForm({ onCreated }: { onCreated: (project: ProjectView) =
     catch (failure) { setError(publicError(failure)); }
     finally { gate.current = false; setBusy(false); }
   }
-  return <section className="panel"><h2>Create Project</h2><form onSubmit={submit}><fieldset disabled={busy}>
+  return <section className="panel"><h2>Create Project</h2><p className="hint">A Project organizes Tasks for one software identity. Creation does not connect a repository or configure execution.</p><form onSubmit={submit}><fieldset disabled={busy}>
     <label htmlFor="project-key">Key <span className="muted">required</span></label><input id="project-key" name="key" required maxLength={64} placeholder="payment-api" />
     <p className="hint">Lowercase letters and numbers, separated by single hyphens.</p>
     <label htmlFor="project-name">Name <span className="muted">required</span></label><input id="project-name" name="name" required />

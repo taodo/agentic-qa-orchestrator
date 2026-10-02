@@ -1,5 +1,10 @@
 # Frontend operator dashboard (Tasks 14–15)
 
+For first-time operation, start with [Product Guide](PRODUCT_GUIDE.md) and
+[Feature Reference](FEATURES.md). Earlier task-specific startup/scope statements
+below describe their checkpoint; Tasks 16–17 provide local and protected demo
+hosting, and Task 18 adds only static onboarding/copy.
+
 The Web is a local operator/control dashboard over the accepted Task 13 API.
 React, TypeScript and Vite live in the separate `frontend/` workspace. Python/core
 packages and backend contracts are unchanged. The browser displays backend-owned
@@ -198,7 +203,8 @@ provider calls. Python backend contracts and dependencies remain unchanged.
 Current limits: trusted local/dev API without auth, separately composed backend,
 bounded prefixes, manual freshness and in-memory per-Task evidence. No source
 editor/diff engine, terminal, analytics, notifications, global state framework,
-settings, deployment or auth is implemented.
+settings or product auth is implemented. The current full-stack host and temporary
+preview Basic gate are documented in the Task 16–17 sections below.
 
 The required `npm ci` audit reports two moderate entries in the existing Vitest
 3.2.7 development dependency chain (`vitest` and `@vitest/mocker`, advisory
@@ -229,3 +235,27 @@ new API endpoint, browser storage or authentication code enters the bundle.
 The host enforces preview isolation independently of this label. Same-origin API
 requests use the browser's HTTP Basic authentication after the initial challenge.
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the protected preview deployment path.
+
+## Task 18 lightweight product onboarding
+
+Projects now introduces QA Sentinel and explains how to open a Project, create
+a Task, Run its configured workflow and inspect evidence. A native button opens
+an inline **How QA Sentinel works** panel with Project/Task/Run/Resume distinctions,
+the canonical Division support input and a clear synthetic-demo limitation.
+Project creation helper text states that identity creation does not configure
+execution. Task Execution copy describes completion/safe stops and separate Resume.
+
+The button is keyboard-focusable with native Enter/Space activation,
+aria-expanded/aria-controls and the existing focus styling. Hidden content is
+inline, not a modal; there is no focus trap or new route. The panel uses fluid
+width, wrapping text/control and the existing narrow-screen layout. Local component
+state is discarded on navigation; there is no analytics, browser storage, tutorial
+framework, API call or added dependency. The Task 17 preview label is unchanged.
+Tests cover visibility, expansion/collapse, focus/semantics, exact demo wording,
+no extra requests, preview indicator and unchanged Project navigation. See
+[Product Guide](PRODUCT_GUIDE.md#demo-mode) and [PRD](PRD.md).
+
+Supplementary checks against the production SPA use mocked API fixtures at
+1280px and 390px widths, verifying native Enter/Space activation, no horizontal
+overflow, unchanged routing and no help-triggered request. No screenshot assets
+or screenshot-automation tooling are added.

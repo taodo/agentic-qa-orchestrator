@@ -5,13 +5,15 @@ import { useResource } from '../app/useResource';
 import { LoadingState, EmptyState, ErrorState, TruncationNotice } from '../components/Feedback';
 import { DateTime } from '../components/DateTime';
 import { ProjectForm } from '../components/Forms';
+import { ProductHelp } from '../components/ProductHelp';
 export function ProjectsPage() {
   const projects = useResource(useCallback(listProjects, []));
-  return <><header className="page-header"><p className="eyebrow">Workspace / Projects</p><h1>Projects</h1><p className="muted">Software under QA Sentinel orchestration.</p></header>
+  return <><header className="page-header"><p className="eyebrow">Workspace / Projects</p><h1>Projects</h1><p className="muted">QA Sentinel coordinates QA work and records the evidence. Open a Project to create a Task, Run its configured workflow, and inspect the result.</p></header>
+    <ProductHelp />
     <div className="content-grid"><section className="panel"><div className="panel-heading"><h2>Project registry</h2><button type="button" disabled={projects.loading} onClick={() => void projects.reload()}>Refresh</button></div>
       {projects.loading && <LoadingState>Loading Projects…</LoadingState>}
       {projects.error && <ErrorState error={projects.error} retry={() => void projects.reload()} />}
-      {projects.data && <>{!projects.data.items.length ? <EmptyState>No Projects yet. Create your first Project to begin.</EmptyState> : <ul className="record-list">{projects.data.items.map(project => <li key={project.id}><div><Link to={`/projects/${project.id}`} className="record-title">{project.name}</Link><p className="mono muted">{project.key}</p></div><div className="record-meta"><span className="muted">Updated</span><DateTime value={project.updated_at} /></div></li>)}</ul>}<TruncationNotice truncated={projects.data.truncated} /></>}
+      {projects.data && <>{!projects.data.items.length ? <EmptyState>No Projects yet. Create a Project to organize its Tasks; execution requires a configured runtime.</EmptyState> : <ul className="record-list">{projects.data.items.map(project => <li key={project.id}><div><Link to={`/projects/${project.id}`} className="record-title">{project.name}</Link><p className="mono muted">{project.key}</p></div><div className="record-meta"><span className="muted">Updated</span><DateTime value={project.updated_at} /></div></li>)}</ul>}<TruncationNotice truncated={projects.data.truncated} /></>}
     </section><ProjectForm onCreated={async () => { await projects.reload(); }} /></div>
   </>;
 }

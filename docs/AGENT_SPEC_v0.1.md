@@ -1,5 +1,11 @@
 # Agent specification v0.1
 
+This document records the original schema-only checkpoint. Statements about
+missing gates/prompts/runtime apply to that checkpoint, not implemented Tasks
+1–17. For current roles and their authority read the
+[role guide](PRODUCT_GUIDE.md#agent-roles-and-deterministic-actors) and
+[Runtime](RUNTIME.md); no hidden reasoning is stored or displayed.
+
 LLM agents: RESEARCHER, PLANNER, IMPLEMENTER, TEST_ANALYZER, INVESTIGATOR,
 REVIEWER. The deterministic Test Runner is separate.
 

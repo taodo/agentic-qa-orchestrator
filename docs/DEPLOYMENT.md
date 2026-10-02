@@ -3,9 +3,11 @@
 Render terminates HTTPS for its generated `https://<service-name>.onrender.com`
 address and forwards to one Docker Web Service: HTTP Basic preview gate →
 same-origin ASGI host → accepted API/application/core and built React SPA →
-deterministic synthetic calculator runtime. This path requires review and user
-approval before deployment. No service or public URL was provisioned during
-implementation; the repository remains private.
+deterministic synthetic calculator runtime. Task 17 implementation prepared this
+path without provisioning a service; operational deployment/access belongs to
+the owner, who supplies the current generated HTTPS URL privately. The repository
+remains private. First-time visitors should read the
+[Product Guide walkthrough](PRODUCT_GUIDE.md#demo-mode) and [Features](FEATURES.md).
 
 ## Security boundary
 
@@ -113,12 +115,17 @@ filesystem reuses the existing seed without duplication; a clean filesystem
 starts a new demo database. No paid disk is required. Task 16's default
 `~/.qa-sentinel/demo/` local persistence is unchanged. No new migration is added.
 
-After authentication: open Demo Calculator, create a Task such as “Add division
-support and reject division by zero”, click Run, then inspect Overview, Timeline,
-Artifacts, Invocations, Test Runs, Decisions and Gates. Evidence is synthetic.
+After authentication: open Demo Calculator and create a Task titled
+“Division support” with requirement “Add division support and reject division by
+zero.” Click Run, then inspect Overview, Timeline, Artifacts, Invocations, Test
+Runs, Decisions and Gates. Evidence is synthetic.
 New arbitrary requirements still execute the same fixed demonstration scenario.
 Run is synchronous; Resume remains a separate explicit action. A second Project
 can be created but must receive a safe execution rejection, never a runtime.
+
+The complete first-time [walkthrough](PRODUCT_GUIDE.md#demo-mode) explains what
+each evidence section means; the Projects inline help provides a compact start.
+These additions do not change deployment, access, runtime or reset behavior.
 
 ## Local Docker verification
 

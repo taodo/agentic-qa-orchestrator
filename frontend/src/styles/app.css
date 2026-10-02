@@ -23,4 +23,9 @@
 .correlation dt{color:#aebed0}
 .correlation dd{margin:0;overflow-wrap:anywhere}
 [hidden]{display:none!important}
+.product-help{margin-bottom:20px;overflow-wrap:anywhere}
+.product-help button{max-width:100%;white-space:normal;text-align:left}
+.product-help p:first-child{margin-top:18px}
+.product-help dt{font-weight:600;margin-top:12px}
+.product-help dd{margin:4px 0 16px;color:#aebed0}
 @media(max-width:620px){.section-nav{gap:2px}.section-nav a{padding:8px}.expanded-json{max-height:420px}.record-heading{gap:8px}}

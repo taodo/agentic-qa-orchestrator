@@ -1,7 +1,7 @@
 # Application services (Task 12)
 
 `qa_sentinel.application.QASentinelApplication` is the in-process boundary for
-future CLI, Backend API and Web callers. Hosts configure dependencies explicitly;
+CLI, Backend API and Web callers. Hosts configure dependencies explicitly;
 callers receive frozen, extra-forbidden DTOs. Application code depends on domain,
 persistence and orchestration. Core code never depends on application contracts.
 

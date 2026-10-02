@@ -1,5 +1,16 @@
 # Phase 1 bootstrap status and assumptions
 
+## Current product scope
+
+Implemented Tasks 1–17 provide the evidence-driven core, trusted real local
+execution, Project isolation, application/API boundary, operator frontend,
+loopback local host and protected deterministic synthetic Render preview path.
+Task 18 adds product documentation and lightweight static frontend onboarding
+only. No workflow, backend/API, migration, model, dependency or deployment
+behavior changes. Read [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
+[Feature Reference](FEATURES.md) first. Entries below describe historical task
+checkpoints; their then-unimplemented scope is not a current capability inventory.
+
 Task 1 implements the package skeleton, enums, Pydantic domain/agent-output
 contracts, validation tests, and initial documentation. Task 1.1 hardens lifecycle,
 structured evidence, routing/coverage fields, and record references.
@@ -39,7 +50,9 @@ the unchanged TESTING stop limitation.
 Task 7 implements Researcher/Planner model calls; Task 8 adds real Test Analyzer,
 Investigator and Reviewer. Task 9 adds real Implementer proposals and deterministic
 controlled mutation. Task 10 adds read-only repository evidence for Researcher and
-Planner. A general permission engine, CLI, UI and workers remain unimplemented.
+Planner. At that checkpoint CLI/UI were not implemented; Tasks 14–17 now provide
+the operator UI and explicit hosts. A general permission engine and distributed
+workers remain unimplemented.
 Models never directly edit source.
 
 Contract hardening:
@@ -277,4 +290,17 @@ See DEPLOYMENT.md for private-repository setup and smoke verification. Docker is
 unavailable in the implementation environment, so image/container verification
 must be completed on a Docker-capable machine before deployment. Wait for ChatGPT
 review and user approval, then deploy accepted feature/develop and record the
-provider-generated HTTPS URL. Task 18 is not implemented.
+provider-generated HTTPS URL. These deployment/availability notes describe the
+Task 17 implementation checkpoint; the owner supplies current preview access.
+
+## Task 18 — Product clarity and onboarding
+
+PRD, Product Guide and Feature Reference describe implemented Tasks 1–17 only,
+including exact states, six reasoning roles plus deterministic Test Runner and
+Orchestrator, distinct evidence and correlation limits, safe-stop/reconciliation
+semantics, the Division support walkthrough and trusted real local boundaries.
+README now introduces the product, demo, documentation index, limitations and
+contributor reading order. Projects has compact inline help; form/execution copy
+clarifies configuration and inspection. No backend/core/API, schema, dependency,
+runtime or security behavior changes. Wait for ChatGPT review and user approval
+before Task 19; Task 19 is not implemented.

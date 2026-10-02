@@ -1,5 +1,10 @@
 # Agent runtime — Bootstrap Tasks 5–11
 
+For product interpretation read [Product Guide](PRODUCT_GUIDE.md); the current
+operator surface includes Application/API (Tasks 12–13), frontend (14–15),
+local host (16) and protected synthetic preview (17). Earlier task sections below
+describe their own checkpoint. They do not imply missing current host/UI features.
+
 QA Sentinel coordinates one persisted task using fake or reasoning-only real
 roles. Agents receive no database/session handle or mutable Task. WorkflowRunner
 selects routes; WorkflowEngine validates and atomically records every state change
@@ -183,8 +188,10 @@ adapter, bounded repository-owned prompts, real Researcher/Planner, and explicit
 CompositeAgentRuntime routing. Task 8 extends real reasoning to later roles. See MODELS.md for no-tools
 requests, provenance, sanitized errors, stateless context, deterministic schema
 correction, disabled SDK retries, and offline tests. Task 9 adds reasoning-only real
-Implementer proposals and deterministic MutationService. Playwright, API, CLI, UI,
-workers remain unimplemented.
+Implementer proposals and deterministic MutationService. At the Task 9 checkpoint,
+API, CLI and UI were not implemented. Tasks 12–17 now provide the application,
+API, operator UI and hosts; distributed workers and product browser-test execution
+remain unimplemented. See [Hosting](HOSTING.md) and [Deployment](DEPLOYMENT.md).
 
 ## Task 8 failure reasoning and explicit escalation
 
