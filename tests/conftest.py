@@ -1,3 +1,4 @@
+from qa_sentinel.domain.project import Project
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 import pytest
@@ -81,7 +82,7 @@ def factory():
 @pytest.fixture
 def bundle():
     now = datetime(2026, 10, 1, 12, 34, 56, 123456, tzinfo=timezone(timedelta(hours=7)))
-    task = Task(title="Persistence test", requirement="Store evidence", created_at=now,
+    task = Task(project_id=uuid4(), title="Persistence test", requirement="Store evidence", created_at=now,
                 updated_at=now, implementation_attempt=2, defect_cycle=3, review_cycle=4)
     error = ErrorRecord(task_id=task.id, error_type="TEST_FAILURE", code="ASSERT", severity="ERROR",
                         owner="TEST_TARGET", retryable=False, blocking=True, message="Mismatch",
@@ -127,7 +128,7 @@ def bundle():
 @pytest.fixture
 def store_bundle():
     def store(uow, bundle):
-        uow.tasks.add(bundle["task"])
+        uow.projects.add(Project(id=bundle["task"].project_id,key="test-"+bundle["task"].project_id.hex,name="Test owner")); uow.tasks.add(bundle["task"])
         uow.history.append_error(bundle["error"])
         uow.invocations.add(bundle["invocation"])
         uow.artifacts.add(bundle["artifact"])

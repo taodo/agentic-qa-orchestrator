@@ -1,4 +1,4 @@
-# Persistence foundation — Tasks 2 and 2.1
+# Persistence foundation — Tasks 2, 2.1 and 11
 
 Phase 1 persistence is implemented with SQLite, SQLAlchemy 2.x, and Alembic.
 It stores records and supports transactions; it does not choose workflow
@@ -13,7 +13,7 @@ Small frozen persistence records represent Requirement, AcceptanceCriterionRecor
 and FailureFingerprint because these have no existing first-class domain contracts.
 Agent-output schemas stay inside artifacts rather than getting separate tables.
 
-Tables: tasks, invocations, artifacts, transitions, gate_evaluations, decisions,
+Tables: projects, tasks, invocations, artifacts, transitions, gate_evaluations, decisions,
 errors, events, audit_records, test_runs, failure_fingerprints, requirements,
 acceptance_criteria. Alembic also maintains alembic_version.
 
@@ -39,6 +39,11 @@ uses persistence_id; get_by_logical_id requires requirement_id and logical ID.
 PlannerOutput acceptance IDs remain strings and are unchanged.
 
 ## Repositories and mutability
+
+Task 11 adds ProjectRepository add/get/get_by_key/list/save, with immutable id/key/
+created_at and explicit mutable name/description/updated_at. Project keys are unique
+and validated without normalization. Task.project_id is mandatory, indexed, FK-backed
+and immutable through TaskRepository.save. Evidence stays task-scoped. See PROJECTS.md.
 
 TaskRepository provides add/get/save for the mutable current task snapshot.
 InvocationRepository supports add/get/save for lifecycle records, including
@@ -76,12 +81,12 @@ without a workflow-specific transition method.
 
 ## Migration and verification
 
-alembic/versions/0001_initial.py is the initial, unreleased schema migration.
+alembic/versions/0001_initial.py is the accepted initial schema migration.
 It creates all 13 application tables with explicit columns, foreign keys, checks,
 and acceptance identity constraints, independently of current ORM metadata.
-Task 2.1 repairs this unreleased initial migration in place; no extra revision is
-introduced. Existing databases at revision 0001 are not retroactively altered by
-an upgrade to head: use a fresh database for this unreleased bootstrap schema.
+Task 2.1 historically repaired the then-unreleased initial migration in place.
+Task 11 assumes that accepted 0001 schema, leaves it unchanged, and upgrades it
+with revision 0002. Older pre-Task-2.1 schema variants require separate reconciliation.
 
 From the repository root, after installing the project and its test dependencies:
 
@@ -96,3 +101,12 @@ integration tests actually upgrade an empty SQLite file with Alembic, compare
 columns/types/nullability, FK targets/options, checks, unique constraints and PKs
 against ORM metadata, and verify durable round-trips and foreign-key rejection.
 No database payload logging or configuration secrets are added.
+
+Task 11 adds 0002_projects.py without modifying 0001. Online upgrade creates Project
+identity and non-null Task ownership, backfilling existing Tasks into one fixed
+migration-only legacy-bootstrap Project. Empty databases have no bootstrap row.
+Existing task data and incoming cyclic history links survive SQLite batch recreation.
+Migration connections temporarily disable FK checks before BEGIN, verify all links
+before commit and restore enforcement; normal connections keep enforcement enabled.
+Tests now upgrade to 0002 and compare schema/index integrity. See PROJECTS.md for
+backfill identity, transaction constraints and runtime binding of migrated Tasks.

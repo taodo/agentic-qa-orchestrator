@@ -1,5 +1,6 @@
 """Single-task deterministic vertical slice. WorkflowEngine owns every state change."""
 from uuid import UUID
+from qa_sentinel.projects import ProjectWorkspaceGuard, ProjectBindingError
 from qa_sentinel.agents.base import (
     STATE_AGENTS, ARTIFACT_TYPES, OUTPUT_TYPES, ResearchContext, PlanContext,
     ImplementationContext, AnalysisContext, InvestigationContext, ReviewContext, TestContext,
@@ -59,12 +60,16 @@ def review_target(output):
 class WorkflowRunner:
     def __init__(self, session_factory, runtime, test_provider, *, max_steps: int = 50,
                  reliability_config: ReliabilityConfig | None = None,
-                 investigation_evidence_conflict: bool = False, mutation_service=None, repository_service=None):
+                 investigation_evidence_conflict: bool = False, mutation_service=None, repository_service=None,
+                 workspace_binding=None):
         if type(max_steps) is not int or max_steps < 1:
             raise ValueError("max_steps must be a positive integer")
         self.session_factory = session_factory
         self.executor = AgentExecutor(session_factory, runtime, mutation_service=mutation_service,
-                                      repository_service=repository_service)
+                                      repository_service=repository_service, workspace_binding=workspace_binding)
+        self.workspace_binding = workspace_binding
+        self.project_guard = ProjectWorkspaceGuard(session_factory, workspace_binding,
+            reader=repository_service, mutation=mutation_service, test_provider=test_provider)
         self.test_provider = test_provider
         self.workflow = WorkflowEngine(session_factory)
         if type(investigation_evidence_conflict) is not bool:
@@ -78,6 +83,13 @@ class WorkflowRunner:
                 "investigator_primary_model": models[0], "investigator_escalated_model": models[1]})
         self.reliability = ReliabilityService(session_factory, reliability_config)
         self.max_steps = max_steps
+
+    def _validate_project(self, task):
+        try:
+            self.project_guard.check(task)
+        except ProjectBindingError as failure:
+            self._workflow_error(task.id, str(failure))
+            raise RunnerStoppedError(str(failure)) from None
 
     def _task(self, task_id):
         with UnitOfWork(self.session_factory) as uow:
@@ -130,6 +142,7 @@ class WorkflowRunner:
         return run
 
     def build_context(self, task, agent):
+        self._validate_project(task)
         with UnitOfWork(self.session_factory) as uow:
             attempt = 1 + sum(i.agent == agent for i in uow.invocations.list_by_task(task.id))
             base = dict(task_id=task.id, attempt=attempt)
@@ -194,6 +207,7 @@ class WorkflowRunner:
     def run(self, task_id: UUID):
         for _ in range(self.max_steps):
             task = self._task(task_id)
+            self._validate_project(task)
             if task.state in {S.DONE, S.FAILED, S.BLOCKED}:
                 return task
             try:
@@ -210,6 +224,7 @@ class WorkflowRunner:
         return self._task(task_id)
 
     def _step(self, task):
+        self._validate_project(task)
         if task.state == S.CREATED:
             self.workflow.transition(task_id=task.id, to_state=S.RESEARCHING,
                 reason_code="START_RESEARCH", reason_details="Start deterministic workflow")

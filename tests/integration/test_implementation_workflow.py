@@ -1,4 +1,7 @@
 """Mock Responses reasoning, deterministic source mutation, and actual target pytest."""
+from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -66,6 +69,7 @@ class Harness:
 
 
 def setup(factory, tmp_path, mock, *, create=False, config=None):
+    task = Task(project_id=uuid4(), title="Task 9 guarded division", requirement=DIVISION_REQUIREMENT)
     root = tmp_path / "target-project"
     (root / "tests").mkdir(parents=True)
     if not create:
@@ -77,13 +81,12 @@ def setup(factory, tmp_path, mock, *, create=False, config=None):
     runtime = RealAgentRuntime(OpenAIModelAdapter(client=mock.client), models)
     mutation = MutationService(MutationConfig(root))
     service = ExecutionService(factory, PytestRunner(CommandRunner(ExecutionConfig(root,
-        python_path=(Path(pytest.__file__).resolve().parents[1],)))))
+        python_path=(Path(pytest.__file__).resolve().parents[1],)))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
     provider = PytestTestResultProvider(service, CommandRequest(cwd=str(root), args=("-m", "pytest", "tests", "-q")))
-    task = Task(title="Task 9 guarded division", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
-    runner = WorkflowRunner(factory, runtime, provider, mutation_service=mutation, reliability_config=config)
+    runner = WorkflowRunner(factory, runtime, provider, mutation_service=mutation, reliability_config=config, workspace_binding=provider.workspace_binding)
     return Harness(task, factory, root, mutation, runtime, provider, runner, mock)
 
 
@@ -98,7 +101,7 @@ def advance(h, stage):
 
 
 def restart(h, factory=None):
-    return WorkflowRunner(factory or h.factory, h.runtime, h.provider, mutation_service=h.mutation)
+    return WorkflowRunner(factory or h.factory, h.runtime, h.provider, mutation_service=h.mutation, workspace_binding=h.provider.workspace_binding)
 
 
 @pytest.mark.parametrize("create", [False, True])

@@ -1,4 +1,7 @@
 """Mocked real reasoning + real pytest; fixture harness alone switches prepared code."""
+from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +36,14 @@ class PreparedRetestHarness:
     def __init__(self, provider, prepare, *, repair=True):
         self.provider, self.prepare, self.repair = provider, prepare, repair
 
+    @property
+    def workspace_root(self):
+        return self.provider.workspace_root
+
+    @property
+    def workspace_binding(self):
+        return self.provider.workspace_binding
+
     def run(self, context):
         if context.attempt > 1 and self.repair:
             # Explicit synthetic fixture switch outside every agent/runtime.
@@ -57,6 +68,7 @@ class Harness:
 
 
 def setup(factory, prepare, mock, *, first_fail=True, repair=True, config=None, conflict=False):
+    task = Task(project_id=uuid4(), title="Task 8 failure reasoning", requirement=DIVISION_REQUIREMENT)
     root = prepare(failing=first_fail)
     scenario, _ = division_scenario(repair=True)
     scenario = FakeScenario(responses=scenario.responses, repeat_last=True)
@@ -66,15 +78,14 @@ def setup(factory, prepare, mock, *, first_fail=True, repair=True, config=None, 
     fake = FakeAgentRuntime(scenario)
     runtime = CompositeAgentRuntime({role: fake if role == A.IMPLEMENTER else real for role in A})
     service = ExecutionService(factory, PytestRunner(CommandRunner(ExecutionConfig(root,
-        python_path=(Path(pytest.__file__).resolve().parents[1],)))))
+        python_path=(Path(pytest.__file__).resolve().parents[1],)))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
     provider = PreparedRetestHarness(PytestTestResultProvider(service,
         CommandRequest(cwd=str(root), args=("-m", "pytest", "tests", "-q"))), prepare, repair=repair)
-    task = Task(title="Task 8 failure reasoning", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     runner = WorkflowRunner(factory, runtime, provider, reliability_config=config,
-                            investigation_evidence_conflict=conflict)
+                            investigation_evidence_conflict=conflict, workspace_binding=provider.workspace_binding)
     return Harness(factory, task, runner, runtime, provider, mock)
 
 
@@ -154,7 +165,7 @@ def test_explicit_escalation_reservation_survives_reopen_and_selects_second_arti
     fresh = create_engine(str(engine.url))
     try:
         fresh_factory = create_session_factory(fresh)
-        runner = WorkflowRunner(fresh_factory, h.runtime, h.provider)
+        runner = WorkflowRunner(fresh_factory, h.runtime, h.provider, workspace_binding=h.provider.workspace_binding)
         assert runner.run(task.id).state == S.DONE
         with UnitOfWork(fresh_factory) as uow:
             investigations = [a for a in uow.artifacts.list_by_task(task.id) if a.artifact_type == ArtifactType.INVESTIGATION]
@@ -205,7 +216,7 @@ def test_existing_policy_signals_reserve_explicit_escalation(migrated_factory, c
         class Transient:
             def run(self, *args):
                 raise ModelError(ProviderErrorCategory.RATE_LIMIT)
-        first = AgentExecutor(factory, Transient()).execute(A.INVESTIGATOR, h.runner.build_context(task, A.INVESTIGATOR))
+        first = AgentExecutor(factory, Transient(), workspace_binding=h.provider.workspace_binding).execute(A.INVESTIGATOR, h.runner.build_context(task, A.INVESTIGATOR))
         h.runner._recover(task, A.INVESTIGATOR, first)
         task = h.runner._task(task.id)
     h.runner._step(task)
@@ -354,7 +365,7 @@ def test_escalation_event_rollback_preserves_primary_and_budget(migrated_factory
         assert not any(e.event_type == "MODEL_ESCALATED" for e in uow.history.list_events(task.id))
         assert len([a for a in uow.artifacts.list_by_task(task.id) if a.artifact_type == ArtifactType.INVESTIGATION]) == 1
     monkeypatch.setattr(HistoryRepository, "append_event", original)
-    assert WorkflowRunner(factory, h.runtime, h.provider).run(task.id).state == S.DONE
+    assert WorkflowRunner(factory, h.runtime, h.provider, workspace_binding=h.provider.workspace_binding).run(task.id).state == S.DONE
     assert len(mock.calls) == 6
 
 
@@ -380,7 +391,7 @@ def test_escalated_completion_rollback_never_falls_back_to_primary(migrated_fact
         assert sum(e.event_type == "MODEL_ESCALATED" for e in uow.history.list_events(task.id)) == 1
         assert len([a for a in uow.artifacts.list_by_task(task.id) if a.artifact_type == ArtifactType.INVESTIGATION]) == 1
     with pytest.raises(RunnerStoppedError):
-        WorkflowRunner(factory, h.runtime, h.provider).run(task.id)
+        WorkflowRunner(factory, h.runtime, h.provider, workspace_binding=h.provider.workspace_binding).run(task.id)
     assert len(mock.calls) == 5
 
 

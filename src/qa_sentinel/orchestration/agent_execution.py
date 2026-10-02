@@ -1,5 +1,6 @@
 """Invocation/artifact transaction boundary; agents receive no persistence handles."""
 from dataclasses import dataclass
+from qa_sentinel.projects import ProjectWorkspaceGuard
 from datetime import datetime, timezone
 from pydantic import ValidationError
 from qa_sentinel.agents.base import (
@@ -32,9 +33,12 @@ class AgentExecution:
 
 
 class AgentExecutor:
-    def __init__(self, session_factory, runtime: AgentRuntime, *, mutation_service=None, repository_service=None):
+    def __init__(self, session_factory, runtime: AgentRuntime, *, mutation_service=None, repository_service=None,
+                 workspace_binding=None):
         self.session_factory = session_factory
         self.runtime = runtime
+        self.project_guard = ProjectWorkspaceGuard(session_factory, workspace_binding,
+            reader=repository_service, mutation=mutation_service)
         self.implementation = ControlledImplementationExecution(session_factory, mutation_service)
         self.repository = ControlledRepositoryExecution(session_factory, repository_service)
 
@@ -50,6 +54,7 @@ class AgentExecutor:
                 type(context) is not CONTEXT_TYPES[invocation.agent] or context.task_id != task.id or
                 context.attempt != invocation.attempt or not self.repository_enabled(invocation.agent)):
                 raise RepositoryReconciliationRequired("REPOSITORY_INVOCATION_REQUIRES_RECONCILIATION")
+        self.project_guard.check(task)
         return self._execute_started(invocation, invocation.agent, context)
 
     @staticmethod
@@ -71,6 +76,11 @@ class AgentExecutor:
                 payload=dict(result=mutation_result.model_dump(mode="json"), workspace_identity=workspace_identity)))
 
     def execute(self, agent: AgentName, context: AgentContext) -> AgentExecution:
+        with UnitOfWork(self.session_factory) as uow:
+            task = uow.tasks.get(context.task_id)
+            if task is None:
+                raise KeyError(context.task_id)
+        self.project_guard.check(task)
         agent = AgentName(agent)
         if type(context) is not CONTEXT_TYPES[agent]:
             raise ValueError("Execution requires the role's typed context")

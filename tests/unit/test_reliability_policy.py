@@ -1,3 +1,4 @@
+from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 from qa_sentinel.domain.enums import ErrorType, TaskState
@@ -90,7 +91,7 @@ def test_circuit_boundary(count, tripped):
 
 @pytest.mark.parametrize("count,allowed", [(0, True), (2, True), (3, False), (4, False)])
 def test_defect_cycle_does_not_mutate_task(count, allowed):
-    task = Task(title="Task", requirement="Requirement", defect_cycle=count)
+    task = Task(project_id=uuid4(), title="Task", requirement="Requirement", defect_cycle=count)
     before = task.model_dump()
     assert can_start_another_defect_cycle(task) == allowed
     assert task.model_dump() == before
@@ -132,7 +133,7 @@ def test_escalation_rules_configurable_and_gate_independent(workflow_outputs):
 
 @pytest.mark.parametrize("reason", list(BlockerReason))
 def test_blocker_recommends_without_mutating(reason):
-    task = Task(title="Task", requirement="Requirement", state=TaskState.RESEARCHING)
+    task = Task(project_id=uuid4(), title="Task", requirement="Requirement", state=TaskState.RESEARCHING)
     result = evaluate_blocker(reason, task.state, ("evidence:1",))
     assert result.action == A.BLOCK and result.recommended_state == TaskState.BLOCKED
     assert result.resume_state == task.state and result.reason_code == reason.value

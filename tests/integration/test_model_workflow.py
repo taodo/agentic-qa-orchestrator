@@ -1,3 +1,6 @@
+from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 import json
 import pytest
 from qa_sentinel.agents.base import ResearchContext
@@ -23,6 +26,7 @@ from pathlib import Path
 
 
 def setup(factory, root, mock):
+    task = Task(project_id=uuid4(), title="Hybrid workflow", requirement=DIVISION_REQUIREMENT)
     scenario, _ = division_scenario()
     config = RoleModelConfig(researcher=ModelSettings(model="configured-researcher", reasoning_effort="medium"),
                             planner=ModelSettings(model="configured-planner", reasoning_effort="high"))
@@ -30,13 +34,12 @@ def setup(factory, root, mock):
     fake = FakeAgentRuntime(scenario)
     runtime = CompositeAgentRuntime({role: real if role in {A.RESEARCHER, A.PLANNER} else fake for role in A})
     execution = ExecutionService(factory, PytestRunner(CommandRunner(ExecutionConfig(root,
-        python_path=(Path(pytest.__file__).resolve().parents[1],)))))
+        python_path=(Path(pytest.__file__).resolve().parents[1],)))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
     provider = PytestTestResultProvider(execution, CommandRequest(cwd=str(root), args=("-m", "pytest", "tests", "-q")))
-    task = Task(title="Hybrid workflow", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
-    return task, WorkflowRunner(factory, runtime, provider), runtime
+    return task, WorkflowRunner(factory, runtime, provider, workspace_binding=provider.workspace_binding), runtime
 
 
 def outputs():
@@ -100,7 +103,7 @@ def test_rate_limit_uses_one_durable_retry_then_continues(migrated_factory, calc
         retry, = [e for e in uow.history.list_events(task.id) if e.event_type == "RETRY_SCHEDULED"]
         assert retry.payload["domain"] == "RESEARCH" and retry.correlation.invocation_id == invocation.id
         assert "synthetic-sensitive" not in str(error)
-    assert WorkflowRunner(factory, runtime, runner.test_provider).run(task.id).state == S.DONE
+    assert WorkflowRunner(factory, runtime, runner.test_provider, workspace_binding=runner.test_provider.workspace_binding).run(task.id).state == S.DONE
     assert len(mock.calls) == 3
 
 
@@ -151,9 +154,9 @@ def test_provider_failure_stops_safely_without_artifacts(migrated_factory, calcu
 def test_completion_atomicity_preserves_started_without_duplicate_call(factory, mock_openai, monkeypatch):
     research, _ = outputs()
     mock = mock_openai([research])
-    task = Task(title="Atomic model", requirement="Research", state=S.RESEARCHING)
+    task = Task(project_id=uuid4(), title="Atomic model", requirement="Research", state=S.RESEARCHING)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     runtime = RealAgentRuntime(OpenAIModelAdapter(client=mock.client))
     original = ArtifactRepository.add
@@ -175,9 +178,9 @@ def test_completion_atomicity_preserves_started_without_duplicate_call(factory, 
 
 
 def test_missing_credential_is_persisted_without_fake_fallback(factory):
-    task = Task(title="No key", requirement="Research", state=S.RESEARCHING)
+    task = Task(project_id=uuid4(), title="No key", requirement="Research", state=S.RESEARCHING)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     execution = AgentExecutor(factory, RealAgentRuntime(OpenAIModelAdapter())).execute(A.RESEARCHER,
         ResearchContext(task_id=task.id, attempt=1, requirement=task.requirement))
@@ -215,7 +218,7 @@ def test_schema_correction_survives_runner_recreation(migrated_factory, calculat
     task, runner, runtime = setup(factory, calculator_workspace(), mock)
     runner._step(task)
     runner._step(runner._task(task.id))
-    fresh = WorkflowRunner(factory, runtime, runner.test_provider)
+    fresh = WorkflowRunner(factory, runtime, runner.test_provider, workspace_binding=runner.test_provider.workspace_binding)
     ctx = fresh.build_context(fresh._task(task.id), A.RESEARCHER)
     assert ctx.schema_correction and ctx.attempt == 2
     assert fresh.run(task.id).state == S.DONE
@@ -225,9 +228,9 @@ def test_schema_correction_survives_runner_recreation(migrated_factory, calculat
 def test_model_call_has_no_open_write_transaction_and_cannot_progress_state(migrated_factory, mock_openai):
     factory, engine, _ = migrated_factory
     mock = mock_openai([outputs()[0]])
-    task = Task(title="No held transaction", requirement="Research", state=S.RESEARCHING)
+    task = Task(project_id=uuid4(), title="No held transaction", requirement="Research", state=S.RESEARCHING)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     real = RealAgentRuntime(OpenAIModelAdapter(client=mock.client))
     original = real.adapter.generate
@@ -239,8 +242,8 @@ def test_model_call_has_no_open_write_transaction_and_cannot_progress_state(migr
                 assert snapshot.state == S.RESEARCHING
                 invocation = uow.invocations.get(snapshot.current_invocation_id)
                 assert invocation.status.value == "STARTED"
-                unrelated = Task(title="Independent writer", requirement="Control remains orchestration")
-                uow.tasks.add(unrelated)
+                unrelated = Task(project_id=uuid4(), title="Independent writer", requirement="Control remains orchestration")
+                uow.projects.add(Project(id=unrelated.project_id,key="test-"+unrelated.project_id.hex,name="Test owner")); uow.tasks.add(unrelated)
                 uow.commit()
         finally:
             fresh.dispose()

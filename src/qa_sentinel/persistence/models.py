@@ -10,10 +10,22 @@ class Base(DeclarativeBase):
     pass
 
 
+class ProjectRow(Base):
+    __tablename__ = "projects"
+    __table_args__ = (UniqueConstraint("key", name="uq_projects_key"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
 class TaskRow(Base):
     __tablename__ = "tasks"
     __table_args__ = (CheckConstraint("implementation_attempt >= 0", name="ck_tasks_implementation_attempt"), CheckConstraint("defect_cycle >= 0", name="ck_tasks_defect_cycle"), CheckConstraint("review_cycle >= 0", name="ck_tasks_review_cycle"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", name="fk_tasks_project_id", deferrable=True, initially="DEFERRED"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(Text, nullable=False)
     requirement: Mapped[str] = mapped_column(Text, nullable=False)
     state: Mapped[str] = mapped_column(String(64), nullable=False)
