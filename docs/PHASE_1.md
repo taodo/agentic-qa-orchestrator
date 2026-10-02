@@ -253,3 +253,12 @@ explicit synchronous Run/separate Resume. API error/truncation feedback and
 responsive accessible controls are included. No backend contract/CORS/persistence
 changes, fake runtime bootstrap, polling, auth or Task 15 tabs were added.
 See [FRONTEND.md](FRONTEND.md). Wait for review and approval before Task 15.
+
+## Task 16 — Local full-stack host
+
+The explicit host package composes the accepted API/application/core with Alembic
+file-backed SQLite and built frontend assets. `qa-sentinel serve --demo` uses the
+offline synthetic calculator runtime; real local JSON configuration resolves
+persisted Project keys into explicit guarded workspace/service bundles. Loopback
+only, one worker, no concurrent Run/Resume, no auth/public deployment. No accepted
+contracts, migrations, model defaults or Task 9–15 policies change. See HOSTING.md.

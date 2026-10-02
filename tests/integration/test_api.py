@@ -398,5 +398,6 @@ def test_api_import_boundary_and_single_use_case_routes():
                         and call.func.value.id == "application"]
                     assert len(calls) == 1, node.name
     for path in root.rglob("*.py"):
-        if "api" not in path.relative_to(root).parts:
+        # Task 16 adds a composition layer above API; core/application stay independent.
+        if path.relative_to(root).parts[0] not in {"api", "host"}:
             assert "qa_sentinel.api" not in path.read_text(), path

@@ -7,13 +7,20 @@ name = "qa-sentinel"
 version = "0.1.0"
 description = "QA Sentinel structured domain contracts"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2,<3", "SQLAlchemy>=2,<3", "Alembic>=1,<2", "openai>=2.54,<3", "fastapi>=0.135.2,<0.136"]
+dependencies = ["pydantic>=2,<3", "SQLAlchemy>=2,<3", "Alembic>=1,<2", "openai>=2.54,<3", "fastapi>=0.135.2,<0.136", "uvicorn>=0.41,<0.42"]
+
+[project.scripts]
+qa-sentinel = "qa_sentinel.host.cli:main"
 
 [project.optional-dependencies]
 test = ["pytest>=8,<10", "httpx>=0.28,<1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.data-files]
+"share/qa-sentinel/alembic" = ["alembic/env.py", "alembic/script.py.mako"]
+"share/qa-sentinel/alembic/versions" = ["alembic/versions/0001_initial.py", "alembic/versions/0002_projects.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

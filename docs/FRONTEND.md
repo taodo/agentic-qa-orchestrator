@@ -198,10 +198,22 @@ provider calls. Python backend contracts and dependencies remain unchanged.
 Current limits: trusted local/dev API without auth, separately composed backend,
 bounded prefixes, manual freshness and in-memory per-Task evidence. No source
 editor/diff engine, terminal, analytics, notifications, global state framework,
-settings, deployment or auth is implemented. Task 16 is not implemented.
+settings, deployment or auth is implemented.
 
 The required `npm ci` audit reports two moderate entries in the existing Vitest
 3.2.7 development dependency chain (`vitest` and `@vitest/mocker`, advisory
 GHSA-82fw-gwwq-j7x9). Task 15 does not change the accepted dependency lockfile or
 add a test server/UI. A future dependency maintenance change can assess the major
 version upgrade separately; the production bundle does not include Vitest.
+
+## Task 16 same-origin local hosting
+
+After `npm ci` and `npm run build`, `qa-sentinel serve --demo` serves this unchanged
+build and the accepted `/api/v1` API through one loopback ASGI host. Relative API
+requests and history refreshes work directly; Vite/proxy is not started by the host.
+Missing dist/index fails startup. Demo Calculator's description identifies the
+synthetic workflow; the global local-workspace label and transport contracts are
+unchanged. See [HOSTING.md](HOSTING.md) for offline demo, explicit real local config,
+single-process admission, private SQLite state and security limitations. The older
+Task 14 startup limitation above describes that task's scope; Task 16 supplies the
+supported local host without production/public deployment.
