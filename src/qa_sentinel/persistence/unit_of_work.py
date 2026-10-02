@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from .repositories import (
     TaskRepository, ArtifactRepository, InvocationRepository, HistoryRepository,
     FailureFingerprintRepository, RequirementRepository, AcceptanceCriterionRepository,
+    ProjectRepository,
 )
 
 
@@ -16,6 +17,7 @@ class UnitOfWork:
             raise RuntimeError("UnitOfWork is already active")
         self.session = self.session_factory()
         self.tasks = TaskRepository(self.session)
+        self.projects = ProjectRepository(self.session)
         self.artifacts = ArtifactRepository(self.session)
         self.invocations = InvocationRepository(self.session)
         self.history = HistoryRepository(self.session)

@@ -1,3 +1,5 @@
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 from dataclasses import replace
 import pytest
 from qa_sentinel.agents.base import (
@@ -26,9 +28,9 @@ def setup(factory, *, repair=False, responses=None, results=None, repeat_last=Fa
     elif repeat_last:
         scenario = replace(scenario, repeat_last=True)
     provider = FakeTestResultProvider(results or defaults, repeat_last=repeat_last)
-    task = Task(title="Add division support", requirement=DIVISION_REQUIREMENT)
+    task = Task(project_id=uuid4(), title="Add division support", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     return task, WorkflowRunner(factory, FakeAgentRuntime(scenario), provider, **runner_options)
 

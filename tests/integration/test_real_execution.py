@@ -1,3 +1,6 @@
+from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 from pathlib import Path
 import os
 import subprocess
@@ -23,17 +26,17 @@ def command(root, *, timeout=120, environment=None, args=None):
         args=args or ("-m", "pytest", "tests", "-q", "--tb=short"))
 
 
-def service(factory, root, *, output_limit=256 * 1024, allowed_names=()):
+def service(factory, root, *, project_id, output_limit=256 * 1024, allowed_names=()):
     config = ExecutionConfig(root, max_output_bytes=output_limit,
         python_path=(Path(pytest.__file__).resolve().parents[1],), allowed_environment_names=allowed_names)
-    return ExecutionService(factory, PytestRunner(CommandRunner(config)))
+    return ExecutionService(factory, PytestRunner(CommandRunner(config)), workspace_binding=ProjectWorkspaceBinding(project_id=project_id, workspace_root=root))
 
 
 def seed(factory, state=S.TESTING):
-    task = Task(title="Real division evidence", requirement=DIVISION_REQUIREMENT, state=state)
+    task = Task(project_id=uuid4(), title="Real division evidence", requirement=DIVISION_REQUIREMENT, state=state)
     implementation = Artifact(task_id=task.id, artifact_type="IMPLEMENTATION", schema_version="0.1", content={"synthetic": True})
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.artifacts.add(implementation)
         uow.commit()
     return task, implementation
@@ -43,7 +46,7 @@ def test_real_pytest_pass_counts_and_history_survive_reopen(migrated_factory, ca
     factory, engine, _ = migrated_factory
     root = calculator_workspace(extra="\ndef test_skipped():\n    pytest.skip('synthetic skip')\n")
     task, implementation = seed(factory)
-    run = service(factory, root).execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
+    run = service(factory, root, project_id=task.project_id).execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
     assert run.execution_status.value == "COMPLETED" and run.outcome.value == "PASS"
     assert (run.passed_count, run.failed_count, run.skipped_count) == (3, 0, 1)
     assert run.environment == "local-pytest"
@@ -54,8 +57,8 @@ def test_real_pytest_pass_counts_and_history_survive_reopen(migrated_factory, ca
             assert uow.tasks.get(task.id) == task
             assert not uow.history.list_errors(task.id)
             events = uow.history.list_events(task.id)
-            assert {e.event_type for e in events} == {"TEST_EXECUTION_STARTED", "TEST_EXECUTION_COMPLETED"}
-            assert all(e.correlation.test_run_id == run.id for e in events)
+            assert {e.event_type for e in events} == {"PROJECT_WORKSPACE_BOUND", "TEST_EXECUTION_STARTED", "TEST_EXECUTION_COMPLETED"}
+            assert all(e.correlation.test_run_id == run.id for e in events if e.event_type != "PROJECT_WORKSPACE_BOUND")
             report = uow.artifacts.get(run.report_artifact_id)
             assert report.artifact_type.value == "TEST_RESULT" and report.content["exit_code"] == 0
             assert "stdout" not in report.content and "stderr" not in report.content
@@ -68,7 +71,7 @@ def test_real_assertion_failure_is_product_evidence(migrated_factory, calculator
     factory, _, _ = migrated_factory
     root = calculator_workspace(failing=True)
     task, implementation = seed(factory)
-    run = service(factory, root).execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
+    run = service(factory, root, project_id=task.project_id).execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
     assert run.outcome.value == "FAIL" and run.execution_status.value == "COMPLETED"
     assert (run.passed_count, run.failed_count) == (2, 1)
     with UnitOfWork(factory) as uow:
@@ -85,7 +88,7 @@ def test_real_environment_excludes_parent_secrets_and_pytest_addopts(migrated_fa
         "    assert 'PYTEST_ADDOPTS' not in os.environ\n"
         "    assert os.environ['APP_MODE'] == 'testing'\n    assert os.environ['PATH']\n")
     task, implementation = seed(factory)
-    execution = service(factory, root, allowed_names=("APP_MODE",))
+    execution = service(factory, root, allowed_names=("APP_MODE",), project_id=task.project_id)
     run = execution.execute(task_id=task.id, implementation_artifact_id=implementation.id,
                             request=command(root, environment={"APP_MODE": "testing"}))
     assert run.outcome.value == "PASS" and run.passed_count == 4
@@ -95,11 +98,11 @@ def test_real_output_is_bounded_without_persisting_raw_logs(migrated_factory, ca
     factory, _, _ = migrated_factory
     root = calculator_workspace(extra="\ndef test_output():\n    import sys\n"
         "    print('synthetic-output-' * 256)\n    sys.stderr.write('synthetic-error-' * 256)\n")
-    execution = service(factory, root, output_limit=128)
+    task, implementation = seed(factory)
+    execution = service(factory, root, output_limit=128, project_id=task.project_id)
     result = execution.pytest_runner.run(command(root, args=("-m", "pytest", "tests", "-q", "-s")))
     assert result.exit_code == 0 and result.stdout_truncated and result.stderr_truncated
     assert len(result.stdout.encode()) <= 128 and len(result.stderr.encode()) <= 128
-    task, implementation = seed(factory)
     run = execution.execute(task_id=task.id, implementation_artifact_id=implementation.id,
                             request=command(root, args=("-m", "pytest", "tests", "-q", "-s")))
     with UnitOfWork(factory) as uow:
@@ -145,7 +148,7 @@ def test_real_timeout_terminates_parent_and_child(migrated_factory, calculator_w
         "    Path('child.pid').write_text(str(child.pid))\n    Path('parent.pid').write_text(str(os.getpid()))\n"
         "    time.sleep(10)\n")
     task, implementation = seed(factory)
-    run = service(factory, root).execute(task_id=task.id, implementation_artifact_id=implementation.id,
+    run = service(factory, root, project_id=task.project_id).execute(task_id=task.id, implementation_artifact_id=implementation.id,
                                          request=command(root, timeout=1.5))
     assert run.outcome.value == "UNKNOWN" and run.execution_status.value == "INCOMPLETE"
     assert run.passed_count == run.failed_count == 0
@@ -158,7 +161,7 @@ def test_real_timeout_terminates_parent_and_child(migrated_factory, calculator_w
         assert any(e.event_type == "TEST_EXECUTION_TIMED_OUT" for e in uow.history.list_events(task.id))
 
 
-def workflow(factory, root, *, request=None, human_action=False):
+def workflow(factory, root, *, project_id, request=None, human_action=False):
     scenario, _ = division_scenario(repair=True)
     if human_action:
         output = scenario.responses[AgentName.INVESTIGATOR][0].output
@@ -166,15 +169,15 @@ def workflow(factory, root, *, request=None, human_action=False):
             update={"type": InvestigationActionType.HUMAN_ACTION})})
         scenario = FakeScenario(responses={**scenario.responses,
             AgentName.INVESTIGATOR: (FakeResponse(output=output),)})
-    provider = PytestTestResultProvider(service(factory, root), request or command(root))
-    return WorkflowRunner(factory, FakeAgentRuntime(scenario), provider)
+    provider = PytestTestResultProvider(service(factory, root, project_id=project_id), request or command(root))
+    return WorkflowRunner(factory, FakeAgentRuntime(scenario), provider, workspace_binding=provider.workspace_binding)
 
 
 def test_workflow_happy_path_uses_real_pytest(migrated_factory, calculator_workspace):
     factory, _, _ = migrated_factory
     root = calculator_workspace()
     task, _ = seed(factory, S.CREATED)
-    assert workflow(factory, root).run(task.id).state == S.DONE
+    assert workflow(factory, root, project_id=task.project_id).run(task.id).state == S.DONE
     with UnitOfWork(factory) as uow:
         run, = uow.history.list_test_runs(task.id)
         assert run.environment == "local-pytest" and run.passed_count == 3
@@ -186,7 +189,7 @@ def test_real_failure_routes_to_analyzer_not_infrastructure_recovery(migrated_fa
     factory, _, _ = migrated_factory
     root = calculator_workspace(failing=True)
     task, _ = seed(factory, S.CREATED)
-    assert workflow(factory, root, human_action=True).run(task.id).state == S.BLOCKED
+    assert workflow(factory, root, human_action=True, project_id=task.project_id).run(task.id).state == S.BLOCKED
     with UnitOfWork(factory) as uow:
         assert any(t.from_state == S.TESTING and t.to_state == S.ANALYZING for t in uow.history.list_transitions(task.id))
         assert any(i.agent == AgentName.TEST_ANALYZER for i in uow.invocations.list_by_task(task.id))
@@ -200,7 +203,7 @@ def test_transient_timeout_retry_survives_service_recreation(migrated_factory, c
         "    marker = Path('delayed-once')\n    if not marker.exists():\n        marker.touch()\n        time.sleep(5)\n")
     task, _ = seed(factory, S.CREATED)
     spec = command(root, timeout=1.5)
-    first = workflow(factory, root, request=spec)
+    first = workflow(factory, root, request=spec, project_id=task.project_id)
     for _ in range(5):
         first._step(first._task(task.id))
     with UnitOfWork(factory) as uow:
@@ -208,7 +211,7 @@ def test_transient_timeout_retry_survives_service_recreation(migrated_factory, c
         assert initial.outcome.value == "UNKNOWN"
         retry, = [e for e in uow.history.list_events(task.id) if e.event_type == "RETRY_SCHEDULED"]
         assert retry.payload["domain"] == "TEST_EXECUTION" and retry.correlation.test_run_id == initial.id
-    assert workflow(factory, root, request=spec).run(task.id).state == S.DONE
+    assert workflow(factory, root, request=spec, project_id=task.project_id).run(task.id).state == S.DONE
     with UnitOfWork(factory) as uow:
         runs = uow.history.list_test_runs(task.id)
         assert len(runs) == 2 and {r.outcome.value for r in runs} == {"UNKNOWN", "PASS"}
@@ -222,7 +225,7 @@ def test_timeout_exhaustion_stops_in_testing_without_analysis(migrated_factory, 
     root = calculator_workspace(extra="\ndef test_slow():\n    import time\n    time.sleep(5)\n")
     task, _ = seed(factory, S.CREATED)
     with pytest.raises(RunnerStoppedError, match="no BLOCKED edge"):
-        workflow(factory, root, request=command(root, timeout=0.5)).run(task.id)
+        workflow(factory, root, request=command(root, timeout=0.5), project_id=task.project_id).run(task.id)
     with UnitOfWork(factory) as uow:
         assert uow.tasks.get(task.id).state == S.TESTING
         assert len(uow.history.list_test_runs(task.id)) == 3
@@ -240,7 +243,7 @@ def test_policy_rejection_persists_without_subprocess(migrated_factory, calculat
     def forbidden(*a, **kw):
         raise AssertionError("Subprocess must not run rejected commands")
     monkeypatch.setattr(subprocess, "Popen", forbidden)
-    run = service(factory, root).execute(task_id=task.id, implementation_artifact_id=implementation.id,
+    run = service(factory, root, project_id=task.project_id).execute(task_id=task.id, implementation_artifact_id=implementation.id,
                                          request=CommandRequest(executable="cmd.exe", cwd=str(root)))
     assert run.outcome.value == "UNKNOWN"
     with UnitOfWork(factory) as uow:
@@ -252,14 +255,14 @@ def test_completion_persistence_failure_rolls_back_all_evidence(migrated_factory
     factory, _, _ = migrated_factory
     root = calculator_workspace()
     task, implementation = seed(factory)
-    execution = service(factory, root)
+    execution = service(factory, root, project_id=task.project_id)
     original_event = HistoryRepository.append_event
     original_run = execution.pytest_runner.run
     calls = []
     def check_no_transaction(request):
         # An independent writer can commit: execution holds no SQLite transaction.
         with UnitOfWork(factory) as uow:
-            uow.tasks.add(Task(title="Independent", requirement="Writer"))
+            independent_task = Task(project_id=uuid4(), title="Independent", requirement="Writer"); uow.projects.add(Project(id=independent_task.project_id,key="test-"+independent_task.project_id.hex,name="Test owner")); uow.tasks.add(independent_task)
             uow.commit()
         calls.append(request)
         return original_run(request)
@@ -275,7 +278,7 @@ def test_completion_persistence_failure_rolls_back_all_evidence(migrated_factory
     with UnitOfWork(factory) as uow:
         assert not uow.history.list_test_runs(task.id) and not uow.history.list_errors(task.id)
         assert len(uow.artifacts.list_by_task(task.id)) == 1
-        event, = uow.history.list_events(task.id)
+        event, = [e for e in uow.history.list_events(task.id) if e.event_type != "PROJECT_WORKSPACE_BOUND"]
         assert event.event_type == "TEST_EXECUTION_STARTED"
     with pytest.raises(PendingError):
         execution.execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
@@ -290,7 +293,7 @@ def test_controlled_config_module_identity_and_space_in_workspace(migrated_facto
     root.joinpath("pytest.py").write_text("raise RuntimeError('workspace must not shadow pytest entrypoint')\n")
     root.joinpath("pytest.ini").write_text("[pytest]\naddopts=--deliberately-unapproved-option\n")
     task, implementation = seed(factory)
-    run = service(factory, root).execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
+    run = service(factory, root, project_id=task.project_id).execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
     assert run.outcome.value == "PASS" and run.passed_count == 3
 
 
@@ -299,7 +302,7 @@ def test_real_start_failure_is_unknown_environment_evidence(migrated_factory, ca
     root = calculator_workspace()
     task, implementation = seed(factory)
     execution = ExecutionService(factory, PytestRunner(CommandRunner(
-        ExecutionConfig(root, python_executable=root / "missing-python.exe"))))
+        ExecutionConfig(root, python_executable=root / "missing-python.exe"))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
     run = execution.execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
     assert run.outcome.value == "UNKNOWN" and run.execution_status.value == "FAILED"
     with UnitOfWork(factory) as uow:
@@ -313,7 +316,7 @@ def test_timeout_completion_rollback_includes_error_record(migrated_factory, cal
     factory, _, _ = migrated_factory
     root = calculator_workspace()
     task, implementation = seed(factory)
-    execution = service(factory, root)
+    execution = service(factory, root, project_id=task.project_id)
     now = datetime.now(timezone.utc)
     result = CommandExecutionResult(executable="python", args=("-m", "pytest"), cwd=str(root),
         started_at=now, finished_at=now, duration_ms=1, exit_code=None, timed_out=True,
@@ -331,5 +334,5 @@ def test_timeout_completion_rollback_includes_error_record(migrated_factory, cal
     with UnitOfWork(factory) as uow:
         assert not uow.history.list_errors(task.id) and not uow.history.list_test_runs(task.id)
         assert len(uow.artifacts.list_by_task(task.id)) == 1
-        event, = uow.history.list_events(task.id)
+        event, = [e for e in uow.history.list_events(task.id) if e.event_type != "PROJECT_WORKSPACE_BOUND"]
         assert event.event_type == "TEST_EXECUTION_STARTED"

@@ -1,6 +1,7 @@
 """Explicit domain/storage mappings with detached JSON values."""
 from copy import deepcopy
 from qa_sentinel.domain.task import Task
+from qa_sentinel.domain.project import Project
 from qa_sentinel.domain.invocation import AgentInvocation
 from qa_sentinel.domain.artifact import Artifact
 from qa_sentinel.domain.transition import Transition
@@ -14,6 +15,7 @@ from qa_sentinel.persistence.records import FailureFingerprint
 from qa_sentinel.persistence.records import Requirement
 from qa_sentinel.persistence.records import AcceptanceCriterionRecord
 from .models import (
+    ProjectRow,
     TaskRow,
     InvocationRow,
     ArtifactRow,
@@ -30,11 +32,23 @@ from .models import (
 )
 
 
+def project_to_orm(record: Project) -> ProjectRow:
+    record = Project.model_validate(record.model_dump())
+    return ProjectRow(id=str(record.id), key=record.key, name=record.name,
+        description=record.description, created_at=record.created_at, updated_at=record.updated_at)
+
+
+def project_from_orm(row: ProjectRow) -> Project:
+    return Project(id=row.id, key=row.key, name=row.name, description=row.description,
+        created_at=row.created_at, updated_at=row.updated_at)
+
+
 def task_to_orm(record: Task) -> TaskRow:
     record = Task.model_validate(record.model_dump())
     data = record.model_dump(mode="json")
     return TaskRow(
         id=data["id"],
+        project_id=data["project_id"],
         title=data["title"],
         requirement=data["requirement"],
         state=data["state"],
@@ -53,6 +67,7 @@ def task_to_orm(record: Task) -> TaskRow:
 def task_from_orm(row: TaskRow) -> Task:
     return Task.model_validate({
         "id": row.id,
+        "project_id": row.project_id,
         "title": row.title,
         "requirement": row.requirement,
         "state": row.state,

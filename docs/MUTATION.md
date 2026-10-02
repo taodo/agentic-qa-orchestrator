@@ -18,14 +18,18 @@ before a provider request.
 
 ```python
 mutation = MutationService(MutationConfig(workspace_root=prepared_target_root))
+binding = ProjectWorkspaceBinding(project_id=task.project_id,
+                                  workspace_root=prepared_target_root)
 runtime = RealAgentRuntime(OpenAIModelAdapter(), RoleModelConfig())
 runner = WorkflowRunner(session_factory, runtime, pytest_provider,
-                        mutation_service=mutation)
+                        mutation_service=mutation, workspace_binding=binding)
 ```
 
 Configure the deterministic pytest provider for the same target workspace. The
 model cannot select roots, limits or commands. Concurrent runners/writers are
 unsupported; use exclusive trusted access throughout implementation and testing.
+Task 11 requires explicit persisted Project ownership and matching binding on the
+runner/executor and real test service. See PROJECTS.md for composition and drift checks.
 
 ## Proposal versus canonical evidence
 
@@ -208,4 +212,5 @@ whole-set rejection, stale conflicts, encoding/modes/limits, partial apply/rollb
 reservation/completion failure, restart/reopen, drift, retries, gates/budgets, zero
 tools and literal command-like metadata. Task 6 deliberately does not classify logs
 into failure fingerprints; the circuit test supplies a trusted explicit identity
-through its existing provider capability. Task 10 is deferred.
+through its existing provider capability. Task 10 adds separate read-only Researcher/
+Planner evidence; Implementer snapshots remain unchanged. Task 11 adds Project binding.

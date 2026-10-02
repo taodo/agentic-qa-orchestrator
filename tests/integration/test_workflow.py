@@ -1,3 +1,5 @@
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 
 from datetime import datetime,timezone
 from qa_sentinel.domain.task import Task
@@ -15,8 +17,8 @@ from qa_sentinel.orchestration.gates import (
 
 def test_complete_workflow_survives_reopening_migrated_sqlite(migrated_factory,workflow_outputs):
     factory,engine,config=migrated_factory
-    task=Task(title="Happy path",requirement="Verified behavior")
-    with UnitOfWork(factory) as uow:uow.tasks.add(task);uow.commit()
+    task=Task(project_id=uuid4(), title="Happy path",requirement="Verified behavior")
+    with UnitOfWork(factory) as uow:uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task);uow.commit()
     workflow=WorkflowEngine(factory)
     workflow.transition(task_id=task.id,to_state=S.RESEARCHING,reason_code="START_RESEARCH",reason_details="Start")
     research=workflow_outputs["research"]
@@ -74,13 +76,13 @@ def test_complete_workflow_survives_reopening_migrated_sqlite(migrated_factory,w
 
 def test_deterministic_failure_repair_loop(migrated_factory,workflow_outputs):
     factory,engine,config=migrated_factory
-    task=Task(title="Repair loop",requirement="Fix defect",state=S.IMPLEMENTING)
+    task=Task(project_id=uuid4(), title="Repair loop",requirement="Fix defect",state=S.IMPLEMENTING)
     impl=Artifact(task_id=task.id,artifact_type="IMPLEMENTATION",schema_version="0.1",content={"work":"completed"})
     now=datetime.now(timezone.utc)
     run=RunRecord(task_id=task.id,implementation_artifact_id=impl.id,execution_status="COMPLETED",outcome="FAIL",
                   environment="test",started_at=now,finished_at=now,passed_count=0,failed_count=1,skipped_count=0)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task);uow.artifacts.add(impl);uow.history.append_test_run(run);uow.commit()
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task);uow.artifacts.add(impl);uow.history.append_test_run(run);uow.commit()
     workflow=WorkflowEngine(factory)
     workflow.transition(task_id=task.id,to_state=S.TESTING,reason_code="IMPLEMENTATION_COMPLETE",reason_details="Work complete",
         gate_evaluation=ImplementationGate.evaluate(task.id,workflow_outputs["implementation"],workflow_outputs["plan"]))

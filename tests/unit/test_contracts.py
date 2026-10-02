@@ -105,7 +105,7 @@ def test_invalid_failure_classification():
 def records():
     task=uuid4(); now=datetime.now(timezone.utc)
     return [
-        Task(id=task,title="Task",requirement="Requirement"),
+        Task(project_id=uuid4(), id=task,title="Task",requirement="Requirement"),
         Artifact(task_id=task,artifact_type="RESEARCH",schema_version="0.1",producer_agent="RESEARCHER",content={"summary":"Evidence"}),
         AgentInvocation(task_id=task,agent="RESEARCHER",model="model-id",reasoning_effort="low",attempt=1,status="COMPLETED",started_at=now,finished_at=now),
         DecisionRecord(task_id=task,decision_type="TRANSITION",decision_source="orchestrator",reason_code="READY",reason_details="Evidence accepted"),

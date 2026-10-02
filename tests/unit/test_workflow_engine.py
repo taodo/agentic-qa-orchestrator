@@ -1,3 +1,4 @@
+from qa_sentinel.domain.project import Project
 
 from datetime import datetime,timezone
 from uuid import uuid4
@@ -18,8 +19,8 @@ from qa_sentinel.orchestration.errors import (
 
 def seed(factory,state=S.CREATED):
     old=datetime(2020,1,1,tzinfo=timezone.utc)
-    task=Task(title="Task",requirement="Requirement",state=state,created_at=old,updated_at=old)
-    with UnitOfWork(factory) as uow:uow.tasks.add(task);uow.commit()
+    task=Task(project_id=uuid4(), title="Task",requirement="Requirement",state=state,created_at=old,updated_at=old)
+    with UnitOfWork(factory) as uow:uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task);uow.commit()
     return task
 
 

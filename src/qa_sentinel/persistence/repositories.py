@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from . import models, mappers
 from qa_sentinel.domain.task import Task
+from qa_sentinel.domain.project import Project
 from qa_sentinel.domain.invocation import AgentInvocation
 from qa_sentinel.domain.artifact import Artifact
 from qa_sentinel.domain.transition import Transition
@@ -17,6 +18,37 @@ from qa_sentinel.domain.test_run import TestRun
 from qa_sentinel.persistence.records import FailureFingerprint
 from qa_sentinel.persistence.records import Requirement
 from qa_sentinel.persistence.records import AcceptanceCriterionRecord
+
+
+class ProjectRepository:
+    def __init__(self, session: Session):
+        self.session = session
+
+    def add(self, record: Project) -> None:
+        self.session.add(mappers.project_to_orm(record))
+        self.session.flush()
+
+    def get(self, record_id: UUID) -> Project | None:
+        row = self.session.get(models.ProjectRow, str(record_id))
+        return None if row is None else mappers.project_from_orm(row)
+
+    def get_by_key(self, key: str) -> Project | None:
+        row = self.session.scalar(select(models.ProjectRow).where(models.ProjectRow.key == key))
+        return None if row is None else mappers.project_from_orm(row)
+
+    def list(self) -> list[Project]:
+        return [mappers.project_from_orm(row) for row in self.session.scalars(
+            select(models.ProjectRow).order_by(models.ProjectRow.key, models.ProjectRow.id))]
+
+    def save(self, record: Project) -> None:
+        row = self.session.get(models.ProjectRow, str(record.id))
+        if row is None:
+            raise KeyError(record.id)
+        values = mappers.project_to_orm(record)
+        if (row.key, row.created_at) != (values.key, values.created_at):
+            raise ValueError("Project identity is immutable")
+        row.name, row.description, row.updated_at = values.name, values.description, values.updated_at
+        self.session.flush()
 
 
 class TaskRepository:
@@ -36,6 +68,8 @@ class TaskRepository:
         if row is None:
             raise KeyError(record.id)
         values = mappers.task_to_orm(record)
+        if row.project_id != values.project_id:
+            raise ValueError("Task ownership is immutable")
         row.title = values.title
         row.requirement = values.requirement
         row.state = values.state

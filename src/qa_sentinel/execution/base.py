@@ -1,5 +1,7 @@
 """Testing provider boundary shared by fake and real deterministic execution."""
 from typing import Protocol
+from pathlib import Path
+from qa_sentinel.projects import ProjectWorkspaceBinding
 from pydantic import BaseModel, ConfigDict
 from qa_sentinel.agents.base import TestContext
 from qa_sentinel.domain.test_run import TestRun
@@ -20,6 +22,10 @@ class TestExecutionPendingError(RuntimeError):
 
 
 class TestResultProvider(Protocol):
+    @property
+    def workspace_root(self) -> Path | None: ...
+    @property
+    def workspace_binding(self) -> ProjectWorkspaceBinding | None: ...
     def run(self, context: TestContext) -> TestRun: ...
     def failure_identity(self, context: TestContext) -> FailureIdentity | None: ...
     def execution_failure(self, run: TestRun) -> ExecutionFailure | None: ...

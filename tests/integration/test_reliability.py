@@ -1,3 +1,5 @@
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 from datetime import datetime, timezone
 import pytest
 from qa_sentinel.domain.artifact import Artifact
@@ -15,14 +17,14 @@ from qa_sentinel.orchestration.reliability_policy import (
 
 
 def seed(factory, state=S.IMPLEMENTING):
-    task = Task(title="Reliability", requirement="Bounded recovery", state=state)
+    task = Task(project_id=uuid4(), title="Reliability", requirement="Bounded recovery", state=state)
     artifact = Artifact(task_id=task.id, artifact_type="IMPLEMENTATION", schema_version="0.1", content={})
     now = datetime(2026, 1, 1, tzinfo=timezone.utc)
     run = RunRecord(task_id=task.id, implementation_artifact_id=artifact.id, execution_status="COMPLETED",
         outcome="FAIL", environment="test", started_at=now, finished_at=now,
         passed_count=0, failed_count=1, skipped_count=0)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.artifacts.add(artifact)
         uow.history.append_test_run(run)
         uow.commit()

@@ -21,6 +21,8 @@ class FakeTestResult(BaseModel):
 
 
 class FakeTestResultProvider:
+    workspace_root = None
+    workspace_binding = None
     def __init__(self, results: tuple[FakeTestResult, ...], *, repeat_last: bool = False):
         if not isinstance(repeat_last, bool):
             raise ValueError("repeat_last must be a boolean")

@@ -104,8 +104,8 @@ Persistence assumptions for Tasks 2/2.1:
 - Acceptance criterion persistence_id is a UUID; logical id remains a string
   unique within its requirement. Agent-facing IDs are unchanged.
 - Explicit commit is required; context exit rolls back uncommitted operations.
-- Revision 0001 is unreleased and repaired in place. Existing bootstrap databases
-  at that revision must be recreated; this is not a deployed-schema upgrade.
+- Revision 0001 was historically repaired during Task 2.1. Task 11 leaves the
+  accepted revision unchanged and adds 0002 to upgrade existing accepted databases.
 
 Task 3 assumptions:
 
@@ -214,5 +214,16 @@ secret paths are protected but arbitrary source may contain secrets. There is no
 snapshot isolation, native provider tooling or silent context/file truncation.
 See REPOSITORY_TOOLS.md for configuration, limits and recovery semantics.
 
-Recommended next step: wait for ChatGPT review and user approval before Task 11.
-Task 11 is not implemented.
+Task 11 adds logical Project identity, mandatory immutable Task ownership, explicit
+Project persistence and Alembic 0002. Existing 0001 rows are backfilled into a fixed
+migration-only Project; new domain Tasks require an explicit owner. Runtime-only
+canonical bindings and a small registry compose one workspace per Project, verifying
+reader/mutation/real-test roots before side effects. Durable task-scoped binding
+digests detect drift; evidence derives ownership through Task rather than duplication.
+Fake workflows retain compatibility through explicit Project fixtures. Models/prompts,
+gates, state edges, path policies, reliability and dependencies remain unchanged.
+Tests cover migration/history preservation, two independent temporary calculator
+Projects, rejected compositions, DB reopen and safe resume. See PROJECTS.md.
+
+Recommended next step: wait for ChatGPT review and user approval before Task 12.
+Task 12 is not implemented.

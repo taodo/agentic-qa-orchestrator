@@ -13,6 +13,10 @@ to WorkflowRunner (or AgentExecutor). The root is a caller-configured existing
 directory, resolved once into a frozen configuration. Models cannot select it.
 CompositeAgentRuntime delegates capability to each role's selected runtime.
 The default runtime remains compatible with ordinary final-output calls.
+Task 11 additionally requires explicit persisted Project ownership and a matching
+ProjectWorkspaceBinding on workspace-backed runner/executor composition. Reader,
+mutation and real pytest roots must agree before any model/read progression.
+See PROJECTS.md for the runtime registry, composition and binding drift rules.
 
 Only Researcher and Planner have repository-result context fields or turn schemas.
 Investigator tooling is deferred. Implementer keeps Task 9 authorized source

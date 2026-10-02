@@ -1,4 +1,6 @@
 """Mocked real turns, durable read evidence, and unchanged gates/mutation boundary."""
+from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.domain.project import Project
 from dataclasses import dataclass
 from pathlib import Path
 from hashlib import sha256
@@ -79,7 +81,9 @@ class Harness:
     mutation: object = None
 
 
-def setup(factory, tmp_path, mock, *, config=None, real_implementation=False):
+def setup(factory, tmp_path, mock, *, config=None, real_implementation=False, project=None):
+    project = project or Project(key="test-"+uuid4().hex, name="Repository fixture owner")
+    task = Task(project_id=project.id, title="Task 10 repository evidence", requirement=DIVISION_REQUIREMENT)
     root = tmp_path / "target-repository"
     (root / "tests").mkdir(parents=True)
     (root / "calculator.py").write_bytes(INITIAL.encode())
@@ -102,22 +106,22 @@ def setup(factory, tmp_path, mock, *, config=None, real_implementation=False):
             b"def test_divide():\n    assert divide(5,2) == 2.5\n"
             b"def test_zero():\n    with pytest.raises(ValueError):\n        divide(1,0)\n")
         execution = ExecutionService(factory, PytestRunner(CommandRunner(ExecutionConfig(root,
-            python_path=(Path(pytest.__file__).resolve().parents[1],)))))
+            python_path=(Path(pytest.__file__).resolve().parents[1],)))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
         provider = PytestTestResultProvider(execution, CommandRequest(cwd=str(root), args=("-m", "pytest", "tests", "-q")))
     else:
         provider = FakeTestResultProvider(runs)
     runtime = CompositeAgentRuntime(routes)
-    task = Task(title="Task 10 repository evidence", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
+        uow.projects.add(project)
         uow.tasks.add(task)
         uow.commit()
-    runner = WorkflowRunner(factory, runtime, provider, repository_service=reader, mutation_service=mutation)
+    runner = WorkflowRunner(factory, runtime, provider, repository_service=reader, mutation_service=mutation, workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
     return Harness(task, factory, root, reader, runtime, provider, runner, mock, mutation)
 
 
 def recreated(h, factory=None, reader=None):
     return WorkflowRunner(factory or h.factory, h.runtime, h.provider,
-        repository_service=reader or h.reader, mutation_service=h.mutation)
+        repository_service=reader or h.reader, mutation_service=h.mutation, workspace_binding=ProjectWorkspaceBinding(project_id=h.task.project_id, workspace_root=h.root))
 
 
 def snapshot(root):

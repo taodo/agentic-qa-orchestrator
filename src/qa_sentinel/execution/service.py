@@ -1,5 +1,6 @@
 """Durable execution evidence. Never hold a transaction across subprocess execution."""
 from uuid import uuid4
+from qa_sentinel.projects import ProjectWorkspaceGuard
 from qa_sentinel.domain.enums import TaskState, ArtifactType
 from qa_sentinel.domain.artifact import Artifact
 from qa_sentinel.domain.error import ErrorRecord
@@ -10,11 +11,21 @@ from .pytest_runner import PytestRunner, interpret, to_test_run
 
 
 class TestExecutionService:
-    def __init__(self, session_factory, pytest_runner: PytestRunner):
+    def __init__(self, session_factory, pytest_runner: PytestRunner, *, workspace_binding=None):
         self.session_factory = session_factory
         self.pytest_runner = pytest_runner
+        self.workspace_binding = workspace_binding
+
+    @property
+    def workspace_root(self):
+        return self.pytest_runner.command_runner.config.workspace_root
 
     def execute(self, *, task_id, implementation_artifact_id, request):
+        with UnitOfWork(self.session_factory) as uow:
+            task = uow.tasks.get(task_id)
+            if task is None:
+                raise ValueError("Execution requires an existing task")
+        ProjectWorkspaceGuard(self.session_factory, self.workspace_binding, execution=self).check(task)
         run_id, report_id = uuid4(), uuid4()
         with UnitOfWork(self.session_factory) as uow:
             task, implementation = uow.tasks.get(task_id), uow.artifacts.get(implementation_artifact_id)
@@ -88,6 +99,14 @@ class TestExecutionService:
 class PytestTestResultProvider:
     def __init__(self, service: TestExecutionService, request):
         self.service, self.request = service, request
+
+    @property
+    def workspace_root(self):
+        return self.service.workspace_root
+
+    @property
+    def workspace_binding(self):
+        return self.service.workspace_binding
 
     def run(self, context):
         return self.service.execute(task_id=context.task_id,

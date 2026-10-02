@@ -1,3 +1,4 @@
+from qa_sentinel.domain.project import Project
 
 from uuid import uuid4
 import pytest
@@ -45,14 +46,14 @@ def test_foreign_keys_are_on_and_invalid_required_reference_rejected(migrated_fa
 
 def test_acceptance_id_scoping_on_migrated_schema(migrated_factory):
     factory,engine,config=migrated_factory
-    task_a=Task(title="A",requirement="A")
-    task_b=Task(title="B",requirement="B")
+    task_a=Task(project_id=uuid4(), title="A",requirement="A")
+    task_b=Task(project_id=uuid4(), title="B",requirement="B")
     req_a=Requirement(task_id=task_a.id,text="A")
     req_b=Requirement(task_id=task_b.id,text="B")
     a=AcceptanceCriterionRecord(id="AC-1",requirement_id=req_a.id,text="A",verification_method="Assert A")
     b=AcceptanceCriterionRecord(id="AC-1",requirement_id=req_b.id,text="B",verification_method="Assert B")
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task_a);uow.tasks.add(task_b)
+        uow.projects.add(Project(id=task_a.project_id,key="test-"+task_a.project_id.hex,name="Test owner")); uow.tasks.add(task_a);uow.projects.add(Project(id=task_b.project_id,key="test-"+task_b.project_id.hex,name="Test owner")); uow.tasks.add(task_b)
         uow.requirements.add(req_a);uow.requirements.add(req_b)
         uow.acceptance_criteria.add(a);uow.acceptance_criteria.add(b);uow.commit()
     with UnitOfWork(factory) as uow:

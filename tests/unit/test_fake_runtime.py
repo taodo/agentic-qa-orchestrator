@@ -1,3 +1,5 @@
+from qa_sentinel.domain.project import Project
+from uuid import uuid4
 from uuid import uuid4
 import pytest
 from pydantic import ValidationError
@@ -102,9 +104,9 @@ def test_enum_routes_do_not_read_descriptions():
 
 def test_invocation_completion_links_artifact_and_counters(factory):
     scenario, _ = division_scenario()
-    task = Task(title="Division", requirement=DIVISION_REQUIREMENT, state=S.RESEARCHING)
+    task = Task(project_id=uuid4(), title="Division", requirement=DIVISION_REQUIREMENT, state=S.RESEARCHING)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     context = ResearchContext(task_id=task.id, attempt=1, requirement=task.requirement)
     executor = AgentExecutor(factory, FakeAgentRuntime(scenario))
@@ -122,9 +124,9 @@ def test_invocation_completion_links_artifact_and_counters(factory):
 @pytest.mark.parametrize("failure_point", ["artifact", "completion_event"])
 def test_completion_rollback_leaves_started_invocation(factory, monkeypatch, failure_point):
     scenario, _ = division_scenario()
-    task = Task(title="Division", requirement=DIVISION_REQUIREMENT, state=S.RESEARCHING)
+    task = Task(project_id=uuid4(), title="Division", requirement=DIVISION_REQUIREMENT, state=S.RESEARCHING)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     original_add = ArtifactRepository.add
     original_event = HistoryRepository.append_event
@@ -149,9 +151,9 @@ def test_completion_rollback_leaves_started_invocation(factory, monkeypatch, fai
 
 def test_contexts_use_accepted_artifacts_and_have_no_state_or_database(factory):
     scenario, results = division_scenario()
-    task = Task(title="Division", requirement=DIVISION_REQUIREMENT)
+    task = Task(project_id=uuid4(), title="Division", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     runner = WorkflowRunner(factory, FakeAgentRuntime(scenario), FakeTestResultProvider(results))
     runner._step(task)
@@ -172,9 +174,9 @@ def test_runner_bound_is_validated(factory):
 
 def test_executor_rejects_terminal_context_before_invocation(factory):
     scenario, _ = division_scenario()
-    task = Task(title="Division", requirement=DIVISION_REQUIREMENT, state=S.DONE)
+    task = Task(project_id=uuid4(), title="Division", requirement=DIVISION_REQUIREMENT, state=S.DONE)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     executor = AgentExecutor(factory, FakeAgentRuntime(scenario))
     with pytest.raises(ValueError, match="current task stage"):
@@ -187,9 +189,9 @@ def test_defect_counter_and_transition_roll_back_together(factory, monkeypatch):
     from qa_sentinel.orchestration.workflow_engine import WorkflowEngine
     from qa_sentinel.orchestration.gates import InvestigationGate
     scenario, _ = division_scenario(repair=True)
-    task = Task(title="Division", requirement=DIVISION_REQUIREMENT, state=S.INVESTIGATING)
+    task = Task(project_id=uuid4(), title="Division", requirement=DIVISION_REQUIREMENT, state=S.INVESTIGATING)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     gate = InvestigationGate.evaluate(task.id, scenario.responses[A.INVESTIGATOR][0].output)
     original = HistoryRepository.append_event
@@ -223,9 +225,9 @@ def test_context_ignores_newer_plan_without_accepted_gate(factory):
     from qa_sentinel.domain.invocation import AgentInvocation
     from qa_sentinel.domain.artifact import Artifact
     scenario, results = division_scenario()
-    task = Task(title="Division", requirement=DIVISION_REQUIREMENT)
+    task = Task(project_id=uuid4(), title="Division", requirement=DIVISION_REQUIREMENT)
     with UnitOfWork(factory) as uow:
-        uow.tasks.add(task)
+        uow.projects.add(Project(id=task.project_id,key="test-"+task.project_id.hex,name="Test owner")); uow.tasks.add(task)
         uow.commit()
     runner = WorkflowRunner(factory, FakeAgentRuntime(scenario), FakeTestResultProvider(results))
     final = runner.run(task.id)

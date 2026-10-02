@@ -1,4 +1,4 @@
-# Agent runtime — Bootstrap Tasks 5–10
+# Agent runtime — Bootstrap Tasks 5–11
 
 QA Sentinel coordinates one persisted task using fake or reasoning-only real
 roles. Agents receive no database/session handle or mutable Task. WorkflowRunner
@@ -264,3 +264,19 @@ An unresolved provider reservation or inconsistent history stops for reconciliat
 A read whose result commit failed can be repeated from its durable request because
 it is read-only; exactly-once reads and snapshot isolation are not promised. Task 9
 write/persistence reconciliation remains unchanged. See REPOSITORY_TOOLS.md.
+
+## Task 11 Project composition
+
+Every Task now requires a persisted Project UUID. Workspace-backed runners and
+executors require an explicit frozen ProjectWorkspaceBinding; real TestExecutionService
+independently requires the same binding before process reservation/start. Reader,
+mutation and real provider roots must match it. Pure supplied-context/fake workflows
+may omit physical binding while retaining explicit Project ownership.
+
+ProjectRuntimeRegistry resolves trusted bindings with no model access or progression
+logic. PROJECT_WORKSPACE_BOUND stores a root/Project identity digest before first
+bound work. Wrong ownership/composition or restart drift records WORKFLOW_ERROR and
+raises RunnerStoppedError while preserving state; no product test FAIL or recovery
+framework is introduced. Accepted artifact selection remains strictly task-scoped.
+Task 9/10 reconciliation and gate/state/reliability policies remain authoritative.
+See PROJECTS.md for composition examples, legacy-evidence adoption and limitations.
