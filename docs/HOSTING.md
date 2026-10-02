@@ -54,7 +54,8 @@ qa-sentinel serve --demo --database /absolute/private/state.sqlite3 --frontend-d
 
 Choose a private state directory outside the platform source and frontend dist.
 Both `127.0.0.1` (default) and explicit `::1` are supported. External bind addresses
-are rejected; no external-bind flag is offered in this local-only task.
+are rejected in ordinary demo and real local modes. Task 17 adds a separate explicit
+`--preview-demo` mode; it does not relax these local restrictions.
 
 ## Real local mode
 
@@ -152,14 +153,17 @@ RUNTIME_STOPPED envelope without entering core. Reads remain available; there is
 no queue, background job, new workflow decision, auto-retry or concurrent mutation.
 CLI logs mode/bind only; no key, environment dump, request body, source or evidence.
 
-**There is no authentication.** The API can expose bounded persisted source/evidence;
+**Local modes have no authentication.** The API can expose bounded persisted source/evidence;
 real mode can mutate configured workspaces and execute their trusted tests. Keep
 DB/config private, restrict local access, and do not expose this host publicly
 without a trusted access boundary. Task 16 is not an internet production service.
 
-Task 17 can later wrap the same ASGI/config/state/assets boundaries in a protected
-deployment after explicit review. No deployment, TLS, proxy, domain, auth, worker,
-Docker or Task 17 implementation is included here.
+Task 17 wraps the same ASGI/config/state/assets boundaries with a temporary HTTP
+Basic gate in explicit `--preview-demo` mode. Only this mode permits `0.0.0.0`;
+it rejects OPENAI_API_KEY and uses only the fake runtime. Credentials are required
+from the environment before filesystem/database startup. It never reads local
+JSON runtime configuration. The local defaults above remain unchanged. See
+[DEPLOYMENT.md](DEPLOYMENT.md) for Docker/Render setup and preview limitations.
 
 ## Checks and troubleshooting
 

@@ -19,6 +19,7 @@ from qa_sentinel.execution.service import TestExecutionService, PytestTestResult
 from .config import HostConfig, HostError
 from .database import bootstrap_database
 from .demo import demo_bundle
+from .preview import preview_credentials
 
 
 def real_components(project):
@@ -45,13 +46,15 @@ class HostComposition:
 def compose(config: HostConfig) -> HostComposition:
     engine = None
     try:
+        if config.mode == "preview-demo":
+            preview_credentials()  # Direct composition fails closed too, before DB IO.
         prepared = []
         if config.mode == "local":
             if not os.environ.get("OPENAI_API_KEY", "").strip():
                 raise HostError("HOST_MODEL_KEY_REQUIRED")
             prepared = [(project, real_components(project)) for project in config.projects]
         engine, factory = bootstrap_database(config.database)
-        if config.mode == "demo":
+        if config.mode in {"demo", "preview-demo"}:
             bundles = [demo_bundle(factory, config.database)]
         else:
             bundles = []
