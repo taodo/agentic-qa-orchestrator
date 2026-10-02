@@ -280,3 +280,11 @@ raises RunnerStoppedError while preserving state; no product test FAIL or recove
 framework is introduced. Accepted artifact selection remains strictly task-scoped.
 Task 9/10 reconciliation and gate/state/reliability policies remain authoritative.
 See PROJECTS.md for composition examples, legacy-evidence adoption and limitations.
+
+## Task 12 application boundary
+
+External hosts use `QASentinelApplication` with explicit Project execution bundles.
+`run_task` delegates to this runtime after closing its read transaction;
+`resume_task` records an engine transition and requires a separate run to continue.
+Read queries never call runtime components. See [APPLICATION.md](APPLICATION.md)
+for safe stop mapping, frozen contracts and bounded chronology.
