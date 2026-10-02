@@ -6,6 +6,7 @@ export function Timeline({ page }: { page: CollectionPage<TimelineEntry> }) {
     {page.items.map(entry => <li key={entry.event_id}><div className="event-heading"><strong>{entry.event_type}</strong><DateTime value={entry.timestamp} /></div>
       {entry.summary !== entry.event_type && <p>{entry.summary}</p>}
       <p className="muted">{entry.actor.type} · {entry.actor.id}{entry.timestamp_tied && ' · Timestamp tie: persisted insertion order'}</p>
+      <dl className="correlation">{(['invocation_id', 'artifact_id', 'test_run_id', 'decision_id'] as const).filter(key => entry.correlation[key] !== null).map(key => <div key={key}><dt>{key}</dt><dd className="mono">{entry.correlation[key]}</dd></div>)}</dl>
       {entry.details !== null && <pre className="event-details">{JSON.stringify(entry.details, null, 2)}</pre>}
     </li>)}
   </ol>}<TruncationNotice truncated={page.truncated} /></>;

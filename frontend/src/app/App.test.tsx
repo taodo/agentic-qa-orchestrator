@@ -136,6 +136,7 @@ describe('Task Detail and explicit controls', () => {
     expect(await screen.findByRole('heading', { name: task.title })).toBeInTheDocument();
     expect(screen.getByText(task.requirement)).toBeInTheDocument(); expect(screen.getByText('Implementation attempts')).toBeInTheDocument();
     expect(screen.getByText('Defect cycles')).toBeInTheDocument(); expect(screen.getByText('Review cycles')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('link', { name: 'Timeline' }));
     const events = within(await screen.findByRole('list', { name: 'Task timeline' })).getAllByRole('listitem');
     expect(events[0]).toHaveTextContent('FIRST_EVENT'); expect(events[1]).toHaveTextContent('SECOND_EVENT');
     expect(events[0]).toHaveTextContent('ORCHESTRATOR'); expect(events[0]).toHaveTextContent('to_state');
