@@ -131,3 +131,11 @@ reach into repositories or WorkflowRunner. No HTTP transport/status mapping is
 implemented here. CLI/frontend/auth/users/RBAC/deletion/background execution,
 schedulers/queues, event buses, generic dependency containers, Git automation,
 secrets storage and Task 13 remain outside Task 12. No new dependency is added.
+
+## Task 13 HTTP transport
+
+`qa_sentinel.api.create_api_app(application)` now wraps this facade with typed
+versioned HTTP routes and stable error envelopes. Route handlers use one explicit
+application method; run/resume remain separate and queries remain bounded.
+Host composition remains explicit. See [API.md](API.md) for transport contracts,
+synchronous semantics and the non-public/no-auth limitation.

@@ -288,3 +288,11 @@ External hosts use `QASentinelApplication` with explicit Project execution bundl
 `resume_task` records an engine transition and requires a separate run to continue.
 Read queries never call runtime components. See [APPLICATION.md](APPLICATION.md)
 for safe stop mapping, frozen contracts and bounded chronology.
+
+## Task 13 HTTP execution
+
+The explicit FastAPI factory delegates synchronous POST run/resume requests to
+the application facade. Routes own no database sessions or workflow logic.
+No background execution or automatic reconciliation is added; stopped execution
+maps to a stable HTTP conflict while durable core evidence remains available.
+See [API.md](API.md); prepared host runtime composition is still required.
