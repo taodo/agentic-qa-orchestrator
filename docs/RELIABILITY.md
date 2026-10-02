@@ -158,7 +158,21 @@ Alembic-migrated SQLite cover transient retry, durable independent budgets, thre
 matching failures, Investigator escalation, WorkflowEngine blocked/resume, cross-task
 rejection, and injected audit/commit failures with rollback of all intended writes.
 
-Tasks 5–8 implement bounded runtime loops, model reasoning, and deterministic pytest
-execution separately from these policy functions. Still unimplemented: real
-Implementer/source mutation, model tools, CLI/API/UI, workers, concurrent scheduling,
-and full execution idempotency.
+Tasks 5–10 implement bounded runtime loops, model reasoning, deterministic pytest,
+controlled source mutation and read-only repository evidence separately from these
+policy functions. CLI/API/UI, provider-native tools, workers, concurrent scheduling
+and full execution idempotency remain unimplemented.
+
+Task 10 repository reads do not add retries. A tool-call/total-byte budget denial
+maps to WORKFLOW_ERROR/STRUCTURAL; other policy denials map to
+POLICY_VIOLATION/TERMINAL; deterministic file/scan failures map to
+TOOL_ERROR/STRUCTURAL. Typed failed evidence is persisted and stops the invocation,
+without asking the model to retry a denied read. Existing ReliabilityService makes
+recovery decisions. Provider errors and bounded schema correction remain unchanged;
+an explicit retry uses a separate invocation with fresh read budgets.
+
+Unresolved provider turns stop for reconciliation, while durable read results may
+be reused before reserving the next turn. Read-result persistence failure permits
+only an unrecorded read to be replayed from its durable completed model request.
+This is read-only recovery, not another provider retry or exactly-once execution.
+See REPOSITORY_TOOLS.md for evidence ordering and bound enforcement.

@@ -16,6 +16,7 @@ from qa_sentinel.models.base import ModelResponse, ModelMetadata, ModelError
 from qa_sentinel.schemas.mutation import ImplementationProposal
 from qa_sentinel.mutation.contracts import MutationFailure, MutationReconciliationRequired
 from .implementation_execution import ControlledImplementationExecution
+from .repository_execution import ControlledRepositoryExecution, RepositoryLoopFailure, RepositoryReconciliationRequired
 from .reliability_policy import FailureDisposition, BlockerReason
 
 
@@ -31,20 +32,37 @@ class AgentExecution:
 
 
 class AgentExecutor:
-    def __init__(self, session_factory, runtime: AgentRuntime, *, mutation_service=None):
+    def __init__(self, session_factory, runtime: AgentRuntime, *, mutation_service=None, repository_service=None):
         self.session_factory = session_factory
         self.runtime = runtime
         self.implementation = ControlledImplementationExecution(session_factory, mutation_service)
+        self.repository = ControlledRepositoryExecution(session_factory, repository_service)
+
+    def repository_enabled(self, agent):
+        return getattr(self.runtime, "repository_turns", lambda role: False)(agent)
+
+    def resume_repository(self, invocation_id, context):
+        with UnitOfWork(self.session_factory) as uow:
+            invocation = uow.invocations.get(invocation_id)
+            task = None if invocation is None else uow.tasks.get(invocation.task_id)
+            if (invocation is None or task is None or invocation.status != AgentInvocationStatus.STARTED or
+                task.current_invocation_id != invocation_id or STATE_AGENTS.get(task.state) != invocation.agent or
+                type(context) is not CONTEXT_TYPES[invocation.agent] or context.task_id != task.id or
+                context.attempt != invocation.attempt or not self.repository_enabled(invocation.agent)):
+                raise RepositoryReconciliationRequired("REPOSITORY_INVOCATION_REQUIRES_RECONCILIATION")
+        return self._execute_started(invocation, invocation.agent, context)
 
     @staticmethod
     def _event(uow, invocation, event_type, artifact=None, metadata=None, schema_correction_planned=False,
-               escalation_decision_id=None, mutation_result=None, proposal_artifact_id=None, workspace_identity=None):
+               escalation_decision_id=None, mutation_result=None, proposal_artifact_id=None, workspace_identity=None,
+               repository_evidence_refs=None):
         uow.history.append_event(Event(task_id=invocation.task_id, event_type=event_type,
             actor=dict(type="ORCHESTRATOR", id="qa-sentinel"),
             correlation=dict(invocation_id=invocation.id, artifact_id=None if artifact is None else artifact.id),
             payload=dict(agent=invocation.agent.value, status=invocation.status.value,
                 **({"escalation_decision_id": str(escalation_decision_id)} if escalation_decision_id else {}),
                 **({"model_metadata": metadata.model_dump(mode="json")} if metadata is not None else {}),
+                **({"repository_evidence_refs": repository_evidence_refs} if repository_evidence_refs is not None else {}),
                 **({"schema_correction_planned": True} if schema_correction_planned else {}))))
         if mutation_result is not None:
             uow.history.append_event(Event(task_id=invocation.task_id, event_type="MUTATION_APPLIED" if mutation_result.success else "MUTATION_FAILED",
@@ -88,13 +106,19 @@ class AgentExecutor:
             escalation_id = getattr(context, "escalation_decision_id", None)
             self._event(uow, invocation, "AGENT_STARTED", escalation_decision_id=escalation_id)
             uow.commit()
+        return self._execute_started(invocation, agent, context)
+
+    def _execute_started(self, invocation, agent, context):
+        controlled = agent == AgentName.IMPLEMENTER and getattr(self.runtime, "implementation_proposals", lambda: False)()
+        repository = self.repository_enabled(agent)
+        escalation_id = getattr(context, "escalation_decision_id", None)
         metadata = None
         proposal_artifact = None
         application = None
         try:
             if controlled:
                 context = self.implementation.source_context(invocation, context)
-            output = self.runtime.run(agent, context)
+            output = self.repository.run(invocation, context, self.runtime) if repository else self.runtime.run(agent, context)
             if isinstance(output, ModelResponse):
                 metadata = ModelMetadata.model_validate(output.metadata.model_dump())
                 output = output.parsed_output
@@ -107,6 +131,9 @@ class AgentExecutor:
                 if metadata is None:
                     raise MutationFailure("INVALID_MUTATION")
                 output, proposal_artifact, application = self.implementation.apply(invocation, context, output, metadata)
+        except RepositoryLoopFailure as failure:
+            return self._failed(invocation, failure.error_type, failure.code,
+                failure.disposition, False, owner="TOOL", tool_id="repository-read")
         except MutationFailure as failure:
             return self._failed(invocation, failure.error_type, failure.code, failure.disposition, False,
                 proposal_artifact=getattr(failure, "proposal_artifact", None),
@@ -137,7 +164,11 @@ class AgentExecutor:
                 self._event(uow, completed, "AGENT_COMPLETED", artifact, metadata,
                     escalation_decision_id=escalation_id, mutation_result=application,
                     proposal_artifact_id=None if proposal_artifact is None else proposal_artifact.id,
-                    workspace_identity=None if application is None else self.implementation.service.workspace_identity)
+                    workspace_identity=None if application is None else self.implementation.service.workspace_identity,
+                    repository_evidence_refs=None if not repository else ["artifact:" + str(a.id) for a in
+                        sorted((a for a in uow.artifacts.list_by_task(invocation.task_id) if
+                            a.invocation_id == invocation.id and a.artifact_type.value == "REPOSITORY_EVIDENCE"),
+                            key=lambda a: a.content["call_index"])])
                 uow.commit()
         except Exception:
             if application is not None and application.applied:
@@ -146,11 +177,12 @@ class AgentExecutor:
         return AgentExecution(invocation=completed, output=output, artifact=artifact)
 
     def _failed(self, invocation, error_type, code, disposition, changed_input, blocker_reason=None,
-                schema_correction_planned=False, proposal_artifact=None, mutation_result=None, metadata=None, owner="AGENT"):
+                schema_correction_planned=False, proposal_artifact=None, mutation_result=None, metadata=None, owner="AGENT",
+                tool_id="mutation-service"):
         error = ErrorRecord(task_id=invocation.task_id, error_type=error_type, code=code,
             severity="ERROR", owner=owner, retryable=(disposition == FailureDisposition.TRANSIENT or
                 disposition == FailureDisposition.CORRECTABLE and changed_input), blocking=blocker_reason is not None,
-            source=dict(actor=dict(type=owner, id="mutation-service" if owner == "TOOL" else invocation.agent.value),
+            source=dict(actor=dict(type=owner, id=tool_id if owner == "TOOL" else invocation.agent.value),
                         invocation_id=invocation.id),
             message="Deterministic agent execution did not produce an accepted output.",
             evidence_refs=invocation.input_context_refs)

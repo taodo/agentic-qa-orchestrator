@@ -38,8 +38,9 @@ the unchanged TESTING stop limitation.
 
 Task 7 implements Researcher/Planner model calls; Task 8 adds real Test Analyzer,
 Investigator and Reviewer. Task 9 adds real Implementer proposals and deterministic
-controlled mutation. A general permission engine, CLI, UI, workers and Task 10
-remain unimplemented. Models never directly edit source.
+controlled mutation. Task 10 adds read-only repository evidence for Researcher and
+Planner. A general permission engine, CLI, UI and workers remain unimplemented.
+Models never directly edit source.
 
 Contract hardening:
 
@@ -196,4 +197,22 @@ manual reconciliation and process death may lose original in-memory backups.
 Portable filesystem checks have TOCTOU limits, not hostile-code sandbox guarantees.
 See MUTATION.md for full policy, error mapping and recovery boundaries.
 
-Recommended next step: BOOTSTRAP TASK 10 — Repository Research Tools & Read-Only Agent Tooling.
+Task 10 adds optional Researcher/Planner repository evidence through typed structured
+turns, independent read authorization and bounded local LIST_FILES/READ_FILE/
+SEARCH_TEXT. The Responses adapter has no native tools. Intermediate evidence and
+per-turn metadata are persisted separately from final Research/Plan artifacts, with
+safe result reuse and explicit unresolved-provider reconciliation on restart.
+Investigator tooling is deferred; Implementer snapshots/mutation and Reviewer
+supplied-evidence boundaries remain unchanged. No dependencies, gates, state edges,
+reliability thresholds or budgets change. Temporary-workspace tests cover discovery,
+citations, Planner reads/NEEDS_RESEARCH, read limits, denied paths, drift, restart,
+zero read-service mutation and existing Task 9 real mutation/pytest/review.
+
+Task 10 assumes a trusted caller-selected repository, no concurrent runners or
+hostile filesystem mutation, and portable path-check TOCTOU limitations. Obvious
+secret paths are protected but arbitrary source may contain secrets. There is no
+snapshot isolation, native provider tooling or silent context/file truncation.
+See REPOSITORY_TOOLS.md for configuration, limits and recovery semantics.
+
+Recommended next step: wait for ChatGPT review and user approval before Task 11.
+Task 11 is not implemented.

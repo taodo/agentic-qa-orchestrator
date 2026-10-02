@@ -1,4 +1,4 @@
-# Agent runtime — Bootstrap Tasks 5–9
+# Agent runtime — Bootstrap Tasks 5–10
 
 QA Sentinel coordinates one persisted task using fake or reasoning-only real
 roles. Agents receive no database/session handle or mutable Task. WorkflowRunner
@@ -184,7 +184,7 @@ CompositeAgentRuntime routing. Task 8 extends real reasoning to later roles. See
 requests, provenance, sanitized errors, stateless context, deterministic schema
 correction, disabled SDK retries, and offline tests. Task 9 adds reasoning-only real
 Implementer proposals and deterministic MutationService. Playwright, API, CLI, UI,
-workers and Task 10 remain unimplemented.
+workers remain unimplemented.
 
 ## Task 8 failure reasoning and explicit escalation
 
@@ -242,3 +242,25 @@ omits the guard, real pytest fails, Analyzer/Investigator diagnose, second Imple
 proposal fixes current code, real pytest passes, Reviewer and ReviewGate reach DONE.
 No fixture switches source state. See MUTATION.md for configuration, protected paths,
 size/encoding limits, rollback, reconciliation and trusted-workspace/TOCTOU limits.
+
+## Task 10 controlled repository reasoning
+
+WorkflowRunner/AgentExecutor optionally receive RepositoryReadService. Only enabled
+Researcher/Planner runtimes use ControlledRepositoryExecution, which handles typed
+TOOL_REQUEST/FINAL_OUTPUT turns. It commits provider reservations before calls and
+validated completion metadata afterward; deterministic reads occur outside database
+transactions. Each result becomes immutable REPOSITORY_EVIDENCE linked to its
+request and explicit call index. Overall STARTED persists until final role output;
+final canonical artifacts and existing gates retain their original semantics.
+
+The loop permits at most the configured read count plus one final model turn. A
+further request records exhaustion without executing a read. Denials and read
+failures stop through existing error/reliability handling. No generic tools, hidden
+retries, parallel calls or changes to state-machine edges/gates/budgets are added.
+
+Restart reconstructs completed model turns and ordered durable results under the
+same context/model/root configuration. It reuses results and durable final outputs.
+An unresolved provider reservation or inconsistent history stops for reconciliation.
+A read whose result commit failed can be repeated from its durable request because
+it is read-only; exactly-once reads and snapshot isolation are not promised. Task 9
+write/persistence reconciliation remains unchanged. See REPOSITORY_TOOLS.md.
