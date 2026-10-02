@@ -234,3 +234,12 @@ An in-process `QASentinelApplication` now provides Project/Task commands,
 Project-scoped execution/resume and bounded detached evidence views above the
 existing core. No transport, CLI, frontend or dependency was introduced. See
 [APPLICATION.md](APPLICATION.md); Task 13 remains pending review and approval.
+
+## Task 13 backend API v1
+
+An explicitly composed FastAPI factory now exposes `/api/v1` Project/Task commands
+and bounded inspection routes over QASentinelApplication, plus process health and
+generated OpenAPI. Controlled error envelopes omit internal details. Run is
+synchronous and resume remains separate. No auth/frontend/background worker or
+migration is introduced. ASGI HTTP tests use no real API/provider connections.
+See [API.md](API.md). Wait for ChatGPT review and user approval before Task 14.
