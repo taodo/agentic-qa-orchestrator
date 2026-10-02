@@ -52,8 +52,8 @@ class LocalProjectConfig(BaseModel):
 
 class HostConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal["demo", "local"]
-    host: Literal["127.0.0.1", "::1"] = "127.0.0.1"
+    mode: Literal["demo", "local", "preview-demo"]
+    host: Literal["127.0.0.1", "::1", "0.0.0.0"] = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535, strict=True)
     database: Path
     frontend_dist: Path
@@ -74,7 +74,9 @@ class HostConfig(BaseModel):
             raise ValueError("Database must be outside frontend assets")
         if self.database.is_relative_to(Path(__file__).resolve().parents[1]):
             raise ValueError("Database must be outside package source")
-        if (self.mode == "demo" and self.projects) or (self.mode == "local" and not self.projects):
+        if self.mode != "preview-demo" and self.host == "0.0.0.0":
+            raise ValueError("External bind requires explicit preview-demo mode")
+        if (self.mode in {"demo", "preview-demo"} and self.projects) or (self.mode == "local" and not self.projects):
             raise ValueError("Mode requires explicit matching configuration")
         if len({p.key for p in self.projects}) != len(self.projects):
             raise ValueError("Duplicate project keys")

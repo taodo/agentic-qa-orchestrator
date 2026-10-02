@@ -262,3 +262,19 @@ offline synthetic calculator runtime; real local JSON configuration resolves
 persisted Project keys into explicit guarded workspace/service bundles. Loopback
 only, one worker, no concurrent Run/Resume, no auth/public deployment. No accepted
 contracts, migrations, model defaults or Task 9–15 policies change. See HOSTING.md.
+
+## Task 17 — Protected public demo preview
+
+Explicit preview-demo hosting permits external bind only with environment-only
+HTTP Basic credentials, rejects any OPENAI_API_KEY, and composes the accepted
+fake calculator runtime without repository/mutation/real-test services. Exact
+GET /health stays public; UI/API/docs/static routes require authentication.
+Local demo and real mode remain loopback-only. Preview security headers, a public
+build-time synthetic notice, a non-root multi-stage image and a one-instance
+Render Blueprint add no core/API contract, migration or dependency type.
+Preview SQLite is ephemeral; Run/Resume admission and reconciliation remain intact.
+See DEPLOYMENT.md for private-repository setup and smoke verification. Docker is
+unavailable in the implementation environment, so image/container verification
+must be completed on a Docker-capable machine before deployment. Wait for ChatGPT
+review and user approval, then deploy accepted feature/develop and record the
+provider-generated HTTPS URL. Task 18 is not implemented.

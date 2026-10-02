@@ -217,3 +217,15 @@ unchanged. See [HOSTING.md](HOSTING.md) for offline demo, explicit real local co
 single-process admission, private SQLite state and security limitations. The older
 Task 14 startup limitation above describes that task's scope; Task 16 supplies the
 supported local host without production/public deployment.
+
+## Task 17 preview indicator
+
+The Docker frontend build sets `PUBLIC_QA_SENTINEL_MODE=preview-demo`. The shell
+then displays **DEMO PREVIEW · Synthetic**, with a title explaining that no live
+AI, source mutation or real test execution occurs. Other values retain the local
+operator label; environment values are never displayed. This is public build-time
+information only, not a mode-selection or authorization mechanism. No credentials,
+new API endpoint, browser storage or authentication code enters the bundle.
+The host enforces preview isolation independently of this label. Same-origin API
+requests use the browser's HTTP Basic authentication after the initial challenge.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the protected preview deployment path.

@@ -29,7 +29,15 @@ Demo agent/test evidence is synthetic: no API key, network, source writes or rea
 test process is needed. Default file-backed state is `~/.qa-sentinel/demo/`.
 The host binds only to loopback and has no authentication. Real local mode can
 mutate explicitly configured trusted workspaces; see [docs/HOSTING.md](docs/HOSTING.md)
-for JSON configuration, boundaries and troubleshooting. No public deployment is included.
+for JSON configuration, boundaries and troubleshooting.
+
+## Protected demo preview (Task 17)
+
+The Docker/Render deployment path runs only the deterministic Demo Calculator,
+behind an environment-only HTTP Basic gate. Real local execution stays loopback-only.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for private-repository setup, required
+dashboard secrets, ephemeral SQLite state and the local container smoke test.
+Deployment awaits review and user approval; no preview URL has been provisioned.
 
 ## Frontend development (Task 14)
 

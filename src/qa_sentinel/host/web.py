@@ -11,6 +11,7 @@ from qa_sentinel.api.errors import application_error_handler
 from qa_sentinel.application import ApplicationError, ApplicationErrorCode
 from .config import HostConfig, HostError, canonical_path, overlaps
 from .composition import compose
+from .preview import PreviewAccess, preview_credentials
 
 
 def validate_frontend(config: HostConfig):
@@ -19,7 +20,7 @@ def validate_frontend(config: HostConfig):
         index = canonical_path(root / "index.html", exists=True)
         if not root.is_dir() or not index.is_file():
             raise ValueError("Missing frontend")
-        if config.mode == "demo" and overlaps(root, canonical_path(config.database.parent / "demo-workspace")):
+        if config.mode in {"demo", "preview-demo"} and overlaps(root, canonical_path(config.database.parent / "demo-workspace")):
             raise ValueError("Overlapping host directories")
         return root
     except (ValueError, OSError, RuntimeError):
@@ -75,11 +76,14 @@ class ExclusiveExecution:
 
 
 def create_host_app(config: HostConfig):
+    credentials = preview_credentials() if config.mode == "preview-demo" else None
     root = validate_frontend(config)  # Full-stack readiness before migration/seed IO.
     composed = compose(config)
     try:
         app = create_api_app(composed.application)
         app.add_middleware(ExclusiveExecution)
+        if credentials is not None:
+            app.add_middleware(PreviewAccess, credentials=credentials)
         app.mount("/", FrontendFiles(directory=root, follow_symlink=False), name="frontend")
         app.state.host_composition = composed
         app.state.host_mode = config.mode

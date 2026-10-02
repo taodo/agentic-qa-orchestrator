@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: qa-sentinel-preview
+    runtime: docker
+    repo: https://github.com/taodo/qa-sentinel-repo
+    branch: feature/develop
+    plan: free
+    numInstances: 1
+    autoDeployTrigger: off
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: QA_SENTINEL_PREVIEW_USERNAME
+        sync: false
+      - key: QA_SENTINEL_PREVIEW_PASSWORD
+        sync: false
