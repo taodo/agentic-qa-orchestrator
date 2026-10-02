@@ -1,0 +1,24 @@
+"""Safe stable errors for host callers; exception text never includes internals."""
+from enum import StrEnum
+
+
+class ApplicationErrorCode(StrEnum):
+    PROJECT_NOT_FOUND = "PROJECT_NOT_FOUND"
+    TASK_NOT_FOUND = "TASK_NOT_FOUND"
+    PROJECT_TASK_MISMATCH = "PROJECT_TASK_MISMATCH"
+    PROJECT_RUNTIME_NOT_CONFIGURED = "PROJECT_RUNTIME_NOT_CONFIGURED"
+    PROJECT_RUNTIME_MISMATCH = "PROJECT_RUNTIME_MISMATCH"
+    TASK_NOT_BLOCKED = "TASK_NOT_BLOCKED"
+    TASK_RESUME_STATE_MISSING = "TASK_RESUME_STATE_MISSING"
+    TASK_RESUME_STATE_INVALID = "TASK_RESUME_STATE_INVALID"
+    INVALID_LIST_LIMIT = "INVALID_LIST_LIMIT"
+    INVALID_INPUT = "INVALID_INPUT"
+    PROJECT_KEY_EXISTS = "PROJECT_KEY_EXISTS"
+    PERSISTENCE_ERROR = "PERSISTENCE_ERROR"
+    RUNTIME_STOPPED = "RUNTIME_STOPPED"
+
+
+class ApplicationError(Exception):
+    def __init__(self, code: ApplicationErrorCode):
+        self.code = code
+        super().__init__(code.value)

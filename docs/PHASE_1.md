@@ -226,4 +226,11 @@ Tests cover migration/history preservation, two independent temporary calculator
 Projects, rejected compositions, DB reopen and safe resume. See PROJECTS.md.
 
 Recommended next step: wait for ChatGPT review and user approval before Task 12.
-Task 12 is not implemented.
+At the Task 11 checkpoint, Task 12 was not implemented.
+
+## Task 12 application surface
+
+An in-process `QASentinelApplication` now provides Project/Task commands,
+Project-scoped execution/resume and bounded detached evidence views above the
+existing core. No transport, CLI, frontend or dependency was introduced. See
+[APPLICATION.md](APPLICATION.md); Task 13 remains pending review and approval.

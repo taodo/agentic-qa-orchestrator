@@ -3,6 +3,7 @@ import json
 from sqlalchemy import Engine, event, create_engine as sqlalchemy_create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
+from .chronology import utc_microseconds
 
 
 def create_engine(url: str = "sqlite+pysqlite:///:memory:") -> Engine:
@@ -17,6 +18,7 @@ def create_engine(url: str = "sqlite+pysqlite:///:memory:") -> Engine:
     def configure_sqlite(connection, record):
         # SQLAlchemy owns BEGIN, including DDL/savepoints, on Python 3.12 SQLite.
         connection.isolation_level = None
+        connection.create_function("qa_utc_microseconds", 1, utc_microseconds, deterministic=True)
         cursor = connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()

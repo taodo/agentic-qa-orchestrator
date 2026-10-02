@@ -157,3 +157,12 @@ No dependency, prompt/model role, provider tool, state edge or reliability frame
 was added. Multi-repository Projects, Application Services, Backend API, Frontend,
 auth/organizations/RBAC, deletion, provisioning and workers remain future work.
 Task 12 is not implemented; wait for review and explicit user approval.
+
+## Task 12 host composition
+
+`ProjectExecutionResolver` maps persisted Task ownership to explicit execution
+bundles validated against `ProjectRuntimeRegistry`. Application callers cannot
+select workspace roots or mutate ownership. Optional Project scope is validated
+on every Task operation; read queries require no configured execution bundle and
+perform no workspace IO. Task 11 guard behavior is preserved. See
+[APPLICATION.md](APPLICATION.md) for commands and frozen bounded views.
