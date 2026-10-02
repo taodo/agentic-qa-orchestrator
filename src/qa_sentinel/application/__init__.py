@@ -2,6 +2,7 @@
 from .errors import ApplicationError, ApplicationErrorCode
 from .runtime import ProjectExecutionBundle, ProjectExecutionResolver
 from .service import QASentinelApplication
+from .models import ExecutionJobView
 from .models import (
     ProjectView, TaskSummary, TaskDetail, CollectionPage, TimelineEntry, InvocationView,
     ArtifactView, TestRunView, ErrorView, DecisionView, GateEvaluationView,

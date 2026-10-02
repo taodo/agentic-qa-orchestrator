@@ -8,7 +8,9 @@ loopback local host and protected deterministic synthetic Render preview path.
 Task 18 adds product documentation and lightweight static frontend onboarding
 only. Task 19 adds explicit local init/validate and host-only readiness status/UI;
 no core/API v1, migration, model, dependency or preview execution boundary changes.
-Read [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
+Task 20 adds backend durable execution jobs and shared single-host admission with
+additive migration 0003. Frontend Run stays synchronous; job lifecycle never replaces
+Task state/evidence. Read [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md) first. Entries below describe historical task
 checkpoints; their then-unimplemented scope is not a current capability inventory.
 
@@ -330,3 +332,26 @@ from readiness. Multi-Project JSON remains supported; init overwrite replaces th
 whole valid config with one binding. [HOSTING.md](HOSTING.md#real-project-onboarding)
 documents exact inputs, codes and scope. Wait for ChatGPT review and user approval
 before Task 20; Task 20 is not implemented.
+
+## Task 20 — Durable background execution jobs
+
+ExecutionJob has QUEUED/RUNNING/SUCCEEDED/STOPPED/FAILED, frozen safe DTOs, persisted
+ownership and short atomic lifecycle writes. Additive 0003 introduces lifecycle/FK
+checks, one-active-per-Task/one-RUNNING indexes and internal durable FIFO insertion.
+Application creates/queries requests; one lifespan-owned daemon worker claims and
+commits RUNNING before existing Run, without holding a DB transaction during core
+execution. Job status never changes Task state, evidence, gates or reliability.
+
+One host coordinator covers legacy synchronous Run, separate synchronous Resume
+and background execution. API v1 adds POST Task executions (202), GET Task jobs
+and GET one job. Terminal async requests reject deliberately; /run terminal checks
+remain. Preview remains Basic-protected fake-only; real local jobs retain accepted
+resolver/workspace/mutation/test boundaries. No frontend, dependency or broker is added.
+
+Startup stops stale RUNNING jobs as EXECUTION_INTERRUPTED before accepting work,
+then recovers QUEUED jobs in durable insertion order. Shutdown stops claims with
+bounded grace and defers engine disposal while a worker remains live. Uncertain
+claim/completion persistence stops further execution without retry. There is no
+exactly-once, multiprocess lease, cancellation or automatic core reconciliation.
+[Execution jobs](EXECUTION_JOBS.md) covers details. Wait for ChatGPT review and user
+approval before Task 21; Task 21 is not implemented.

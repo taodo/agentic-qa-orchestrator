@@ -139,3 +139,26 @@ versioned HTTP routes and stable error envelopes. Route handlers use one explici
 application method; run/resume remain separate and queries remain bounded.
 Host composition remains explicit. See [API.md](API.md) for transport contracts,
 synchronous semantics and the non-public/no-auth limitation.
+
+## Task 20 execution-request lifecycle
+
+The facade exposes request_task_execution, get_execution_job and
+list_task_execution_jobs with frozen ExecutionJobView/bounded page results.
+Creation derives ownership from persisted Task, verifies the trusted resolver,
+rejects DONE/FAILED async requests and allows one active job per Task. No workspace
+or user payload enters job persistence. Invalid scope/unconfigured runtime retain
+accepted errors. Job status never assigns Task state or alters gates.
+
+Trusted host-only claim/finish/reconcile methods use separate short BEGIN IMMEDIATE
+UnitOfWork transactions; RUNNING commits before the worker calls existing run_task.
+No transaction spans workflow work. Optional host-owned admission/wakeup objects
+are explicit injected dependencies, never HTTP/model inputs. Synchronous Run,
+Resume and the worker share admission; active jobs block same-Task legacy commands.
+Embeddings must provide equivalent single-worker coordination.
+
+SUCCEEDED means normal return and can accompany BLOCKED. RUNTIME_STOPPED maps to
+a stopped request; unexpected job failures retain only generic codes. Core
+run/resume behavior, terminal checks and evidence remain authoritative. Restart
+stops stale RUNNING requests without rerunning them; queued work can recover.
+No retry, Task transition or source reconciliation belongs to this job surface.
+[Execution jobs](EXECUTION_JOBS.md) documents the full contract.

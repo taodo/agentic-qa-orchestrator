@@ -5,6 +5,11 @@ operator surface includes Application/API (Tasks 12–13), frontend (14–15),
 local host (16) and protected synthetic preview (17). Earlier task sections below
 describe their own checkpoint. They do not imply missing current host/UI features.
 
+Task 20 adds a durable host execution-request lifecycle around existing application
+Run. It does not change this runner/state machine, evidence, reliability or model
+boundary. [Execution jobs](EXECUTION_JOBS.md) explains the separate operational
+statuses, shared admission and conservative restart reconciliation.
+
 QA Sentinel coordinates one persisted task using fake or reasoning-only real
 roles. Agents receive no database/session handle or mutable Task. WorkflowRunner
 selects routes; WorkflowEngine validates and atomically records every state change

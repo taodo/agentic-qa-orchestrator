@@ -10,10 +10,22 @@ from qa_sentinel.domain.enums import (
 )
 from qa_sentinel.domain.references import ActorRef, CorrelationRef, ErrorSource
 from qa_sentinel.domain.gate import GateCheck
+from qa_sentinel.domain.execution_job import ExecutionJobStatus, ExecutionJobError
 
 
 class View(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ExecutionJobView(View):
+    id: UUID
+    task_id: UUID
+    project_id: UUID
+    status: ExecutionJobStatus
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    safe_error_code: ExecutionJobError | None
 
 
 T = TypeVar("T")

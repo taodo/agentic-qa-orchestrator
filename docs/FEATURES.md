@@ -1,7 +1,8 @@
 # QA Sentinel feature reference
 
 Implemented Tasks 1–17; Task 18 adds static product onboarding, and Task 19 adds
-explicit trusted local setup and safe host readiness.
+explicit trusted local setup and safe host readiness. Task 20 adds backend durable
+execution requests with a single host worker; frontend Run remains synchronous.
 [Product Guide](PRODUCT_GUIDE.md) provides interpretation/walkthrough;
 [PRD](PRD.md) explains boundaries. Backend ownership below identifies existing
 layers, not new endpoints or services.
@@ -36,6 +37,20 @@ Decision = why routing happened; Gate = deterministic acceptance check;
 Invocation = agent execution record; Test Run = deterministic test execution
 record (synthetic in demo); Error = classified failure evidence. These are
 separate types. [Interpretation/refs](PRODUCT_GUIDE.md#mental-model).
+
+## Durable execution requests
+
+ExecutionJob is an operational request record, separate from QA workflow truth.
+POST `/api/v1/tasks/{task_id}/executions` commits QUEUED and returns 202; persisted
+status is inspectable through the job and Task job-list GET routes. One active job
+per Task and one globally admitted workflow apply; different Tasks can wait FIFO.
+RUNNING commits before existing application Run, with no DB transaction spanning
+model/tool/test execution. SUCCEEDED does not mean DONE.
+
+Stale RUNNING work stops explicitly on restart; QUEUED work can recover. There is
+no exactly-once guarantee, job retry/cancellation, external broker or frontend job
+UX. Synchronous /run and separate Resume stay compatible. Preview is still
+deterministic fake-only and Basic-protected. [Full contract](EXECUTION_JOBS.md).
 
 ## Real Project onboarding
 

@@ -127,15 +127,16 @@ authoritative. No automatic repository/test discovery or Project creation occurs
 | [PRD](docs/PRD.md) — purpose, journeys and boundaries | [Architecture](docs/ARCHITECTURE.md) |
 | [Product Guide](docs/PRODUCT_GUIDE.md) — workflow and evidence walkthrough | [Runtime](docs/RUNTIME.md), [State machine](docs/STATE_MACHINE.md) |
 | [Feature Reference](docs/FEATURES.md) — screens, ownership and limits | [Application](docs/APPLICATION.md), [API](docs/API.md) |
-| [Frontend](docs/FRONTEND.md) — UI and development | [Projects](docs/PROJECTS.md), [Database](docs/DATABASE.md) |
+| [Frontend](docs/FRONTEND.md) — UI and development | [Projects](docs/PROJECTS.md), [Database](docs/DATABASE.md), [Execution jobs](docs/EXECUTION_JOBS.md) |
 | [Hosting](docs/HOSTING.md) — local configuration | [Models](docs/MODELS.md), [Execution](docs/EXECUTION.md) |
 | [Deployment](docs/DEPLOYMENT.md) — protected Render demo | [Mutation](docs/MUTATION.md), [Repository evidence](docs/REPOSITORY_TOOLS.md) |
 | [Phase 1](docs/PHASE_1.md) — status and historical checkpoints | [Reliability](docs/RELIABILITY.md), [Agent contracts](docs/AGENT_SPEC_v0.1.md) |
 
 ## Current limitations
 
-Phase 1 uses SQLite, synchronous Run and a single-process host admitting one
-Run/Resume at a time. There is no background queue, distributed worker system,
+Phase 1 uses SQLite, synchronous browser Run and a single-process host admitting
+one workflow at a time. Backend async requests have a durable queue and one local
+worker; job status remains separate from Task/evidence truth. There is no distributed worker system,
 public multi-tenant SaaS, production auth/RBAC, remote clone or autonomous shell.
 Evidence views are bounded prefixes with explicit truncation and manual freshness.
 Unresolved calls, tests or writes need explicit reconciliation; Resume is not

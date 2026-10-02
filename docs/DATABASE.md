@@ -108,5 +108,21 @@ migration-only legacy-bootstrap Project. Empty databases have no bootstrap row.
 Existing task data and incoming cyclic history links survive SQLite batch recreation.
 Migration connections temporarily disable FK checks before BEGIN, verify all links
 before commit and restore enforcement; normal connections keep enforcement enabled.
-Tests now upgrade to 0002 and compare schema/index integrity. See PROJECTS.md for
+Task 11 tests upgraded to 0002 and compared schema/index integrity. See PROJECTS.md for
 backfill identity, transaction constraints and runtime binding of migrated Tasks.
+
+## Task 20 execution requests
+
+Additive 0003_execution_jobs follows unchanged 0001/0002. Execution jobs persist
+only request identity/ownership, operational status, lifecycle timestamps and fixed
+safe error codes. Internal AUTOINCREMENT sequence orders committed queue insertion;
+it is absent from DTOs. FK/lifecycle checks and partial unique indexes enforce one
+active job per Task and one RUNNING job globally. Application validation proves
+Task/Project ownership consistency before enqueue.
+
+Short BEGIN IMMEDIATE job transactions serialize lifecycle writes before reading;
+core transaction defaults remain unchanged. No transaction spans model/tool/test
+work. Upgrade preserves all Tasks/evidence; downgrade removes only job records.
+Tests compare migrated schema with ORM metadata, constraints, reopen durability
+and 0002→0003 preservation/downgrade. [Execution jobs](EXECUTION_JOBS.md) defines
+restart uncertainty and separate workflow truth.
