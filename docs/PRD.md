@@ -1,7 +1,8 @@
 # QA Sentinel product requirements — implemented Phase 1
 
-This PRD describes implemented Tasks 1–17. Task 18 adds product documentation
-and lightweight onboarding, not runtime capabilities. Read the [Product Guide](PRODUCT_GUIDE.md)
+This PRD describes implemented Tasks 1–23, including lightweight onboarding,
+durable execution requests, derived crash assessment and optional hosted demo access.
+Read the [Product Guide](PRODUCT_GUIDE.md)
 for operation and [Features](FEATURES.md) for the inventory. [Phase 1](PHASE_1.md)
 records historical checkpoints.
 
@@ -48,7 +49,7 @@ is no ticket synchronization or production user-management system.
 Phase 1 is not a generic autonomous software factory, unrestricted shell agent,
 public multi-tenant SaaS, full CI/CD replacement, production auth/RBAC system or
 distributed worker platform. It supplies no cloud workspace, remote repository
-clone, background queue, streaming or automatic crash reconciliation. These
+clone, distributed queue, streaming or automatic crash reconciliation. These
 are exclusions, not roadmap promises.
 
 ## Principles and application boundary
@@ -132,14 +133,15 @@ customer outcomes or reliability guarantees.
 | ProjectWorkspaceBinding outside persistence | Keeps trusted roots outside logical Project/request/model data; drift stops existing Tasks |
 | Controlled mutation instead of direct agent writes | Validates complete authorized sets/hashes/bounds; filesystem and DB are not a distributed transaction |
 | Bounded repository reads | Limits roles, paths, content and work; arbitrary source must still be secret-free |
-| Synchronous Run | Preserves explicit execution/safe stops without adding a queue |
+| Durable browser Run and compatible synchronous /run | Separates request lifecycle from Task state/evidence; Resume stays synchronous |
 | Single-process host | Serializes admitted Run/Resume without claiming distributed coordination |
 | Demo-only public preview | Teaches evidence inspection without exposing trusted local execution |
 
 ## Risks and limitations
 
-Run occupies a synchronous request. One process/worker admits one Run/Resume;
-overlap receives a safe conflict. There is no frontend polling or hidden retry.
+Synchronous /run occupies its request; browser Run uses the durable local queue.
+One host process/worker admits one workflow; overlapping synchronous work receives
+a safe conflict. Active jobs poll without overlap; execution creation never retries.
 SQLite is the Phase 1 database; bounded views are not full history when truncated.
 Timestamps/refs do not guarantee universal cross-table causal order or exactly-once
 execution.
@@ -156,9 +158,28 @@ loopback-only. Do not put secrets into requirements, source evidence or preview.
 
 ## Current phase
 
-Tasks 1–17 implement contracts, persistence, deterministic orchestration,
+Tasks 1–23 implement contracts, persistence, deterministic orchestration,
 bounded reliability, real local reasoning/actions, Project isolation, application
 and API boundaries, operator UI, local hosting and a protected Render demo path.
 The public preview is **deterministic synthetic demo only**. The owner supplies
 its current generated HTTPS URL/access privately; neither is embedded here.
-This PRD adds no deployment or architecture/runtime capability.
+Optional hosted-demo adds paid-disk SQLite durability and single-operator session
+access. It remains fake-only; the existing free ephemeral Basic preview stays
+available. See [deployment profiles](DEPLOYMENT.md) and [access limits](HOSTED_ACCESS.md).
+
+## Persistent hosted demo boundary
+
+Hosted persistence does not enable hosted real execution. Only Demo Calculator
+receives the deterministic fake runtime; arbitrary Projects remain unconfigured.
+No real adapter, repository, mutation or pytest service can be composed in this
+mode, and OPENAI_API_KEY presence aborts startup. Trusted real local execution
+stays loopback-only with host-owned workspace configuration separate from Project.
+
+This is a single-operator portfolio access boundary, not production multi-user
+identity/RBAC. Provider credentials/signing secret remain environment secrets.
+Stateless Secure/HttpOnly/SameSite=Strict sessions expire after eight hours; unsafe
+requests require session-bound CSRF. Logout/expiry changes no Task/job/evidence.
+Auth failure recovers login without replay. One paid disk/instance/process is
+required; no horizontal scale or zero-downtime promise. Existing state machine,
+gates, budgets, job semantics and reconciliation remain authoritative. No auth
+table, migration, dependency or hidden reasoning is added.

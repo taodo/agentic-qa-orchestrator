@@ -32,3 +32,4 @@
 .execution-history{margin-top:18px;min-width:0}
 .execution-history summary{cursor:pointer;max-width:100%;white-space:normal;margin-bottom:18px}
 @media(max-width:620px){.section-nav{gap:2px}.section-nav a{padding:8px}.expanded-json{max-height:420px}.record-heading{gap:8px}}
+@media(max-width:620px){.topbar{flex-wrap:wrap}.topbar button{flex-shrink:0}}

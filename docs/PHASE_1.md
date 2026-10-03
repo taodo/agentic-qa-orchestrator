@@ -10,7 +10,9 @@ only. Task 19 adds explicit local init/validate and host-only readiness status/U
 no core/API v1, migration, model, dependency or preview execution boundary changes.
 Task 20 adds backend durable execution jobs and shared single-host admission with
 additive migration 0003. Task 21 adds async browser Run, persisted active-job recovery
-and bounded polling; job lifecycle never replaces Task state/evidence. Read
+and bounded polling; job lifecycle never replaces Task state/evidence. Task 22
+adds derived crash assessment; Task 23 adds optional persistent hosted fake-only
+demo with single-operator sessions. Read
 [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md) first. Entries below describe historical task
 checkpoints; their then-unimplemented scope is not a current capability inventory.
@@ -394,3 +396,29 @@ Basic-protected deterministic fake-only; real local remains trusted loopback.
 No new dependency or migration. [Reconciliation](RECONCILIATION.md) documents
 operator playbooks and the absence of resolution/exactly-once guarantees.
 Wait for ChatGPT review and user approval before Task 23; Task 23 is not implemented.
+
+## Task 23 — Persistent hosted demo and single-operator sessions
+
+An explicit hosted-demo mode adds a fixed state.sqlite3 under the selected safe
+provider data root. Same-disk restarts preserve Projects, Tasks, evidence and jobs;
+the accepted fake identity binding lives outside durable storage. Hosted mode
+rejects provider keys/local configuration and composes only deterministic fake
+agents/tests for Demo Calculator. No real model/repository/mutation/pytest service
+is constructed; arbitrary Projects remain runtime-unconfigured.
+
+Minimal host login/logout, signed stateless eight-hour cookies and session-bound
+CSRF protect all app/API/assets except exact health/login endpoints. Credentials
+and independent signing secret remain provider environment secrets; no auth table,
+dependency or migration is added. The frontend holds only CSRF in memory, provides
+logout and redirects on auth failure without replaying actions. Secure/HttpOnly/
+SameSite=Strict cookies, fixed expiry, generic bounded login and bounded in-process
+throttle define a single-operator portfolio boundary, not multi-user identity/RBAC.
+
+The separate optional render.hosted.yaml uses one paid Docker instance and 1 GB
+disk. Existing render.yaml stays free/ephemeral/Basic. Real local remains trusted
+loopback-only. Task/job/reconciliation truth, state edges, gates, budgets and API
+v1 business DTOs are unchanged. One process/Uvicorn/execution worker, no horizontal
+scale, exactly-once or zero-downtime guarantee. Deployment prerequisites include
+HTTPS, writable non-root disk, provider secrets and explicit owner opt-in.
+[Access limits](HOSTED_ACCESS.md), [Deployment profiles](DEPLOYMENT.md).
+Wait for ChatGPT review and user approval before Task 24; Task 24 is not implemented.

@@ -23,7 +23,9 @@ WORKDIR /app
 COPY --from=package /install /usr/local
 COPY --from=frontend /build/frontend/dist /app/frontend/dist
 RUN groupadd --gid 10001 sentinel && useradd --uid 10001 --gid sentinel --no-create-home sentinel \
-    && mkdir -p /tmp/qa-sentinel && chown sentinel:sentinel /tmp/qa-sentinel
+    && mkdir -p /tmp/qa-sentinel /var/data/qa-sentinel \
+    && chown sentinel:sentinel /tmp/qa-sentinel /var/data/qa-sentinel \
+    && chmod 0700 /var/data/qa-sentinel
 USER 10001:10001
 EXPOSE 10000
 CMD ["python", "-m", "qa_sentinel.host.container"]

@@ -94,6 +94,15 @@ runtime-unconfigured. Preview SQLite may reset on restart/redeploy; do not enter
 secrets or rely on durable records. The owner supplies the current generated
 HTTPS URL privately; none is hard-coded here. [Deployment](docs/DEPLOYMENT.md).
 
+An optional separate **hosted-demo** profile retains SQLite on one paid persistent
+disk and uses single-operator session login instead of Basic. It remains
+deterministic synthetic fake-only: persistence enables no real models, repository,
+mutation or pytest. Secure/HttpOnly/SameSite=Strict cookies expire after eight
+hours; unsafe requests require CSRF and auth failure never replays actions.
+No users/RBAC, auth table or multi-instance deployment is added. The existing
+free preview stays supported and its data is not automatically transferred.
+[Hosted access](docs/HOSTED_ACCESS.md), [optional deployment](docs/DEPLOYMENT.md#optional-persistent-hosted-demo-task-23).
+
 ## Real local mode
 
 Real local mode executes against an explicitly configured **trusted local

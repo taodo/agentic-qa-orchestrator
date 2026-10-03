@@ -1,4 +1,15 @@
-# Protected public demo preview (Task 17)
+# Synthetic deployment profiles
+
+The existing free preview and optional persistent hosted demo are separate
+services and explicit owner choices. Both are deterministic synthetic fake-only.
+Persistence never enables real models, repository reads, mutation or pytest.
+
+| Profile | Blueprint | Storage | Access |
+| --- | --- | --- | --- |
+| Existing preview-demo | render.yaml | Ephemeral /tmp SQLite | Temporary HTTP Basic |
+| Optional hosted-demo | render.hosted.yaml | Paid persistent SQLite disk | Single-operator stateless session |
+
+## Existing free preview (Task 17)
 
 Render terminates HTTPS for its generated `https://<service-name>.onrender.com`
 address and forwards to one Docker Web Service: HTTP Basic preview gate →
@@ -11,7 +22,7 @@ remains private. First-time visitors should read the
 
 ## Security boundary
 
-Only explicit `--preview-demo` permits `--host 0.0.0.0`. Ordinary `--demo` and
+Only explicit `--preview-demo` or `--hosted-demo` permits `--host 0.0.0.0`. Ordinary `--demo` and
 real local JSON mode stay loopback-only, including explicit overrides. Preview
 has no local project configuration and composes only `division_scenario()` fake
 agents and synthetic tests for `demo-calculator`. It never constructs
@@ -120,7 +131,8 @@ After authentication: open Demo Calculator and create a Task titled
 zero.” Click Run, then inspect Overview, Timeline, Artifacts, Invocations, Test
 Runs, Decisions and Gates. Evidence is synthetic.
 New arbitrary requirements still execute the same fixed demonstration scenario.
-Run is synchronous; Resume remains a separate explicit action. A second Project
+Browser Run creates a durable execution job; the synchronous /run API remains
+compatible and Resume remains separate/synchronous. A second Project
 can be created but must receive a safe execution rejection, never a runtime.
 
 The complete first-time [walkthrough](PRODUCT_GUIDE.md#demo-mode) explains what
@@ -226,3 +238,88 @@ not demo workflow network calls; execution requires no external network.
 - Missing records: ephemeral state was recycled; create a new synthetic demo Task.
 - Basic access to Swagger/ReDoc remains gated, but those optional accepted pages
   use external UI assets. They are not needed for the offline SPA/workflow.
+
+## Optional persistent hosted demo (Task 23)
+
+This is a single-operator portfolio access boundary, not production multi-user
+identity/RBAC. The separate render.hosted.yaml defines qa-sentinel-hosted-demo,
+one paid Docker web service (current smallest paid plan ID 0.5c-512mb), one 1 GB
+disk at /var/data/qa-sentinel, auto-deploy off and /health. No database/worker
+service or OpenAI key is supplied. The existing render.yaml/free service is
+unchanged. Current [Render schema](https://render.com/schema/render.yaml.json)
+supports service disk sizeGB minimum 1; [Blueprint fields](https://render.com/docs/blueprint-spec)
+define paid compute IDs. [Persistent disk limitations](https://render.com/docs/disks)
+require one instance and preclude zero-downtime deploys. Check provider pricing
+before opting in; this task provisions no service or disk.
+
+After separate review/integration, explicitly select render.hosted.yaml from
+feature/develop when creating a **new** Blueprint. Supply the three sync:false
+secrets in its provider prompts: QA_SENTINEL_OPERATOR_USERNAME,
+QA_SENTINEL_OPERATOR_PASSWORD, QA_SENTINEL_SESSION_SECRET. Existing services need
+manual environment updates rather than initial prompt reuse. Use a distinct
+cryptographically random signing secret of at least 32 bytes. Do not forward
+OPENAI_API_KEY or local project config. Use only the generated HTTPS URL.
+
+The Blueprint overrides Docker CMD with the fixed
+`python -m qa_sentinel.host.hosted_container`. It reads PORT, explicit
+QA_SENTINEL_DATA_DIR and auth preflight secrets only, selecting hosted-demo,
+0.0.0.0, /app/frontend/dist and `<data-root>/state.sqlite3`. No database filename,
+workspace or arbitrary command option is accepted. /tmp is rejected by this
+container entrypoint. Source/asset overlap and linked/junction roots fail closed.
+Startup may create the selected safe root within its already-existing provider
+parent and uses normal Alembic upgrades (0003).
+There is no migration or user/session table.
+
+The image keeps UID/GID 10001 and prepares /var/data/qa-sentinel with mode 0700.
+The **mounted** provider disk must be writable by that UID/GID; mounting can
+replace image directory ownership. Verify provisioning permissions before use.
+If HOST_DATABASE_STARTUP_FAILED occurs, privately check disk ownership/access;
+keep the non-root runtime and correct the selected disk permissions through the
+provider/operator provisioning process. Do not grant broad source access or run
+the server as root to bypass this boundary. Disk attachment and ownership are
+deployment prerequisites, not actions performed by web requests.
+
+Durable state is only SQLite and its SQLite journal files on that disk: Projects,
+Tasks, evidence and execution jobs. There is no target workspace there. The fake
+bundle uses an empty, host-selected identity-only directory in the system temp
+area, derived deterministically from the selected mount path. It holds no source
+or durable state, never attaches physical services, and preserves the accepted
+logical binding identity across same-path restarts. Do not repoint existing state
+to another mount path; existing workspace/reconciliation guards still apply.
+
+Open /login, sign in, confirm **HOSTED DEMO · Synthetic**, and complete the normal
+Demo Calculator walkthrough. Other Projects remain runtime-unconfigured. Sign out
+is an explicit protected POST; session expiry does not stop/change jobs or Tasks.
+Only exact GET /health, GET /login and POST /auth/login are public. API expiry
+returns safe 401 and the browser goes to login without retrying any action.
+Secure/HttpOnly/SameSite=Strict cookies, eight-hour fixed expiry, session-bound
+CSRF and bounded login throttle are detailed in [Hosted access](HOSTED_ACCESS.md).
+
+### Hosted restart smoke
+
+Through HTTPS, sign in and create a synthetic Task. Run once; wait for the job to
+finish, then inspect actual Task DONE, Artifacts, Invocations, Test Runs and
+Recovery / Reconciliation. Record only their UUIDs privately. Restart/redeploy
+the **same service with the same disk mount and signing secret**. Verify the same
+Project UUID, Task state, evidence and terminal job; seeding must not duplicate
+Demo Calculator. A still-valid session should remain usable. Verify unauthenticated
+API/assets are blocked and /health stays public. Do not print cookies/env secrets.
+
+Uncertain RUNNING jobs still stop as EXECUTION_INTERRUPTED on startup; persisted
+QUEUED jobs follow existing deterministic recovery. Reconciliation remains derived
+guidance and blocks unresolved core evidence. There is no exactly-once guarantee.
+On the Task 23 implementation host, the Docker CLI was present but its daemon
+was unavailable; no image/container smoke pass is claimed. Offline automated
+tests perform this restart check with temporary SQLite and ASGI,
+deny real constructors/provider calls/subprocess/network, and require no Render
+or Docker. Live deployment/container verification is a separate owner prerequisite.
+
+### Explicit owner migration choice
+
+Keeping the free ephemeral Basic preview is supported. Opting into hosted-demo
+creates a separate paid service/disk; it does not magically preserve or transfer
+the existing preview's records. Start with a fresh seeded database. Any future
+data transfer requires an explicit stopped-host, consistent SQLite backup and
+separately reviewed identity/reconciliation plan; no transfer command is supplied.
+Never copy a live SQLite file, rewrite evidence or weaken binding guards to force
+compatibility. Backups/access and sensitive record hygiene remain owner duties.

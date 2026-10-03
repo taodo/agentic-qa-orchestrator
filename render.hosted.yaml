@@ -1,0 +1,27 @@
+# Optional separate paid service. Existing render.yaml remains the free preview.
+services:
+  - type: web
+    name: qa-sentinel-hosted-demo
+    runtime: docker
+    repo: https://github.com/taodo/qa-sentinel-repo
+    branch: feature/develop
+    plan: 0.5c-512mb
+    numInstances: 1
+    autoDeployTrigger: off
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: python -m qa_sentinel.host.hosted_container
+    healthCheckPath: /health
+    disk:
+      name: qa-sentinel-state
+      mountPath: /var/data/qa-sentinel
+      sizeGB: 1
+    envVars:
+      - key: QA_SENTINEL_DATA_DIR
+        value: /var/data/qa-sentinel
+      - key: QA_SENTINEL_OPERATOR_USERNAME
+        sync: false
+      - key: QA_SENTINEL_OPERATOR_PASSWORD
+        sync: false
+      - key: QA_SENTINEL_SESSION_SECRET
+        sync: false

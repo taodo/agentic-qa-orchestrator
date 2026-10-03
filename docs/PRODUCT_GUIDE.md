@@ -1,6 +1,6 @@
 # QA Sentinel product guide
 
-For technical Operators using implemented Tasks 1–21. Start with the
+For technical Operators using implemented Tasks 1–23. Start with the
 [demo walkthrough](#demo-mode); use the evidence sections as a reference.
 [PRD](PRD.md) explains intent; [Features](FEATURES.md) summarizes ownership/limits.
 
@@ -51,7 +51,7 @@ A Project is logical software identity: immutable key/ID, name, description and
 timestamps. Open one from the Projects registry to inspect its owned Tasks.
 Create Project stores identity, not a repository/workspace/runtime. UI creation
 does not clone software or configure tests. Demo Calculator is the only
-executable demo Project; other Projects remain runtime-unconfigured in demo/preview.
+executable demo Project; other Projects remain runtime-unconfigured in all synthetic modes.
 [Project isolation](PROJECTS.md).
 
 ## Tasks
@@ -374,3 +374,30 @@ uncertain mutations or fabricate completion. Inspection does not itself resolve
 blocking evidence, and no exactly-once guarantee is provided. Preview remains
 deterministic synthetic demo; real mode remains trusted local workspace execution.
 [Detailed assessment and operator playbooks](RECONCILIATION.md).
+
+## Persistent hosted demo
+
+The owner may choose the separate paid hosted-demo profile. Open the privately
+supplied HTTPS URL and sign in on the minimal login page. The console shows
+**HOSTED DEMO · Synthetic** and a **Sign out** control. Follow the same Demo
+Calculator walkthrough; requirement text still selects no real model, workspace
+or tests. Arbitrary Projects can be inspected but have no configured runtime.
+
+The persistent disk retains Projects, Tasks, evidence and execution jobs across
+same-service restarts. It does not enable real execution, repair uncertain work
+or turn SUCCEEDED into DONE. Keep using Task state, evidence and Recovery /
+Reconciliation separately. There is one host workflow at a time and no
+exactly-once or zero-downtime guarantee.
+
+Access lasts at most eight hours. Sign out or expiry returns to login, without
+canceling/changing jobs or Tasks. Sign in again, inspect refreshed execution
+history and reconciliation, then choose any next action explicitly. Failed
+actions are never replayed automatically. Credentials and session cookies are
+not shown in the console or stored in browser localStorage. This is a
+single-operator portfolio access boundary, not production multi-user identity/RBAC.
+
+The existing free **DEMO PREVIEW · Synthetic** mode remains ephemeral with its
+temporary Basic gate. Local demo still has no auth; real local remains trusted
+loopback workspace execution. The owner must explicitly provision the hosted
+profile; existing preview records are not automatically transferred.
+[Deployment choices](DEPLOYMENT.md), [access/expiry limits](HOSTED_ACCESS.md).

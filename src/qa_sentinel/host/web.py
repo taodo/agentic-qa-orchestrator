@@ -9,6 +9,8 @@ from qa_sentinel.api import create_api_app
 from .config import HostConfig, HostError
 from .composition import compose
 from .preview import PreviewAccess, preview_credentials
+from .access import HostedAccess, hosted_credentials
+from .hosted import preflight_storage
 from .preflight import validate_frontend
 from .status import add_runtime_status
 
@@ -43,12 +45,21 @@ class FrontendFiles(StaticFiles):
 
 def create_host_app(config: HostConfig):
     credentials = preview_credentials() if config.mode == "preview-demo" else None
+    operator = hosted_credentials() if config.mode == "hosted-demo" else None
+    if operator is not None:
+        preflight_storage(config)
     root = validate_frontend(config)  # Full-stack readiness before migration/seed IO.
     composed = compose(config)
     try:
         app = create_api_app(composed.application)
         if credentials is not None:
             app.add_middleware(PreviewAccess, credentials=credentials)
+        if operator is not None:
+            app.add_middleware(HostedAccess, credentials=operator)
+        else:
+            @app.get("/auth/session")
+            def access_mode():
+                return {"mode": config.mode}
         add_runtime_status(app, composed, config.mode)
         app.mount("/", FrontendFiles(directory=root, follow_symlink=False), name="frontend")
         app.state.host_composition = composed
