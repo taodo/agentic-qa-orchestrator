@@ -58,6 +58,14 @@ paths are explicit. After pytest itself loads, the approved workspace is added t
 pytest's controlled pythonpath option so ordinary sample-project imports work, including
 paths with spaces. Quoting that ini value does not invoke a shell.
 
+Task 25 also adds the validated in-root cwd to those controlled import paths for
+backend layouts. ExecutionConfig's optional pytest_target_root tightens target
+containment to that subdirectory; its default remains the full workspace. It does
+not change rootdir/confcutdir, root ownership or workflow TestExecutionService.
+CLI target-check dry-validates this policy; target-test uses the same runner once
+and projects an ephemeral result, without TestRun conversion/persistence or any
+workflow routing. [Proving semantics](REAL_TARGETS.md#result-persistence-and-trust-limits).
+
 ## Environment and limits
 
 The full parent environment is never inherited. Child environment contains a baseline

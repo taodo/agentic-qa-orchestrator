@@ -95,7 +95,7 @@ def initialize(args) -> Readiness:
         try:
             config = HostConfig(mode="local", database=args.database, frontend_dist=args.frontend_dist,
                 host=args.host, port=args.port, projects=({"key": args.project_key,
-                    "workspace_root": args.workspace, "pytest_targets": args.pytest_target},))
+                    "workspace_root": args.workspace, "pytest_targets": args.pytest_target, "test_cwd": args.test_cwd},))
         except (ValueError, TypeError, OSError, RuntimeError):
             raise HostError("HOST_CONFIG_INVALID") from None
         target = config_target(args.config, config)
@@ -113,7 +113,7 @@ def initialize(args) -> Readiness:
         # Nonsecret allowlist only; no serialization of environment/provider objects.
         data = {"database": str(config.database), "frontend_dist": str(config.frontend_dist),
             "projects": [{"key": p.key, "workspace_root": str(p.workspace_root),
-                "pytest_targets": list(p.pytest_targets)} for p in config.projects],
+                "pytest_targets": list(p.pytest_targets), **({"test_cwd": p.test_cwd} if p.test_cwd != "." else {})} for p in config.projects],
             "host": config.host, "port": config.port}
         payload = (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
         if len(payload) > 64 * 1024:

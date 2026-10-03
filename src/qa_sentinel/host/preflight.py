@@ -12,8 +12,11 @@ def real_components(project):
     # Constructors only validate configuration; no snapshots, reads or apply calls.
     reader = RepositoryReadService(RepositoryReadConfig(project.workspace_root))
     mutation = MutationService(MutationConfig(project.workspace_root))
-    execution = ExecutionConfig(project.workspace_root)
-    request = CommandRequest(cwd=str(project.workspace_root), args=("-m", "pytest", *project.pytest_targets))
+    cwd = canonical_path(project.workspace_root / project.test_cwd, exists=True)
+    if not cwd.is_dir() or not cwd.is_relative_to(project.workspace_root):
+        raise HostError("HOST_TEST_POLICY_REJECTED")
+    execution = ExecutionConfig(project.workspace_root, pytest_target_root=cwd)
+    request = CommandRequest(cwd=str(cwd), args=("-m", "pytest", *project.pytest_targets))
     # Bounded inspection of explicitly selected targets, never test discovery/execution.
     if not CommandPolicy(execution).evaluate(request).allowed:
         raise HostError("HOST_TEST_POLICY_REJECTED")

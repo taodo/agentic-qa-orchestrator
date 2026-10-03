@@ -7,6 +7,10 @@ active-job recovery, polling and lightweight recent execution history.
 Task 22 adds derived read-only crash safety assessment and guarded continuation.
 Task 23 adds optional persistent hosted synthetic demo and single-operator sessions.
 Task 24 adds bounded read-only operational summaries and an Operations dashboard.
+Task 25 adds CLI-only real target checks and deterministic pytest proving,
+supporting a relative backend cwd while retaining full-repository ownership.
+Proving has no workflow/evidence persistence, model calls, mutation service or
+HTTP/frontend trigger. [Operator contract](REAL_TARGETS.md).
 
 Operational views summarize persisted truth and derived safety signals. They do
 not control workflow progression. DB-only reconciliation attention is triage,
@@ -71,6 +75,8 @@ deterministic fake-only and Basic-protected. [Full contract](EXECUTION_JOBS.md).
 | --- | --- | --- | --- | --- |
 | local init | Generate one nonsecret host JSON binding | Trusted host CLI; existing Project identity read | Supply explicit paths/key/targets/output | No Project creation, discovery, key storage or execution; explicit overwrite replaces entire valid config |
 | local validate | Report prerequisites safely | Shared HostConfig/service/CommandPolicy checks; read-only existing DB | Validate selected config; set environment key and revalidate | Zero provider/test/mutation actions; key presence only; no migrations; snapshot not Run guarantee |
+| local target-check | Check an external real target | Host-only frozen profile, existing Project read, bounded CommandPolicy | Supply explicit full root, relative cwd and targets | Zero subprocess/model/source mutation; no key or frontend needed; no persistence |
+| local target-test | Prove approved pytest composition | Existing Task 6 runner; ephemeral result | Explicitly run once after target-check | Local-real CLI only, no workflow TestRun/job/transition or mutation authorization; trusted tests, no sandbox |
 | Runtime readiness | Explain configured vs unconfigured | Host-only /host/runtime-status/{project_id}, outside API v1 | Inspect Project Detail / Refresh runtime | No paths/secrets; no polling or frontend Run gate; demo/preview synthetic only |
 
 Project identity remains persisted; workspace/runtime remains host-owned. Local

@@ -118,6 +118,13 @@ executable code; policies are not an OS sandbox. Read the
 
 ## Real Project onboarding
 
+For an external repository, use local `target-check` for zero-execution checks,
+then explicitly request `target-test` for one approved pytest proving run.
+`--test-cwd backend --pytest-target tests` keeps the full repository binding.
+These commands require an existing Project but no model key; they create no
+Task, TestRun or execution job and authorize no mutation.
+[Real target proving and Windows example](docs/REAL_TARGETS.md).
+
 Create/select a logical Project in the same database through the UI/API, then stop
 the host. Use `qa-sentinel local init` with explicit absolute database, frontend,
 workspace paths, Project key and repeatable pytest targets to generate nonsecret
@@ -141,6 +148,7 @@ authoritative. No automatic repository/test discovery or Project creation occurs
 | [Feature Reference](docs/FEATURES.md) — screens, ownership and limits | [Application](docs/APPLICATION.md), [API](docs/API.md) |
 | [Frontend](docs/FRONTEND.md) — UI and development | [Projects](docs/PROJECTS.md), [Database](docs/DATABASE.md), [Execution jobs](docs/EXECUTION_JOBS.md) |
 | [Hosting](docs/HOSTING.md) — local configuration | [Models](docs/MODELS.md), [Execution](docs/EXECUTION.md) |
+| [Real targets](docs/REAL_TARGETS.md) — CLI proving before controlled repair | [Projects](docs/PROJECTS.md), [Execution](docs/EXECUTION.md) |
 | [Deployment](docs/DEPLOYMENT.md) — protected Render demo | [Mutation](docs/MUTATION.md), [Repository evidence](docs/REPOSITORY_TOOLS.md) |
 | [Reconciliation](docs/RECONCILIATION.md) — read-only assessment and operator playbooks | [Execution jobs](docs/EXECUTION_JOBS.md) |
 | [Phase 1](docs/PHASE_1.md) — status and historical checkpoints | [Reliability](docs/RELIABILITY.md), [Agent contracts](docs/AGENT_SPEC_v0.1.md) |

@@ -1,6 +1,6 @@
 """Frozen trusted-host JSON configuration, never request/model configuration."""
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from qa_sentinel.domain.project import ProjectKey
@@ -26,11 +26,32 @@ def overlaps(a: Path, b: Path) -> bool:
     return a == b or a.is_relative_to(b) or b.is_relative_to(a)
 
 
+def relative_test_path(value: str) -> str:
+    """Portable host-only path, excluding drive-relative, UNC, ADS and traversal."""
+    if (not isinstance(value, str) or not value or len(value) > 512 or value != value.strip()
+            or any(ord(char) < 32 or ord(char) == 127 for char in value)
+            or any(marker in value for marker in (":", ";", "|", "&", "`", "$(", "<", ">"))):
+        raise ValueError("Invalid relative test path")
+    windows = PureWindowsPath(value)
+    portable = value.replace("\\", "/")
+    if windows.drive or windows.root or PurePosixPath(portable).is_absolute() or ".." in portable.split("/"):
+        raise ValueError("Test path must stay relative")
+    if any(part.startswith("-") for part in portable.split("/")):
+        raise ValueError("Test path cannot select options")
+    return str(PurePosixPath(portable))
+
+
 class LocalProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     key: ProjectKey
     workspace_root: Path
     pytest_targets: tuple[str, ...] = Field(min_length=1)
+    test_cwd: str = "."
+
+    @field_validator("test_cwd")
+    @classmethod
+    def cwd(cls, value):
+        return relative_test_path(value)
 
     @field_validator("workspace_root")
     @classmethod

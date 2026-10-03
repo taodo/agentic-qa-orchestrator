@@ -41,6 +41,7 @@ class ExecutionConfig:
     max_target_entries: int = 10000
     python_path: tuple[Path, ...] = ()
     allowed_environment_names: tuple[str, ...] = ()
+    pytest_target_root: Path | None = None
 
     def __post_init__(self):
         root = Path(self.workspace_root).resolve(strict=True)
@@ -61,6 +62,10 @@ class ExecutionConfig:
         object.__setattr__(self, "python_executable", Path(self.python_executable).resolve())
         object.__setattr__(self, "python_path", paths)
         object.__setattr__(self, "allowed_environment_names", names)
+        scope = root if self.pytest_target_root is None else Path(self.pytest_target_root).resolve(strict=True)
+        if not scope.is_dir() or not within(scope, root):
+            raise ValueError("Pytest target scope must be a directory within workspace")
+        object.__setattr__(self, "pytest_target_root", scope)
 
 
 def safe_environment_name(name: str) -> bool:
@@ -100,7 +105,7 @@ class CommandPolicy:
                     if count > self.config.max_target_entries:
                         return False
                     resolved = Path(entry.path).resolve(strict=True)
-                    if not within(resolved, self.config.workspace_root):
+                    if not within(resolved, self.config.pytest_target_root):
                         return False
                     if resolved.is_dir():
                         pending.append(resolved)
@@ -135,7 +140,7 @@ class CommandPolicy:
                 target = (cwd / file_part).resolve(strict=True)
             except (OSError, ValueError, RuntimeError):
                 return decision("INVALID_TEST_TARGET", "Test target must exist inside the approved workspace.")
-            if not within(target, self.config.workspace_root):
+            if not within(target, self.config.pytest_target_root):
                 return decision("WORKSPACE_ESCAPE", "Test target is outside the approved workspace.")
             if not target.is_dir() and (not target.is_file() or target.suffix != ".py"):
                 return decision("INVALID_TEST_TARGET", "Target must be a test directory or Python file.")

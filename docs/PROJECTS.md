@@ -83,6 +83,14 @@ runner.run(task.id)
 Configure pytest_runner's ExecutionConfig for the same root. Construction alone
 does not authorize a Task; guards validate its persisted ownership before execution.
 
+Task 25 adds a frozen trusted TargetProfile for CLI proving against an existing
+Project, with no Project persistence changes. The binding remains the full
+repository root; test_cwd such as backend and targets such as tests are relative
+host configuration. local init supports the same optional test_cwd (default `.`).
+Proving rejects any equality/parent/child overlap with QA Sentinel, executes no
+model or mutation service, and stores no Task/evidence/workspace anchor.
+[Real target checks and proving](REAL_TARGETS.md).
+
 ## Isolation and failure handling
 
 ProjectWorkspaceGuard verifies persisted Task/Project ownership, explicit binding
