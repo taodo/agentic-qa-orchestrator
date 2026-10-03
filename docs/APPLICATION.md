@@ -1,5 +1,18 @@
 # Application services (Task 12)
 
+## Operational reads (Task 24)
+
+OperationalSummaryView, ProjectOperationalSummaryView, TaskOperationalSummaryView
+and OperationalActivityView are frozen derived visibility over existing durable
+records. The explicit get_operational_summary/list_* operational methods use one
+short read transaction and bounded SQL projections (default 50, maximum 100).
+No runtime resolution, full reconciliation, filesystem scan, provider, test,
+mutation or write occurs. TaskState remains workflow truth; operational labels
+are never consulted by progression. Host readiness remains a separate host read.
+[Observability](OBSERVABILITY.md) documents counts, DB-only signal limitations,
+attention priority, deterministic activity ordering and snapshot consistency.
+No table, migration, dependency or existing execution contract changes.
+
 `qa_sentinel.application.QASentinelApplication` is the in-process boundary for
 CLI, Backend API and Web callers. Hosts configure dependencies explicitly;
 callers receive frozen, extra-forbidden DTOs. Application code depends on domain,

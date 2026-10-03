@@ -43,6 +43,8 @@ privately by the owner. For local demo, start the host below. Then:
    **Add division support and reject division by zero.**
 3. Open the Task and click **Run**. The fixed synthetic scenario reaches DONE.
 4. Inspect Overview, Timeline, Artifacts, Invocations, Test Runs, Decisions and Gates.
+5. Open **Operations** for bounded execution/activity summaries and Task drill-down.
+   [Operational visibility and limits](docs/OBSERVABILITY.md).
 
 **Demo evidence is deterministic and synthetic.** No live AI, source writes,
 real pytest process, API key or external workflow network is involved. A different

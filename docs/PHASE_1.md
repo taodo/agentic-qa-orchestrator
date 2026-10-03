@@ -421,4 +421,22 @@ v1 business DTOs are unchanged. One process/Uvicorn/execution worker, no horizon
 scale, exactly-once or zero-downtime guarantee. Deployment prerequisites include
 HTTPS, writable non-root disk, provider secrets and explicit owner opt-in.
 [Access limits](HOSTED_ACCESS.md), [Deployment profiles](DEPLOYMENT.md).
-Wait for ChatGPT review and user approval before Task 24; Task 24 is not implemented.
+This checkpoint is the accepted base for Task 24.
+
+## Task 24 — Operational observability and recovery dashboard
+
+Frozen derived operational DTOs and bounded GET APIs summarize durable Projects,
+Tasks, jobs, errors, TestRuns and Events. DB-only pending-evidence signals are
+triage; full Task 22 assessment and execution guards remain authoritative.
+TaskState and evidence remain QA truth. No dashboard label controls progression,
+resolves uncertainty or enables effects. Reads use short SQL-only transactions;
+there is no runtime resolution, provider, subprocess, filesystem scan or mutation.
+
+Operations navigation adds global cards, safe activity and Task/Project tables,
+URL filters and a serialized seven-second visible GET cycle. Stale filter/navigation
+results are ignored; auth expiry follows Task 23 recovery. Detail links preserve
+lazy evidence and synchronous Resume. Host readiness remains a separate selected
+Project read. Preview/hosted remain synthetic fake-only, local real loopback-only.
+No new dependency, migration, table, auth or core behavior change.
+[Observability](OBSERVABILITY.md) documents snapshot semantics and limits.
+Wait for ChatGPT review and user approval before Task 25; Task 25 is not implemented.

@@ -9,6 +9,13 @@ job table through 0003 without changing core workflow policies.
 
 ## Application factory and host composition
 
+Task 24 adds only read-only operational projections. These routes alone use
+strict 400 REQUEST_VALIDATION_ERROR for unknown/duplicate/invalid queries,
+lowercase true/false booleans and decimal limits 1–100 (default 50); filtered
+unknown Projects return safe 404. Success responses are no-store. Task/job state,
+existing validation, host Basic/session access and unsafe-action CSRF remain
+unchanged. [Operational filters, snapshots and DB-only signals](OBSERVABILITY.md).
+
 ```python
 from qa_sentinel.api import create_api_app
 
@@ -50,6 +57,10 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | POST /api/v1/tasks/{task_id}/executions | request_task_execution → ExecutionJobView (202) |
 | GET /api/v1/tasks/{task_id}/executions | list_task_execution_jobs → CollectionPage[ExecutionJobView] |
 | GET /api/v1/executions/{execution_id} | get_execution_job → ExecutionJobView |
+| GET /api/v1/operations/summary | get_operational_summary → OperationalSummaryView |
+| GET /api/v1/operations/projects | list_project_operational_summaries → CollectionPage[ProjectOperationalSummaryView] |
+| GET /api/v1/operations/tasks | list_task_operational_summaries → CollectionPage[TaskOperationalSummaryView] |
+| GET /api/v1/operations/activity | list_operational_activity → CollectionPage[OperationalActivityView] |
 | GET /api/v1/tasks/{task_id}/timeline | get_task_timeline → CollectionPage[TimelineEntry] |
 | GET /api/v1/tasks/{task_id}/artifacts | get_task_artifacts → CollectionPage[ArtifactView] |
 | GET /api/v1/tasks/{task_id}/test-runs | get_task_test_runs → CollectionPage[TestRunView] |
@@ -59,7 +70,7 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/tasks/{task_id}/invocations | get_task_invocations → CollectionPage[InvocationView] |
 
 All collections accept `?limit=50`, capped at 200 except timeline (500).
-Zero, negative, non-integer and over-maximum values produce 422; values are never
+For the existing Task 13 collections, zero, negative, non-integer and over-maximum values produce 422; values are never
 clamped. The response preserves Task 12's bounded prefix and honest truncation:
 
 ```json
@@ -114,7 +125,7 @@ Messages are fixed and generic, selected by code rather than exception text.
 | 422 | INVALID_INPUT, INVALID_LIST_LIMIT |
 | 500 | PERSISTENCE_ERROR |
 
-Request validation (including invalid UUID/limit/body/extra fields) returns 422
+Existing non-operational route validation (including invalid UUID/limit/body/extra fields) returns 422
 with REQUEST_VALIDATION_ERROR and "Request validation failed". It does not echo
 body, field values, exception details or internal validation structures. Framework
 HTTP failures use HTTP_ERROR and generic messages; unexpected transport/response
