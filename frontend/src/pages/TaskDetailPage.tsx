@@ -5,6 +5,8 @@ import { publicError, type ApiError } from '../api/client';
 import { useResource } from '../app/useResource';
 import { useTaskExecution } from '../app/useTaskExecution';
 import { ExecutionPanel } from '../components/ExecutionPanel';
+import { getReconciliation } from '../api/reconciliation';
+import { ReconciliationPanel } from '../components/ReconciliationPanel';
 import { LoadingState, ErrorState } from '../components/Feedback';
 import { DateTime } from '../components/DateTime';
 import { StatusBadge } from '../components/StatusBadge';
@@ -24,23 +26,24 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
   useEffect(() => { setOpened(previous => previous.has(selected) ? previous : new Set([...previous, selected])); }, [selected]);
   const task = useResource(useCallback(() => getTask(taskId), [taskId]));
   const timeline = useResource(useCallback(() => getTimeline(taskId), [taskId]));
+  const reconciliation = useResource(useCallback(() => getReconciliation(taskId), [taskId]));
   const refreshers = useRef(new Map<string, () => Promise<void>>());
   const register: RefreshRegistry = useCallback((key, refresh) => {
     refreshers.current.set(key, refresh);
     return () => { refreshers.current.delete(key); };
   }, []);
   const refreshEvidence = useCallback(async () => {
-    await Promise.all([task.reload(), timeline.reload(), ...Array.from(refreshers.current.values(), refresh => refresh())]);
-  }, [task.reload, timeline.reload]);
+    await Promise.all([task.reload(), timeline.reload(), reconciliation.reload(), ...Array.from(refreshers.current.values(), refresh => refresh())]);
+  }, [task.reload, timeline.reload, reconciliation.reload]);
   const execution = useTaskExecution(taskId, refreshEvidence);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const gate = useRef(false);
   const [busy, setBusy] = useState<'run' | 'resume'>();
   const [error, setError] = useState<ApiError>();
-  const locked = !!busy || execution.active || execution.creating || execution.refreshing || execution.checking || !execution.verified;
+  const locked = !!busy || execution.active || execution.creating || execution.refreshing || execution.checking || !execution.verified || reconciliation.loading || !!reconciliation.error || !reconciliation.data;
   async function act(action: 'run' | 'resume') {
-    if (gate.current || locked) return;
+    if (gate.current || locked || !(action === 'run' ? reconciliation.data?.safe_to_run : reconciliation.data?.safe_to_resume)) return;
     gate.current = true; setBusy(action); setError(undefined);
     const synchronous = action === 'resume' || task.data?.state === 'DONE' || task.data?.state === 'FAILED';
     try {
@@ -69,7 +72,7 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
   return <>
     <header className="page-header"><p className="eyebrow">Workspace / Task inspector</p><h1>{detail?.title || 'Task Detail'}</h1>{detail && <div className="task-heading"><span>Task state:</span><StatusBadge state={detail.state} /><Link to={`/projects/${detail.project_id}`}>View Project</Link><Id value={detail.id} /></div>}</header>
     {task.loading && <LoadingState>Loading Task…</LoadingState>}{task.error && <ErrorState error={task.error} retry={busy ? undefined : () => void task.reload()} />}
-    {detail && <section className="panel execution-controls" aria-label="Execution controls"><div className="panel-heading"><h2>Execution</h2><div className="actions"><button type="button" disabled={locked || task.loading || !!task.error} onClick={() => void act('run')}>{detail.state === 'DONE' || detail.state === 'FAILED' ? 'Run (terminal check)' : 'Run'}</button>{detail.state === 'BLOCKED' && detail.resume_state && <button type="button" disabled={locked || task.loading || !!task.error} onClick={() => void act('resume')}>Resume</button>}</div></div>
+    {detail && <section className="panel execution-controls" aria-label="Execution controls"><div className="panel-heading"><h2>Execution</h2><div className="actions"><button type="button" disabled={locked || !reconciliation.data?.safe_to_run || task.loading || !!task.error} onClick={() => void act('run')}>{detail.state === 'DONE' || detail.state === 'FAILED' ? 'Run (terminal check)' : 'Run'}</button>{detail.state === 'BLOCKED' && detail.resume_state && <button type="button" disabled={locked || !reconciliation.data?.safe_to_resume || task.loading || !!task.error} onClick={() => void act('resume')}>Resume</button>}</div></div>
       <p className="muted">Run creates a durable execution request. You can leave or refresh this page and recover its status from the host. Task state and evidence determine the QA outcome. Resume only restores the stored state; click Run separately afterward.</p>
       {detail.state === 'BLOCKED' && <p className="notice">This Task is blocked. Run does not resume it.</p>}
       {busy === 'resume' && <LoadingState>Resuming — recording the state transition…</LoadingState>}
@@ -77,6 +80,7 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
       {error && <ErrorState error={error} />}
     </section>}
     {detail && <ExecutionPanel {...execution} refresh={execution.refresh} disabled={!!busy} />}
+    {detail && <ReconciliationPanel {...reconciliation} error={!!reconciliation.error} refresh={() => void reconciliation.reload()} disabled={!!busy} />}
     <nav className="section-nav" aria-label="Task sections">{sections.map(section => <Link key={section} to={sectionUrl(section)} aria-current={selected === section ? 'page' : undefined}>{labels[section]}</Link>)}</nav>
     <div hidden={selected !== 'overview'}>{detail && <section className="panel" aria-label="Overview"><div className="panel-heading"><h2>Overview</h2><button type="button" disabled={!!busy || task.loading} onClick={() => void task.reload()}>Refresh Overview</button></div>
       <h3>Requirement</h3><p className="prose">{detail.requirement}</p>

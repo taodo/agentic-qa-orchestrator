@@ -20,6 +20,7 @@ function safeWarning(failure: unknown) {
     TASK_EXECUTION_TERMINAL: 'This Task is terminal. Refresh Task state and use the terminal check.',
     EXECUTION_JOB_NOT_FOUND: 'Execution request not found. Polling stopped; refresh history and inspect Task evidence.',
     RUNTIME_STOPPED: 'Execution is unavailable or stopped safely. Inspect persisted Task state and evidence.',
+    TASK_RECONCILIATION_REQUIRED: 'Task requires reconciliation. Inspect Recovery / Reconciliation before continuing.',
     NETWORK_ERROR: 'Execution status is uncertain because the API is unreachable. Keep this request; refresh history to recover it.',
   };
   return new ApiError(code, messages[code] ?? 'Execution status could not be verified. Refresh history and inspect Task evidence.');
@@ -143,7 +144,7 @@ export function useTaskExecution(taskId: string, onTerminal: () => Promise<void>
       await read(session, 'history'); // Recover backend truth, never retry POST.
       if (!valid(session)) return;
       if (warning.code === 'TASK_EXECUTION_ALREADY_ACTIVE' && isActiveJob(session.job)) update(session, { warning: undefined });
-      if (warning.code === 'TASK_EXECUTION_TERMINAL' || warning.code === 'RUNTIME_STOPPED') await terminalCallback.current();
+      if (warning.code === 'TASK_EXECUTION_TERMINAL' || warning.code === 'RUNTIME_STOPPED' || warning.code === 'TASK_RECONCILIATION_REQUIRED') await terminalCallback.current();
     } finally {
       session.command = false;
       if (session.controller === controller) session.controller = undefined;

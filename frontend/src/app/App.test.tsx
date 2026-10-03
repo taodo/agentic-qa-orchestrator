@@ -5,12 +5,12 @@ import { App } from './App';
 import { StatusBadge } from '../components/StatusBadge';
 import { DateTime, formatDate } from '../components/DateTime';
 import type { TaskState } from '../api/types';
-import { project, task, page, event, response, deferred } from '../test/fixtures';
+import { project, task, page, event, response, deferred, reconciliation } from '../test/fixtures';
 
 function open(path = '/projects') { return render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>); }
 function mockRoutes(handler: (url: string, options: RequestInit) => Promise<Response> | Response) {
   return vi.mocked(fetch).mockImplementation((input, options = {}) => Promise.resolve(
-    String(input).includes('/executions?') ? response(page([])) : handler(String(input), options)));
+    String(input).endsWith('/reconciliation') ? response(reconciliation(String(input).split('/').at(-2))) : String(input).includes('/executions?') ? response(page([])) : handler(String(input), options)));
 }
 function taskReads(value = task, events = [event('z', 'STATE_TRANSITIONED')]) {
   return mockRoutes(url => url.includes('/timeline?') ? response(page(events)) : response(value));

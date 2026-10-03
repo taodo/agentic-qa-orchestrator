@@ -1,5 +1,12 @@
 # Agent runtime — Bootstrap Tasks 5–11
 
+Task 22 adds [derived reconciliation assessment](RECONCILIATION.md) at application
+entry points. It inspects existing durable reservations without executing the
+runner, clearing STARTED or changing states/gates/reliability. All unresolved
+STARTED invocations block continuation conservatively, including repository
+sessions that the lower-level runner can reconstruct in narrower cases. Completed
+canonical output reuse still follows accepted runner semantics.
+
 For product interpretation read [Product Guide](PRODUCT_GUIDE.md); the current
 operator surface includes Application/API (Tasks 12–13), frontend (14–15),
 local host (16) and protected synthetic preview (17). Earlier task sections below

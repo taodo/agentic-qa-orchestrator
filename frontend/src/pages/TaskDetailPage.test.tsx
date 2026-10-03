@@ -3,7 +3,7 @@ import { Link, MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
 import { artifact, errorRecord, evidence, invocation, malicious, testRun } from '../test/evidence';
-import { deferred, event, page, response, task } from '../test/fixtures';
+import { deferred, event, page, response, task, reconciliation } from '../test/fixtures';
 
 type EvidenceKey = keyof typeof evidence;
 const names: Record<EvidenceKey, string> = { artifacts: 'Artifacts', invocations: 'Invocations', 'test-runs': 'Test Runs', errors: 'Errors', decisions: 'Decisions', gates: 'Gates' };
@@ -16,6 +16,7 @@ function mocks(override?: (url: string, options: RequestInit) => Response | Prom
   return vi.mocked(fetch).mockImplementation((input, options = {}) => {
     const url = String(input), custom = override?.(url, options);
     if (custom) return Promise.resolve(custom);
+    if (url.endsWith('/reconciliation')) return Promise.resolve(response(reconciliation(url.split('/').at(-2))));
     if (url.includes('/executions?')) return Promise.resolve(response(page([])));
     if (url.includes('/timeline?')) return Promise.resolve(response(page([event('z', 'FIRST'), event('a', 'SECOND', 2)])));
     const key = url.split('/').pop()!.split('?')[0] as EvidenceKey;
@@ -31,7 +32,7 @@ describe('Task operator console sections and evidence', () => {
     mocks(); open(); await screen.findByRole('region', { name: 'Overview' });
     expect(screen.getByRole('link', { name: 'Overview', current: 'page' })).toBeInTheDocument();
     expect(screen.getByText(task.requirement)).toBeVisible(); expect(screen.getByText('Current invocation ID')).toBeVisible();
-    expect(fetch).toHaveBeenCalledTimes(3); expect(screen.queryByRole('region', { name: 'Artifacts' })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(4); expect(screen.queryByRole('region', { name: 'Artifacts' })).not.toBeInTheDocument();
   });
   it('preserves selected section in URL, browser history and direct loads', async () => {
     mocks(); open('/tasks/task-a?view=artifacts'); await screen.findByText('artifact-z');
@@ -46,7 +47,7 @@ describe('Task operator console sections and evidence', () => {
   });
   it('falls back to Overview for an invalid view without evidence calls', async () => {
     mocks(); open('/tasks/task-a?view=invalid'); await screen.findByRole('region', { name: 'Overview' });
-    expect(screen.getByRole('link', { name: 'Overview', current: 'page' })).toBeInTheDocument(); expect(fetch).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('link', { name: 'Overview', current: 'page' })).toBeInTheDocument(); expect(fetch).toHaveBeenCalledTimes(4);
   });
   it('keeps Timeline API order and approved correlation IDs', async () => {
     mocks(url => url.includes('/timeline?') ? response(page([{ ...event('z', 'FIRST'), correlation: { invocation_id: 'inv-a', artifact_id: 'art-a', test_run_id: 'run-a', decision_id: 'dec-a' } }, event('a', 'SECOND', 2)], true)) : undefined);
@@ -73,7 +74,7 @@ describe('Task operator console sections and evidence', () => {
     mocks(url => url.includes(`/${key}?`) ? response(page([])) : undefined); open(`/tasks/task-a?view=${key}`);
     expect(await screen.findByText(`No persisted ${names[key].toLowerCase()} yet.`)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: `Refresh ${names[key]}` }));
-    await waitFor(() => expect(count(`/${key}?`)).toBe(2)); expect(fetch).toHaveBeenCalledTimes(5);
+    await waitFor(() => expect(count(`/${key}?`)).toBe(2)); expect(fetch).toHaveBeenCalledTimes(6);
   });
   it.each(Object.keys(names) as EvidenceKey[])('%s uses public error feedback and operator-only retry', async key => {
     mocks(url => url.includes(`/${key}?`) ? response({ error: { code: 'PERSISTENCE_ERROR', message: 'Persistence operation failed' }, stack: 'secret-body' }, 500) : undefined);

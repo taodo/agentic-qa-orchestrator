@@ -15,6 +15,7 @@ from qa_sentinel.orchestration.state_machine import TERMINAL_STATES
 from .commands import CreateTask, UpdateProject
 from .errors import ApplicationError, ApplicationErrorCode as Code
 from .runtime import ProjectExecutionResolver
+from .reconciliation import ReconciliationEvidence, ReconciliationStatus, assess
 from .models import (
     CollectionPage, ProjectView, TaskSummary, TaskDetail, TimelineEntry,
     ArtifactView, InvocationView, TestRunView, ErrorView, DecisionView, GateEvaluationView,
@@ -165,7 +166,25 @@ class QASentinelApplication:
         admission = self._execution_admission
         with admission.task(task_id) if admission else nullcontext():
             self._assert_execution_available(task_id, getattr(admission, "job_id", None), project_id=project_id)
+            self._assert_reconciled(task_id, project_id=project_id)
             return self._run_task(task_id, project_id=project_id)
+
+    def assess_task_reconciliation(self, task_id, *, project_id=None):
+        task_id = identifier(task_id)
+        project_id = None if project_id is None else identifier(project_id)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            task = self._task(uow, task_id, project_id)
+            evidence = ReconciliationEvidence(task, tuple(uow.invocations.list_by_task(task_id)),
+                tuple(uow.artifacts.list_by_task(task_id)), tuple(uow.history.list_events(task_id)),
+                tuple(uow.history.list_test_runs(task_id)), tuple(uow.history.list_errors(task_id)),
+                tuple(uow.execution_jobs.list_by_task(task_id, 200)))
+        # Detached evidence only. No transaction spans even read-only hash verification.
+        return assess(evidence, self._resolver.resolve(task.project_id))
+
+    def _assert_reconciled(self, task_id, *, project_id=None):
+        assessment = self.assess_task_reconciliation(task_id, project_id=project_id)
+        if assessment.status in {ReconciliationStatus.MANUAL_ACTION_REQUIRED, ReconciliationStatus.INCONSISTENT}:
+            raise ApplicationError(Code.TASK_RECONCILIATION_REQUIRED)
 
     def _assert_execution_available(self, task_id, allowed_job_id=None, *, project_id=None):
         project_id = None if project_id is None else identifier(project_id)
@@ -208,6 +227,7 @@ class QASentinelApplication:
         # FAILED is a separate terminal command edge from BLOCKED, never a resume.
         if task.resume_state in TERMINAL_STATES or task.resume_state == TaskState.BLOCKED:
             raise ApplicationError(Code.TASK_RESUME_STATE_INVALID)
+        self._assert_reconciled(task_id, project_id=project_id)
         try:
             WorkflowEngine(self._factory).transition(task_id=task.id, to_state=task.resume_state,
                 reason_code="APPLICATION_RESUME", reason_details="Explicit host continuation",
@@ -231,6 +251,8 @@ class QASentinelApplication:
         project_id = None if project_id is None else identifier(project_id)
         admission = self._execution_admission
         with admission.submission(task_id) if admission else nullcontext():
+            self._assert_execution_available(task_id, project_id=project_id)
+            self._assert_reconciled(task_id, project_id=project_id)
             with self._job_write() as uow:
                 task = self._task(uow, task_id, project_id)
                 if uow.execution_jobs.active(task.id) is not None:

@@ -375,3 +375,22 @@ usable. Preview remains Basic-protected synthetic fake-only; local readiness doe
 not authorize execution. No backend change, migration, dependency or global state.
 [Frontend](FRONTEND.md#execution-recovery-and-polling-task-21) documents limitations.
 Wait for ChatGPT review and user approval before Task 22; Task 22 is not implemented.
+
+## Task 22 — Crash recovery and reconciliation hardening
+
+The application now derives a detached frozen safety assessment from existing
+durable Task evidence and accepted read-only workspace/applied-hash checks.
+CLEAR/RECOVERABLE/MANUAL_ACTION_REQUIRED/INCONSISTENT are guidance statuses, never
+TaskState. Pending provider/agent/test/mutation evidence and drift block Run,
+valid Resume and async submission before effects; no job is created on rejection.
+STARTED and immutable evidence are preserved; no completion or external outcome
+is guessed, fabricated or automatically retried.
+
+Read-only local reconcile needs no provider key/adapter, test runner, worker or
+migration. Typed API GET and lightweight Task recovery panel expose fixed safe
+guidance and manual refresh. Existing job recovery/polling, lazy evidence, gates,
+budgets, Project isolation and synchronous Resume remain intact. Preview remains
+Basic-protected deterministic fake-only; real local remains trusted loopback.
+No new dependency or migration. [Reconciliation](RECONCILIATION.md) documents
+operator playbooks and the absence of resolution/exactly-once guarantees.
+Wait for ChatGPT review and user approval before Task 23; Task 23 is not implemented.

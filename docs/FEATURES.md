@@ -4,6 +4,7 @@ Implemented Tasks 1–17; Task 18 adds static product onboarding, and Task 19 ad
 explicit trusted local setup and safe host readiness. Task 20 adds backend durable
 execution requests with a single host worker. Task 21 adds async browser Run,
 active-job recovery, polling and lightweight recent execution history.
+Task 22 adds derived read-only crash safety assessment and guarded continuation.
 [Product Guide](PRODUCT_GUIDE.md) provides interpretation/walkthrough;
 [PRD](PRD.md) explains boundaries. Backend ownership below identifies existing
 layers, not new endpoints or services.
@@ -93,3 +94,14 @@ separate synchronous transition; DONE/FAILED use the existing synchronous termin
 check. Preview remains deterministic synthetic only and local execution retains
 trusted backend authorization. No backend change, migration or dependency is added.
 [Frontend behavior](FRONTEND.md#execution-recovery-and-polling-task-21).
+
+## Crash reconciliation (Task 22)
+
+The application derives CLEAR/RECOVERABLE/MANUAL_ACTION_REQUIRED/INCONSISTENT
+from durable evidence and accepted bounded workspace checks. One shared guard
+blocks unsafe Run, valid Resume and async enqueue before effects. Typed GET Task
+reconciliation, read-only local reconcile CLI and a compact manually refreshed
+Task panel expose fixed guidance without secrets/paths/raw failures. No TaskState,
+evidence repair, automatic replay, mutation restoration, migration or dependency
+is added. Interrupted jobs are assessed separately from pending core work.
+[Full contract and playbooks](RECONCILIATION.md).

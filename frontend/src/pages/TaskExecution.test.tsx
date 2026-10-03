@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '../app/App';
 import { EXECUTION_POLL_MS } from '../app/useTaskExecution';
 import { artifact, evidence } from '../test/evidence';
-import { deferred, event, execution, page, response, task } from '../test/fixtures';
+import { deferred, event, execution, page, response, task, reconciliation } from '../test/fixtures';
 import type { ExecutionJobView, TaskDetail } from '../api/types';
 
 beforeEach(() => vi.useFakeTimers());
@@ -22,6 +22,7 @@ function backend(initial?: ExecutionJobView, initialTask: TaskDetail = task,
   vi.mocked(fetch).mockImplementation((input, options = {}) => {
     const url = String(input), custom = customize?.(url, options);
     if (custom) return Promise.resolve(custom);
+    if (url.endsWith('/reconciliation')) return Promise.resolve(response(reconciliation(url.split('/').at(-2))));
     if (url.endsWith('/executions') && options.method === 'POST') { server.job = execution(); return Promise.resolve(response(server.job, 202)); }
     if (url.includes('/executions?')) return Promise.resolve(response(page(server.job ? [server.job] : [])));
     if (url.startsWith('/api/v1/executions/')) return Promise.resolve(response(server.job));

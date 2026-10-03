@@ -173,3 +173,13 @@ Symlink testing skips only when the OS does not grant the required creation priv
 No LLM/provider calls, real agent source edits, arbitrary commands, shell wrappers,
 reporting plugins, new dependencies, remote runners, containers, queues, API/CLI/UI,
 or Task 7 features are introduced. Task 7 is Real Model Adapter & First LLM Agents.
+
+## Task 22 reservation assessment
+
+TEST_EXECUTION_STARTED is a logical reservation, not proof of process start or
+completion. The shared application assessment matches its UUID to a same-task
+TestRun and implementation reference; a valid durable run need not have a
+completion Event to satisfy the reservation. Missing or inconsistent evidence
+blocks new Run/Resume/enqueue before pytest. Assessment executes no subprocess,
+pytest discovery or source mutation and never fabricates TestRun or clears a start.
+[Private inspection playbook](RECONCILIATION.md#operator-playbooks).

@@ -50,7 +50,7 @@ a separate terminal transition, never an application resume target.
   distinct evidence types. Every Task method optionally accepts project_id and
   verifies the scope matches the persisted owner; its owner must always exist.
 
-All queries use short UnitOfWork scopes and perform SELECTs only. They do not
+The ordinary evidence/identity queries use short UnitOfWork scopes and perform SELECTs only. They do not
 resolve execution dependencies, establish workspace anchors, transition workflow,
 call models/tools, run subprocesses or read local source files. Inspection works
 even when no execution bundle exists. UUID inputs may be UUID objects or strings.
@@ -162,3 +162,19 @@ run/resume behavior, terminal checks and evidence remain authoritative. Restart
 stops stale RUNNING requests without rerunning them; queued work can recover.
 No retry, Task transition or source reconciliation belongs to this job surface.
 [Execution jobs](EXECUTION_JOBS.md) documents the full contract.
+
+## Task 22 derived reconciliation
+
+`assess_task_reconciliation(task_id, project_id=None)` reads a detached durable
+snapshot and then uses the trusted resolver, read-only workspace guard and
+bounded recorded applied-hash verification outside the transaction. It returns
+ReconciliationAssessmentView without state changes, anchor adoption, evidence
+writes, provider calls, subprocesses or source mutation. Unlike ordinary evidence
+queries, it requires the configured trusted bundle for workspace safety.
+
+Run, valid Resume and async submission share the assessment guard before effects
+or enqueue. MANUAL_ACTION_REQUIRED/INCONSISTENT return
+TASK_RECONCILIATION_REQUIRED. Invalid Resume retains its existing validation codes
+before reconciliation; no invalid command can transition. Active-job errors retain
+their existing priority. No retry/routing/evidence repair moves into application.
+See [Reconciliation](RECONCILIATION.md) for flags, bounds and operator playbooks.
