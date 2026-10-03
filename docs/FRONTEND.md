@@ -1,4 +1,22 @@
-# Frontend operator dashboard (Tasks 14–22)
+# Frontend operator dashboard (Tasks 14–24)
+
+## Operations monitoring (Task 24)
+
+Primary navigation now includes /operations: global text summary cards, bounded
+Task/Project tables and safe recent activity with existing detail links. TaskState
+and job lifecycle are separate; SUCCEEDED is never shown as Task DONE. DB-only
+reconciliation attention is triage, never a full CLEAR assessment or permission
+to execute. Task Detail adds only Back to Operations; lazy evidence is preserved.
+
+Project/Task-state/attention-only/active-only filters live in URL queries; invalid
+values show resettable errors. Four GETs form one serialized cycle, waiting seven
+seconds after settlement while visible. Partial failures still await all requests;
+no overlap, stale-filter publication, hidden scheduling or polling after navigation.
+Task 23 login recovery stops expired reads without replaying writes. Manual Refresh,
+discreet last-updated, text statuses, labelled filters, table captions and contained
+keyboard-accessible horizontal scrolling support narrow layouts. Selected Project
+runtime readiness is fetched once separately, never per-row or on every cycle.
+[Full behavior and limits](OBSERVABILITY.md). No dependency or auth change.
 
 For first-time operation, start with [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md). Earlier task-specific startup/scope statements

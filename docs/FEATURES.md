@@ -6,6 +6,16 @@ execution requests with a single host worker. Task 21 adds async browser Run,
 active-job recovery, polling and lightweight recent execution history.
 Task 22 adds derived read-only crash safety assessment and guarded continuation.
 Task 23 adds optional persistent hosted synthetic demo and single-operator sessions.
+Task 24 adds bounded read-only operational summaries and an Operations dashboard.
+
+Operational views summarize persisted truth and derived safety signals. They do
+not control workflow progression. DB-only reconciliation attention is triage,
+not CLEAR or execution authorization. Global cards and bounded Task/Project/activity
+collections use existing records without a new table, migration or dependency.
+The /operations route offers URL filters, GET-only serialized seven-second refresh,
+detail drill-down and separate selected-Project host readiness. Task state, job
+lifecycle, lazy evidence and public fake-only access remain unchanged.
+[Operational contracts and limits](OBSERVABILITY.md).
 [Product Guide](PRODUCT_GUIDE.md) provides interpretation/walkthrough;
 [PRD](PRD.md) explains boundaries. Backend ownership below identifies existing
 layers, not new endpoints or services.

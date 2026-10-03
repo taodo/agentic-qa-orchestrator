@@ -1,6 +1,6 @@
 # QA Sentinel product guide
 
-For technical Operators using implemented Tasks 1–23. Start with the
+For technical Operators using implemented Tasks 1–24. Start with the
 [demo walkthrough](#demo-mode); use the evidence sections as a reference.
 [PRD](PRD.md) explains intent; [Features](FEATURES.md) summarizes ownership/limits.
 
@@ -11,6 +11,23 @@ workflow gates to execute and inspect software QA work. It connects a requiremen
 to research, a plan, implementation evidence, tests and independent review.
 It records why work moved or stopped, rather than treating one model answer or
 passing test as sufficient proof.
+
+## Operations dashboard
+
+Choose Operations to see global running/queued jobs, blocked Tasks, terminal
+counts and recent failed/stopped requests. Filter by Project, Task state, Attention
+only or Active only; the URL preserves the selection. Open Task links to inspect
+the existing execution, reconciliation and evidence panels. Inspect runtime selects
+one Project and shows this host's safe readiness separately.
+
+Operational views summarize persisted truth and derived safety signals. They do
+not control workflow progression. Job SUCCEEDED does not mean Task DONE. A DB-only
+reconciliation signal can be active unfinished work; no signal does not prove CLEAR.
+Use Task Detail for the full assessment before explicit continuation. Lists show
+up to 50 rows and honest truncation; GET-only refresh runs every seven seconds while
+visible, with manual Refresh and last-updated text. Public demo activity remains
+deterministic synthetic evidence, never real AI/testing.
+[Detailed meanings and limits](OBSERVABILITY.md).
 
 ## When should I use it?
 

@@ -1,5 +1,12 @@
 # Local full-stack host (Task 16)
 
+Task 24 adds the exact /operations SPA route and protected GET operational APIs.
+No runtime composition, worker, session, cookie, CSRF or public exemption changes.
+Preview/hosted remain deterministic synthetic fake-only; local real remains
+loopback-only trusted workspace execution. Selected-Project runtime readiness
+uses the existing separate host route rather than persistence/API v1 fields.
+[Operational polling/access limits](OBSERVABILITY.md).
+
 The supported host is one same-origin ASGI app: host → API → application → core.
 Host code lives in `qa_sentinel.host`; no core/application/API module imports it.
 Imports create no app, engine, database, workspace or listening server. Explicit

@@ -21,6 +21,10 @@ from .models import (
     ArtifactView, InvocationView, TestRunView, ErrorView, DecisionView, GateEvaluationView,
     ExecutionJobView,
 )
+from .operations import (
+    OperationalAttention, OperationalSummaryView, ProjectOperationalSummaryView,
+    TaskOperationalSummaryView, OperationalActivityView,
+)
 
 
 def identifier(value):
@@ -129,6 +133,50 @@ class QASentinelApplication:
         limit = list_limit(limit)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             return page(uow.reads.projects(limit), limit, ProjectView)
+
+    def get_operational_summary(self) -> OperationalSummaryView:
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            return OperationalSummaryView.model_validate(uow.operations.summary())
+
+    @staticmethod
+    def _operational_page(rows, limit, view):
+        items = tuple(view.model_validate(row) for row in rows[:limit])
+        return CollectionPage[view](items=items, total_returned=len(items), truncated=len(rows) > limit)
+
+    def list_project_operational_summaries(self, *, limit=50) -> CollectionPage[ProjectOperationalSummaryView]:
+        limit = list_limit(limit, 100)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            return self._operational_page(uow.operations.projects(limit), limit, ProjectOperationalSummaryView)
+
+    def list_task_operational_summaries(self, *, project_id=None, task_state=None,
+            execution_status=None, attention=None, reconciliation_attention=None,
+            active_only=False, attention_only=False, limit=50) -> CollectionPage[TaskOperationalSummaryView]:
+        limit = list_limit(limit, 100)
+        project_id = None if project_id is None else identifier(project_id)
+        try:
+            task_state = None if task_state is None else TaskState(task_state)
+            execution_status = None if execution_status is None else JobStatus(execution_status)
+            attention = None if attention is None else OperationalAttention(attention)
+            if any(type(v) is not bool for v in (active_only, attention_only)) or (
+                    reconciliation_attention is not None and type(reconciliation_attention) is not bool):
+                raise ValueError
+        except (TypeError, ValueError):
+            raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            if project_id is not None:
+                self._project(uow, project_id)
+            rows = uow.operations.tasks(limit, project_id=project_id, task_state=task_state,
+                execution_status=execution_status, attention=attention,
+                reconciliation_attention=reconciliation_attention, active_only=active_only, attention_only=attention_only)
+            return self._operational_page(rows, limit, TaskOperationalSummaryView)
+
+    def list_operational_activity(self, *, project_id=None, limit=50) -> CollectionPage[OperationalActivityView]:
+        limit = list_limit(limit, 100)
+        project_id = None if project_id is None else identifier(project_id)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            if project_id is not None:
+                self._project(uow, project_id)
+            return self._operational_page(uow.operations.activity(limit, project_id), limit, OperationalActivityView)
 
     def create_task(self, *, project_id, title, requirement) -> TaskSummary:
         try:
