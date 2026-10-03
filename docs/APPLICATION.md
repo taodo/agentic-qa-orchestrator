@@ -18,6 +18,13 @@ CLI, Backend API and Web callers. Hosts configure dependencies explicitly;
 callers receive frozen, extra-forbidden DTOs. Application code depends on domain,
 persistence and orchestration. Core code never depends on application contracts.
 
+Task 25's trusted local target-check/target-test commands are host/operator
+preflight, outside Task commands and the application workflow facade. They use
+read-only existing Project lookup and the accepted command policy/runner directly,
+creating no Task/TestRun/Event/ExecutionJob or workflow transition. Proving exposes
+no HTTP API or frontend action and changes no application business contract.
+[Real target boundary](REAL_TARGETS.md).
+
 ## Composition and execution
 
 Construct the facade with an existing `create_session_factory` and a

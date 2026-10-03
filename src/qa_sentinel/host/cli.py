@@ -8,8 +8,15 @@ from .config import HostConfig, HostError, load_local_config
 from .web import create_host_app
 
 
-def parser():
-    value = argparse.ArgumentParser(prog="qa-sentinel", description="Local host or explicitly protected demo preview.")
+class TargetArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        # No invalid argv/value or raw argparse diagnostic reaches proving output.
+        self.exit(2, "Target status: TARGET_NOT_READY\nSafe error: TARGET_ARGUMENTS_INVALID\n")
+
+
+def parser(*, target_errors=False):
+    kind = TargetArgumentParser if target_errors else argparse.ArgumentParser
+    value = kind(prog="qa-sentinel", description="Local host or explicitly protected demo preview.")
     commands = value.add_subparsers(dest="command", required=True)
     serve = commands.add_parser("serve", help="Serve locally or as an explicitly protected demo preview",
         description="Local modes are loopback-only; preview-demo requires environment Basic credentials.")
@@ -32,6 +39,7 @@ def parser():
     init.add_argument("--project-key", required=True)
     init.add_argument("--workspace", type=Path, required=True)
     init.add_argument("--pytest-target", action="append", required=True)
+    init.add_argument("--test-cwd", default=".", help="Relative test directory inside the full workspace root (default: .)")
     init.add_argument("--config", type=Path, required=True)
     init.add_argument("--host", choices=("127.0.0.1", "::1"), default="127.0.0.1")
     init.add_argument("--port", type=int, default=8000)
@@ -42,6 +50,17 @@ def parser():
     reconcile = setup.add_parser("reconcile", help="Read-only crash safety; no provider, pytest, source writes or evidence repair")
     reconcile.add_argument("--config", type=Path, required=True)
     reconcile.add_argument("--task", type=UUID, required=True)
+    for name in ("target-check", "target-test"):
+        target = setup.add_parser(name, help="Check an external real target without execution" if name == "target-check" else "Run one approved local pytest proving execution; no workflow",
+            description="Trusted local-real CLI only. Requires an existing Project and external repository; no API key needed.")
+        target.add_argument("--database", type=Path, required=True)
+        owner = target.add_mutually_exclusive_group(required=True)
+        owner.add_argument("--project-key")
+        owner.add_argument("--project-id", type=UUID)
+        target.add_argument("--workspace", type=Path, required=True)
+        target.add_argument("--test-cwd", default=".")
+        target.add_argument("--pytest-target", action="append", required=True)
+        target.add_argument("--timeout-seconds", type=float, default=120)
     return value
 
 
@@ -70,9 +89,13 @@ def configuration(args) -> HostConfig:
 
 
 def main(argv=None):
-    command_parser = parser()
-    args = command_parser.parse_args(argv)
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    command_parser = parser(target_errors=arguments[:2] in (["local", "target-check"], ["local", "target-test"]))
+    args = command_parser.parse_args(arguments)
     if args.command == "local":
+        if args.local_command in {"target-check", "target-test"}:
+            from .targets import target_command
+            return target_command(args)
         if args.local_command == "reconcile":
             from .reconciliation import reconcile_command
             return reconcile_command(args)

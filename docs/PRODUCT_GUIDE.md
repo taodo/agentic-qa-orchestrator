@@ -281,6 +281,13 @@ model-owned file tools are unsupported. [Mutation](MUTATION.md), [Execution](EXE
 
 ## Real Project onboarding
 
+Before the first controlled repair on an external trusted target, use the local
+CLI's target-check and explicit target-test proving commands. They require an
+existing Project, support a backend test cwd under the full repository root,
+and need no model key. Their ephemeral result does not appear in Task Test Runs,
+does not run agents or change workflow state, and authorizes no mutation.
+[Windows operator walkthrough and trust limits](REAL_TARGETS.md).
+
 Creating a Project stores logical identity; it does not provision a workspace.
 In a local demo session using your intended database, create/select the Project
 and stop the host. Run `qa-sentinel local init` with its key, the database and

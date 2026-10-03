@@ -12,7 +12,9 @@ Task 20 adds backend durable execution jobs and shared single-host admission wit
 additive migration 0003. Task 21 adds async browser Run, persisted active-job recovery
 and bounded polling; job lifecycle never replaces Task state/evidence. Task 22
 adds derived crash assessment; Task 23 adds optional persistent hosted fake-only
-demo with single-operator sessions. Read
+demo with single-operator sessions. Task 24 adds read-only operational visibility;
+Task 25 adds local-real CLI proving for external targets with backend test cwd.
+Neither introduces workflow truth or public real execution. Read
 [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md) first. Entries below describe historical task
 checkpoints; their then-unimplemented scope is not a current capability inventory.
@@ -439,4 +441,25 @@ lazy evidence and synchronous Resume. Host readiness remains a separate selected
 Project read. Preview/hosted remain synthetic fake-only, local real loopback-only.
 No new dependency, migration, table, auth or core behavior change.
 [Observability](OBSERVABILITY.md) documents snapshot semantics and limits.
-Wait for ChatGPT review and user approval before Task 25; Task 25 is not implemented.
+This checkpoint is the accepted base for Task 25.
+
+## Task 25 — Real target integration and proving
+
+Frozen extra-forbidden TargetProfile connects an existing Project to an explicit
+external full-repository workspace, relative test cwd and bounded pytest targets.
+CLI-only target-check performs read-only Project lookup and bounded metadata/
+policy validation with zero subprocesses, source-content reads or source writes.
+target-test delegates one explicit pytest execution to the accepted Task 6 runner
+and projects a safe ephemeral result. No agent/provider/mutation service/workflow
+transition, Task/TestRun/Event/ExecutionJob, migration or dependency is added.
+
+Backend cwd support preserves full-root read/mutation/binding identity and adds
+the canonical cwd to controlled pytest imports. Root-only defaults and workflow
+TestExecutionService remain compatible. Host overlap, Windows drive/UNC/ADS,
+traversal and link escapes fail closed; output omits paths/raw logs/secrets.
+Demo/public modes remain fake-only with unchanged access. No HTTP/frontend trigger.
+Trusted pytest is executable content, not a sandbox; exclusive access and an
+independently verified clean baseline remain operator requirements.
+[Real targets](REAL_TARGETS.md) documents StayFinder's clean reference and exact
+Windows examples without hard-coded product paths or automated target provisioning.
+No controlled defect, repair demonstration, browser testing or Task 26 is included.

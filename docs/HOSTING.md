@@ -92,6 +92,12 @@ slashes. `database`/`frontend_dist` are relative to the JSON file when relative;
 workspace roots must be absolute existing directories. Optional `host`/`port`
 retain the same loopback defaults. Only mode `local` is allowed in a config file.
 
+Each Project may also specify `"test_cwd": "backend"` (default `"."`). Targets
+resolve beneath that canonical relative cwd, while workspace_root stays the full
+repository root for binding, read/mutation services and pytest rootdir/confcutdir.
+local init accepts the matching `--test-cwd backend` flag; default generated JSON
+remains compatible. This is host configuration, never HTTP/model-selected cwd.
+
 ```shell
 qa-sentinel serve --config qa-sentinel.local.json
 ```
@@ -239,7 +245,8 @@ Canonical flow (replace each absolute path with an explicitly selected path):
 
 `local init --help` and `local validate --help` list the narrow argparse flags.
 Init writes one Project binding, with deterministic UTF-8 JSON and only database,
-frontend_dist, projects (key/workspace_root/pytest_targets), loopback host and port.
+frontend_dist, projects (key/workspace_root/pytest_targets and optional nondefault
+test_cwd), loopback host and port.
 It can succeed without a model key; it performs the same inert prerequisites as
 validate before publishing configuration. No arbitrary command, executable,
 environment, provider object, credential or secret field is supported.
@@ -330,6 +337,16 @@ without retry. Fixed host codes are HOST_EXECUTION_WORKER_START_FAILED,
 HOST_EXECUTION_WORKER_INVALID_STATE and HOST_EXECUTION_PERSISTENCE_UNCERTAIN.
 No cancellation, external broker, multi-host lease or exactly-once guarantee is
 added. [Execution jobs](EXECUTION_JOBS.md).
+
+## Real target proving
+
+For a new external target, local target-check and target-test provide a separate
+CLI-only proving boundary. They require an existing Project but no OPENAI_API_KEY
+or frontend build. Check runs zero subprocesses; test uses only accepted pytest
+and returns safe transient counts with no workflow/evidence/database writes.
+These operations are not Run/Resume/reconciliation and authorize no mutation.
+Public hosts expose no proving endpoint and remain fake-only.
+[Exact Windows walkthrough](REAL_TARGETS.md#windows-operator-walkthrough--example-only).
 
 ## Local crash inspection
 

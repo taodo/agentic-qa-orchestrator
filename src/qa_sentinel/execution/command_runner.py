@@ -113,11 +113,15 @@ class CommandRunner:
                 config_file, report = scratch / "pytest.ini", scratch / "report.xml"
                 config_file.write_text("[pytest]\n", encoding="utf-8")
                 targets = request.args[2:] or (".",)
+                # The full repository remains rootdir/confcutdir/ownership. Only
+                # validated in-root import locations are added after pytest loads.
+                import_roots = dict.fromkeys((self.config.workspace_root, self.policy.cwd(request)))
+                pythonpath = " ".join(shlex.quote(path.as_posix()) for path in import_roots)
                 argv = [str(self.config.python_executable), "-P", "-s", "-m", "pytest", *targets,
                     "-c", str(config_file), "--rootdir", str(self.config.workspace_root),
                     "--confcutdir", str(self.config.workspace_root), "--basetemp", str(scratch / "temp"),
                     "--junitxml", str(report), "-p", "no:cacheprovider", "-o", "addopts=",
-                    "-o", "pythonpath=" + shlex.quote(self.config.workspace_root.as_posix()),
+                    "-o", "pythonpath=" + pythonpath,
                     "-o", "junit_logging=no", "-o", "junit_log_passing_tests=false"]
                 return self._execute(request, started, clock, scratch, report, argv)
         except OSError:
