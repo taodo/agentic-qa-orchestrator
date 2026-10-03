@@ -331,8 +331,9 @@ preserve IMPLEMENTING, TESTING or ANALYZING.
 Resolve the blocker with the trusted host owner before Resume, then Run separately.
 For unresolved STARTED calls/tests/writes, inspect durable reservations and actual
 workspace facts through the documented recovery process. Resume is not reconciliation;
-repeated Run is not a safe repair mechanism. There is no automatic reconciliation
-UI/API. [Safe stops](RUNTIME.md#run-loop-limits-and-safe-stops).
+repeated Run is not a safe repair mechanism. Recovery / Reconciliation now shows
+derived safety guidance with an explicit Refresh; it offers no automatic resolution
+or unsafe override. [Recovery playbooks](RECONCILIATION.md#operator-playbooks).
 
 ## Common mistakes
 
@@ -356,3 +357,20 @@ state is ephemeral and Basic is a temporary shared gate, not product users/RBAC.
 Local execution trusts prepared source/tests and local access; it is not an OS
 sandbox or cloud workspace. No remote clone, arbitrary shell, human approval UI,
 source editor or hidden reasoning viewer. [PRD](PRD.md#risks-and-limitations).
+
+## Crash recovery guidance
+
+Task Detail's Recovery / Reconciliation panel is separate from Task state and
+ExecutionJob status. Clear means no unresolved evidence was found; Recoverable
+means existing durable reuse/queue rules apply. Manual action required and
+Inconsistent stop Run/Resume. Refresh rereads facts and does not clear uncertainty.
+For real local work, the owner can use `local reconcile --config ... --task <UUID>`
+without an API key, model call, pytest process or source write.
+
+An interrupted job alone does not prove safe continuation: inspect pending
+Invocation/provider, mutation, TestRun and workspace evidence independently.
+Do not replay lost provider responses, rerun uncertain tests, reapply/restore
+uncertain mutations or fabricate completion. Inspection does not itself resolve
+blocking evidence, and no exactly-once guarantee is provided. Preview remains
+deterministic synthetic demo; real mode remains trusted local workspace execution.
+[Detailed assessment and operator playbooks](RECONCILIATION.md).

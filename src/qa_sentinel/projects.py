@@ -86,6 +86,34 @@ class ProjectWorkspaceGuard:
         # Service-specific configuration drift remains enforced by Tasks 9/10.
         return binding.workspace_identity
 
+    def verify_evidence(self, task, events, *, identity):
+        """Shared read-only anchor/legacy checks; never adopt or persist an anchor."""
+        anchors = [e for e in events if e.event_type == "PROJECT_WORKSPACE_BOUND"]
+        if anchors:
+            if len(anchors) != 1 or anchors[0].payload != {"workspace_identity": identity}:
+                raise ProjectBindingError("PROJECT_WORKSPACE_REQUIRES_RECONCILIATION")
+        elif identity is not None:
+            for event in events:
+                if event.event_type == "TEST_EXECUTION_STARTED":
+                    raise ProjectBindingError("LEGACY_TEST_WORKSPACE_REQUIRES_RECONCILIATION")
+                if event.event_type == "REPOSITORY_SESSION_STARTED" and (
+                    self.reader is None or event.payload.get("repository_config_identity") != self.reader.config.identity):
+                    raise ProjectBindingError("REPOSITORY_WORKSPACE_REQUIRES_RECONCILIATION")
+                if event.event_type in {"MUTATION_APPLIED", "MUTATION_RESERVED", "IMPLEMENTATION_SOURCE_CAPTURED"} and (
+                    self.mutation is None or event.payload.get("workspace_identity") != self.mutation.workspace_identity):
+                    raise ProjectBindingError("MUTATION_WORKSPACE_REQUIRES_RECONCILIATION")
+
+    def assess(self, task, events):
+        """No DB writes and no physical inspection for supplied-context/fake bundles."""
+        physical = self.reader is not None or self.mutation is not None or self.execution is not None or getattr(self.test_provider, "workspace_root", None) is not None
+        if physical:
+            identity = self._identity(task)
+        else:
+            if self.binding is not None and task.project_id != self.binding.project_id:
+                raise ProjectBindingError("PROJECT_BINDING_MISMATCH")
+            identity = None if self.binding is None else self.binding.workspace_identity
+        self.verify_evidence(task, events, identity=identity)
+
     def check(self, task):
         identity = self._identity(task)
         with UnitOfWork(self.factory) as uow:
@@ -95,21 +123,9 @@ class ProjectWorkspaceGuard:
             active = None if durable.current_invocation_id is None else uow.invocations.get(durable.current_invocation_id)
             if active is not None and active.task_id != task.id:
                 raise ProjectBindingError("CROSS_TASK_INVOCATION")
-            anchors = [e for e in uow.history.list_events(task.id) if e.event_type == "PROJECT_WORKSPACE_BOUND"]
-            if anchors:
-                if len(anchors) != 1 or anchors[0].payload != {"workspace_identity": identity}:
-                    raise ProjectBindingError("PROJECT_WORKSPACE_REQUIRES_RECONCILIATION")
-            elif identity is not None:
-                # Adopt legacy Task 9/10 evidence only after validating its existing root identity.
-                for event in uow.history.list_events(task.id):
-                    if event.event_type == "TEST_EXECUTION_STARTED":
-                        raise ProjectBindingError("LEGACY_TEST_WORKSPACE_REQUIRES_RECONCILIATION")
-                    if event.event_type == "REPOSITORY_SESSION_STARTED" and (
-                        self.reader is None or event.payload.get("repository_config_identity") != self.reader.config.identity):
-                        raise ProjectBindingError("REPOSITORY_WORKSPACE_REQUIRES_RECONCILIATION")
-                    if event.event_type in {"MUTATION_APPLIED", "MUTATION_RESERVED", "IMPLEMENTATION_SOURCE_CAPTURED"} and (
-                        self.mutation is None or event.payload.get("workspace_identity") != self.mutation.workspace_identity):
-                        raise ProjectBindingError("MUTATION_WORKSPACE_REQUIRES_RECONCILIATION")
+            events = uow.history.list_events(task.id)
+            self.verify_evidence(task, events, identity=identity)
+            if identity is not None and not any(e.event_type == "PROJECT_WORKSPACE_BOUND" for e in events):
                 uow.history.append_event(Event(task_id=task.id, event_type="PROJECT_WORKSPACE_BOUND",
                     actor=dict(type="ORCHESTRATOR", id="qa-sentinel"), correlation={},
                     payload=dict(workspace_identity=identity)))

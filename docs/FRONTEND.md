@@ -1,4 +1,4 @@
-# Frontend operator dashboard (Tasks 14–21)
+# Frontend operator dashboard (Tasks 14–22)
 
 For first-time operation, start with [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md). Earlier task-specific startup/scope statements
@@ -319,3 +319,19 @@ bodies. Route identity resets readiness; late responses after navigation are
 discarded by the existing read hook. No new storage, dependency or provisioning
 UI is added. Tests cover safe fields, modes, unavailable status, explicit refresh
 and stale navigation. [Setup](HOSTING.md#real-project-onboarding).
+
+## Recovery / Reconciliation (Task 22)
+
+Task Detail adds one no-store assessment read and a compact panel with Clear,
+Recoverable, Manual action required or Inconsistent. Fixed kind-based guidance
+and UUID references are allowlisted; arbitrary server summaries, paths, exceptions
+or provider fields never enter this panel. Native Refresh reconciliation rereads
+only the assessment, with no POST, auto-fix, wizard, polling or storage.
+
+Run/Resume wait for a valid assessment and respect its separate advisory safety
+flags. Unavailable/unknown assessment keeps controls disabled until explicit
+refresh; backend entry-point checks remain authoritative. Existing latest-read
+and keyed Task routing discard late responses on navigation/unmount. Job terminal
+and synchronous-action evidence refresh also reread reconciliation without opening
+lazy evidence sections. Job status never changes TaskState. Preview remains
+synthetic fake-only and Basic-protected. [Meaning and limits](RECONCILIATION.md).

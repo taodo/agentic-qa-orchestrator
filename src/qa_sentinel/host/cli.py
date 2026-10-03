@@ -3,6 +3,7 @@ import argparse
 from pathlib import Path
 import sys
 import tempfile
+from uuid import UUID
 from .config import HostConfig, HostError, load_local_config
 from .web import create_host_app
 
@@ -37,6 +38,9 @@ def parser():
     init.add_argument("--create-parent", action="store_true", help="Explicitly create the selected safe config parent")
     validate = setup.add_parser("validate", help="Read-only readiness; no server, provider, pytest or source writes")
     validate.add_argument("--config", type=Path, required=True)
+    reconcile = setup.add_parser("reconcile", help="Read-only crash safety; no provider, pytest, source writes or evidence repair")
+    reconcile.add_argument("--config", type=Path, required=True)
+    reconcile.add_argument("--task", type=UUID, required=True)
     return value
 
 
@@ -57,6 +61,9 @@ def main(argv=None):
     command_parser = parser()
     args = command_parser.parse_args(argv)
     if args.command == "local":
+        if args.local_command == "reconcile":
+            from .reconciliation import reconcile_command
+            return reconcile_command(args)
         from .onboarding import local_command
         return local_command(args)
     if args.host == "0.0.0.0" and not args.preview_demo:

@@ -164,3 +164,16 @@ depends on persisted host state; ephemeral preview loss is not browser recovery.
 No localStorage, global queue state, cancellation or job retry is introduced.
 Preview is still synthetic fake-only; readiness is informative, not authorization.
 [Frontend details](FRONTEND.md#execution-recovery-and-polling-task-21).
+
+## Task 22 independent core safety
+
+STOPPED/EXECUTION_INTERRUPTED contributes informational recovery guidance; it
+does not resolve pending provider/agent/mutation/test evidence. The derived
+assessment checks core records independently. New async requests are rejected
+before queue insertion when unsafe, with TASK_RECONCILIATION_REQUIRED (409).
+Recovered QUEUED requests are still claimed durably; the worker's application
+Run rechecks before core work. Unsafe claimed requests use the existing generic
+FAILED/EXECUTION_FAILED mapping, without retries or Task-state changes. Active
+duplicate requests retain TASK_EXECUTION_ALREADY_ACTIVE. No job lifecycle edge,
+retry, cancellation or exactly-once claim is added.
+[Reconciliation](RECONCILIATION.md).

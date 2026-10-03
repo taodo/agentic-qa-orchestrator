@@ -60,10 +60,11 @@ requires no screenshot assets.
 | --- | --- |
 | Project | Logical software identity; creation does not configure a workspace/runtime |
 | Task | One QA requirement owned by exactly one Project |
-| Run | Synchronous execution request until completion or a safe stop |
+| Run | Browser creates a durable job; API /run and terminal checks remain synchronous |
 | Resume | Restores a BLOCKED Task's stored state; Run is separate |
 | Evidence | Distinct Artifacts, Invocations, Test Runs, Errors, Decisions, Gates and Events |
 | Workflow state | Persisted current Task snapshot, not an agent opinion |
+| Reconciliation | Derived crash safety assessment; unresolved evidence blocks continuation |
 
 ## Local demo
 
@@ -130,6 +131,7 @@ authoritative. No automatic repository/test discovery or Project creation occurs
 | [Frontend](docs/FRONTEND.md) — UI and development | [Projects](docs/PROJECTS.md), [Database](docs/DATABASE.md), [Execution jobs](docs/EXECUTION_JOBS.md) |
 | [Hosting](docs/HOSTING.md) — local configuration | [Models](docs/MODELS.md), [Execution](docs/EXECUTION.md) |
 | [Deployment](docs/DEPLOYMENT.md) — protected Render demo | [Mutation](docs/MUTATION.md), [Repository evidence](docs/REPOSITORY_TOOLS.md) |
+| [Reconciliation](docs/RECONCILIATION.md) — read-only assessment and operator playbooks | [Execution jobs](docs/EXECUTION_JOBS.md) |
 | [Phase 1](docs/PHASE_1.md) — status and historical checkpoints | [Reliability](docs/RELIABILITY.md), [Agent contracts](docs/AGENT_SPEC_v0.1.md) |
 
 ## Current limitations

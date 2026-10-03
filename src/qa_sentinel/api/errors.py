@@ -17,6 +17,7 @@ ERROR_MAPPING = {
     Code.TASK_RESUME_STATE_MISSING: (409, "Task has no resume state"),
     Code.TASK_RESUME_STATE_INVALID: (409, "Task resume state is invalid"),
     Code.RUNTIME_STOPPED: (409, "Task execution stopped; inspect persisted evidence"),
+    Code.TASK_RECONCILIATION_REQUIRED: (409, "Task reconciliation is required; inspect the assessment before continuing"),
     Code.EXECUTION_JOB_NOT_FOUND: (404, "Execution job not found"),
     Code.TASK_EXECUTION_ALREADY_ACTIVE: (409, "Task execution is already active"),
     Code.TASK_EXECUTION_TERMINAL: (409, "Task is terminal; use synchronous Run for the existing terminal check"),

@@ -3,6 +3,7 @@ from .errors import ApplicationError, ApplicationErrorCode
 from .runtime import ProjectExecutionBundle, ProjectExecutionResolver
 from .service import QASentinelApplication
 from .models import ExecutionJobView
+from .reconciliation import ReconciliationAssessmentView, ReconciliationIssueView, ReconciliationStatus, ReconciliationIssueKind
 from .models import (
     ProjectView, TaskSummary, TaskDetail, CollectionPage, TimelineEntry, InvocationView,
     ArtifactView, TestRunView, ErrorView, DecisionView, GateEvaluationView,
@@ -13,4 +14,5 @@ __all__ = [
     "ProjectExecutionResolver", "ProjectView", "TaskSummary", "TaskDetail", "CollectionPage",
     "TimelineEntry", "InvocationView", "ArtifactView", "TestRunView", "ErrorView", "DecisionView",
     "GateEvaluationView",
+    "ReconciliationAssessmentView", "ReconciliationIssueView", "ReconciliationStatus", "ReconciliationIssueKind",
 ]

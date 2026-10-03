@@ -44,6 +44,7 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/projects/{project_id}/tasks | list_tasks_for_project → CollectionPage[TaskSummary] |
 | POST /api/v1/projects/{project_id}/tasks | create_task → TaskSummary (201) |
 | GET /api/v1/tasks/{task_id} | get_task_detail → TaskDetail |
+| GET /api/v1/tasks/{task_id}/reconciliation | assess_task_reconciliation → ReconciliationAssessmentView |
 | POST /api/v1/tasks/{task_id}/run | run_task → TaskDetail |
 | POST /api/v1/tasks/{task_id}/resume | resume_task → TaskDetail |
 | POST /api/v1/tasks/{task_id}/executions | request_task_execution → ExecutionJobView (202) |
@@ -109,7 +110,7 @@ Messages are fixed and generic, selected by code rather than exception text.
 | Status | ApplicationErrorCode |
 | --- | --- |
 | 404 | PROJECT_NOT_FOUND, TASK_NOT_FOUND |
-| 409 | PROJECT_KEY_EXISTS, PROJECT_TASK_MISMATCH, PROJECT_RUNTIME_NOT_CONFIGURED, PROJECT_RUNTIME_MISMATCH, TASK_NOT_BLOCKED, TASK_RESUME_STATE_MISSING, TASK_RESUME_STATE_INVALID, RUNTIME_STOPPED |
+| 409 | PROJECT_KEY_EXISTS, PROJECT_TASK_MISMATCH, PROJECT_RUNTIME_NOT_CONFIGURED, PROJECT_RUNTIME_MISMATCH, TASK_NOT_BLOCKED, TASK_RESUME_STATE_MISSING, TASK_RESUME_STATE_INVALID, RUNTIME_STOPPED, TASK_RECONCILIATION_REQUIRED |
 | 422 | INVALID_INPUT, INVALID_LIST_LIMIT |
 | 500 | PERSISTENCE_ERROR |
 
@@ -164,6 +165,18 @@ The dedicated React/Vite workspace consumes these unchanged API contracts via
 same-origin `/api/v1` requests and a configurable development proxy. Backend
 startup remains explicit; no wildcard CORS or unsafe runtime defaults were added.
 See [FRONTEND.md](FRONTEND.md) for operator screens and development commands.
+
+## Task 22 reconciliation read
+
+GET `/api/v1/tasks/{task_id}/reconciliation` is read-only and returns task_id,
+status (CLEAR/RECOVERABLE/MANUAL_ACTION_REQUIRED/INCONSISTENT), safe_to_run,
+safe_to_resume and bounded fixed-guidance issues with UUID references. No paths,
+source, raw exceptions, provider data, credentials or command output is returned.
+Unknown Tasks retain 404. Run, valid Resume and async submission reject unresolved
+assessment with TASK_RECONCILIATION_REQUIRED (409) before effects/queue insertion.
+No resolution endpoint or client override exists. Existing Task/API contracts,
+synchronous Resume, active-job recovery and preview authentication remain intact.
+[Assessment and safety flags](RECONCILIATION.md).
 
 ## Task 16 local host
 

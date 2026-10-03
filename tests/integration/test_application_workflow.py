@@ -193,14 +193,13 @@ def test_wrong_host_service_preserves_guard_stop_and_zero_side_effects(migrated_
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     with pytest.raises(ApplicationError) as caught:
         app.run_task(a.task.id)
-    assert caught.value.code == "RUNTIME_STOPPED"
+    assert caught.value.code == "TASK_RECONCILIATION_REQUIRED"
     assert app.get_task(a.task.id).state == S.CREATED
     assert not mock.calls and not app.get_task_invocations(a.task.id).items
     assert not app.get_task_artifacts(a.task.id).items
     errors = app.get_task_errors(a.task.id)
-    assert errors.total_returned == 1 and errors.items[0].error_type.value == "WORKFLOW_ERROR"
-    assert errors.items[0].code == {"reader": "REPOSITORY_WORKSPACE_MISMATCH",
-        "mutation": "MUTATION_WORKSPACE_MISMATCH", "provider": "TEST_WORKSPACE_MISMATCH"}[component]
+    assert errors.total_returned == 0  # Derived assessment does not append recovery evidence.
+    assert app.assess_task_reconciliation(a.task.id).status == "MANUAL_ACTION_REQUIRED"
     assert not app.get_task_timeline(b.task.id).items
 
 

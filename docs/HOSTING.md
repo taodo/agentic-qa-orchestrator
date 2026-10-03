@@ -323,3 +323,19 @@ without retry. Fixed host codes are HOST_EXECUTION_WORKER_START_FAILED,
 HOST_EXECUTION_WORKER_INVALID_STATE and HOST_EXECUTION_PERSISTENCE_UNCERTAIN.
 No cancellation, external broker, multi-host lease or exactly-once guarantee is
 added. [Execution jobs](EXECUTION_JOBS.md).
+
+## Local crash inspection
+
+`qa-sentinel local reconcile --config qa-sentinel.local.json --task <UUID>`
+opens the existing accepted-schema SQLite database read-only and inspects durable
+Task evidence plus trusted identity/recorded applied hashes. It constructs no SDK,
+test runner or worker, requires no API key, does not scan pytest targets and
+performs no provider/subprocess/source mutation or evidence writes. Fixed summaries
+and UUID references omit paths/secrets; unsafe/unavailable assessment exits 1.
+
+Use exclusive trusted access when diagnosing real local work. Normal host startup
+still stops old RUNNING jobs and recovers queued requests, but application Run
+rechecks reconciliation before executing them. Public preview retains only fake
+runtime and metadata assessment, unchanged Basic protection and exact GET /health
+exemption. Real local bind remains loopback-only. No migration or dependency is
+added. [Read-only command and operator playbooks](RECONCILIATION.md).

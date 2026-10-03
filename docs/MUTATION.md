@@ -177,7 +177,7 @@ records fixed workflow-error evidence when possible. IMPLEMENTING has no BLOCKED
 edge: its snapshot remains IMPLEMENTING and RunnerStoppedError exposes the stop.
 Forbidden terminal requests may use the existing FAILED edge. No graph is changed.
 
-There is no automatic reconciliation API or distributed filesystem/DB transaction.
+There is no automatic resolution API or distributed filesystem/DB transaction.
 A developer must inspect the invocation, reserved proposal, source manifest and
 actual target hashes, then deliberately resolve workspace and workflow evidence
 before resuming. Blindly clearing STARTED is unsafe. Process death may lose original
@@ -214,3 +214,14 @@ tools and literal command-like metadata. Task 6 deliberately does not classify l
 into failure fingerprints; the circuit test supplies a trusted explicit identity
 through its existing provider capability. Task 10 adds separate read-only Researcher/
 Planner evidence; Implementer snapshots remain unchanged. Task 11 adds Project binding.
+
+## Task 22 read-only assessment
+
+The application now detects reservations without canonical completion, explicit
+reconciliation markers, failed rollback and applied hash/root drift before new
+Run/Resume/enqueue. It reuses MutationService.verify_applied for bounded explicit
+recorded files, after closing the read transaction. Later durable implementation
+facts supersede earlier hashes for the same path; no proposal text proves writes.
+Assessment never captures new source snapshots, applies, restores, deletes,
+clears STARTED or fabricates completion. Preview has no mutation service or real
+filesystem assessment. [Operator playbook](RECONCILIATION.md#operator-playbooks).

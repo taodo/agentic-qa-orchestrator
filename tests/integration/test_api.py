@@ -102,6 +102,7 @@ def test_health_openapi_and_no_unversioned_domain_routes(api):
     expected |= {"/api/v1/tasks/{task_id}/" + suffix for suffix in
                  ("timeline", "artifacts", "test-runs", "errors", "decisions", "gates", "invocations")}
     expected |= {"/api/v1/tasks/{task_id}/executions", "/api/v1/executions/{execution_id}"}
+    expected.add("/api/v1/tasks/{task_id}/reconciliation")
     assert set(schema["paths"]) == expected | {"/health"}
     assert schema["paths"]["/api/v1/projects"]["post"]["responses"]["201"]
     error_schema = schema["paths"]["/api/v1/projects"]["get"]["responses"]["422"]["content"]["application/json"]["schema"]
@@ -373,10 +374,11 @@ def test_http_wrong_workspace_service_stops_before_calls(api, tmp_path, mock_ope
         monkeypatch.setattr(h.mutation, "apply", forbidden)
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     response = client.post(f"/api/v1/tasks/{a.task.id}/run")
-    error(response, 409, "RUNTIME_STOPPED")
+    error(response, 409, "TASK_RECONCILIATION_REQUIRED")
     assert not mock.calls
     assert client.get(f"/api/v1/tasks/{a.task.id}").json()["state"] == "CREATED"
-    assert client.get(f"/api/v1/tasks/{a.task.id}/errors").json()["items"][0]["error_type"] == "WORKFLOW_ERROR"
+    assert client.get(f"/api/v1/tasks/{a.task.id}/errors").json()["total_returned"] == 0
+    assert client.get(f"/api/v1/tasks/{a.task.id}/reconciliation").json()["status"] == "MANUAL_ACTION_REQUIRED"
     assert client.get(f"/api/v1/tasks/{b.task.id}/errors").json()["total_returned"] == 0
 
 

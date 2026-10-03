@@ -7,8 +7,14 @@ from qa_sentinel.application import (
 )
 from .dependencies import Application, CollectionLimit, TimelineLimit
 from .errors import ERROR_RESPONSES
+from qa_sentinel.application.reconciliation import ReconciliationAssessmentView
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"], responses=ERROR_RESPONSES)
+
+
+@router.get("/{task_id}/reconciliation", response_model=ReconciliationAssessmentView)
+def reconciliation(task_id: UUID, application: Application):
+    return application.assess_task_reconciliation(task_id)
 
 
 @router.get("/{task_id}", response_model=TaskDetail)
