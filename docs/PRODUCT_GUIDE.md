@@ -1,6 +1,6 @@
 # QA Sentinel product guide
 
-For technical Operators using implemented Tasks 1–20. Start with the
+For technical Operators using implemented Tasks 1–21. Start with the
 [demo walkthrough](#demo-mode); use the evidence sections as a reference.
 [PRD](PRD.md) explains intent; [Features](FEATURES.md) summarizes ownership/limits.
 
@@ -64,12 +64,20 @@ permission. Do not put credentials in either field.
 
 ## Run
 
-Run sends one synchronous request, waiting for completion or a safe stop. The
-backend resolves runtime from persisted Project ownership. Controls are disabled
-while pending; evidence refreshes afterward, including after errors. There is no
-queue, browser polling or hidden browser retry. After an uncertain request,
-inspect committed evidence before repeating it. One host Run/Resume is admitted
-at a time.
+Run sends one request to create a durable execution job. The backend resolves
+runtime from persisted Project ownership. The execution panel shows queued/running
+progress separately from Task state. You can leave or refresh the page and recover
+the active request from persisted history. One host workflow runs at a time;
+different Tasks may wait in the durable queue. Run/Resume are disabled while an
+active job is known, while checking history or while submitting/refreshing.
+
+Only active jobs are polled, every 1.5 seconds after the previous read settles.
+Polling stops at terminal status or navigation. A completed request refreshes Task,
+Timeline and already-opened evidence, without fetching unopened sections. There
+is no automatic creation retry. Network interruption preserves the request and
+shows recovery guidance; use **Refresh execution history** before considering
+another Run. Missing jobs stop polling and prompt recovery. Recent executions
+show at most ten requests, including fixed safe error codes and timestamps.
 
 Run does not resume BLOCKED. For DONE/FAILED, **Run (terminal check)** returns
 durable state under existing runtime/binding guards without new agent execution;
@@ -283,8 +291,9 @@ unconfigured. Public preview is not a real-workspace onboarding host.
 
 ## Execution requests and workflow truth
 
-Task 20 adds backend async requests. Browser Run remains synchronous and Resume
-stays separate; no job UI/polling is added. API callers can POST
+Task 20 adds backend async requests; Task 21 uses them for browser Run, with
+active-job recovery, bounded polling and recent history. Resume stays separate.
+API callers and browser Run POST
 `/api/v1/tasks/{task_id}/executions` for a 202 job record, then inspect that record
 and the Task through GET. One active job per Task and one active workflow globally
 are allowed in the single host process. Different Tasks can wait durably.
@@ -338,10 +347,11 @@ UI/API. [Safe stops](RUNTIME.md#run-loop-limits-and-safe-stops).
 
 ## Current limitations
 
-SQLite, synchronous Run, one host process/worker and one admitted Run/Resume at a
+SQLite, durable async browser Run, one host process/worker and one admitted workflow at a
 time. Views are bounded prefixes, evidence loads on section open and Refresh is
-explicit. Backend async requests use one durable local queue; there is no frontend
-job UX/polling, search, distributed execution or streaming. Preview
+explicit, apart from active job polling and refresh on completion. Async requests
+use one durable local queue; there is no cancellation, job retry, search,
+distributed execution or streaming. Preview
 state is ephemeral and Basic is a temporary shared gate, not product users/RBAC.
 Local execution trusts prepared source/tests and local access; it is not an OS
 sandbox or cloud workspace. No remote clone, arbitrary shell, human approval UI,

@@ -2,7 +2,8 @@
 
 Implemented Tasks 1–17; Task 18 adds static product onboarding, and Task 19 adds
 explicit trusted local setup and safe host readiness. Task 20 adds backend durable
-execution requests with a single host worker; frontend Run remains synchronous.
+execution requests with a single host worker. Task 21 adds async browser Run,
+active-job recovery, polling and lightweight recent execution history.
 [Product Guide](PRODUCT_GUIDE.md) provides interpretation/walkthrough;
 [PRD](PRD.md) explains boundaries. Backend ownership below identifies existing
 layers, not new endpoints or services.
@@ -11,7 +12,7 @@ layers, not new endpoints or services.
 | --- | --- | --- | --- | --- | --- | --- |
 | Project | Logical software identity/Task owner | Projects / Project Detail | Application Project commands/queries; persistence | Create/open | ID, immutable key, metadata, scoped Tasks | No workspace/runtime provisioning or delete UI/API |
 | Task | One Project-owned requirement | Project Detail / Task console | Application Task command/query; core Task | Create/open | Requirement, state, counters/times | Creation does not execute; owner immutable |
-| Run | Execute configured workflow | Task Execution | Application run_task → WorkflowRunner/WorkflowEngine; host admission | Run once, wait | Durable state/evidence before completion/stop | Synchronous; no queue/implicit resume; terminal check not rerun |
+| Run | Request configured workflow execution | Task Execution | Application request_task_execution → host worker → run_task → core; shared admission | Run once, inspect job then refreshed Task/evidence | Durable ExecutionJob plus separate state/evidence | No hidden POST retry/implicit resume; terminal check still synchronous, not rerun |
 | Resume | Restore BLOCKED to stored state | Task Execution when target exists | Application resume_task → WorkflowEngine | Resolve blocker; Resume, then Run | Transition, Decision, Event | No execution, budget reset, reconciliation or terminal restart |
 | State badge | Show current workflow state | Project Tasks / Task header | Backend Task snapshot | Read exact label | Canonical TaskState | Not Invocation status or quality score |
 | Overview | Inspect Task snapshot | Default Task section | Application TaskDetail query | Read / Refresh | Requirement, ownership, times, counters, resume/current Invocation, terminal reason | Snapshot alone does not explain every stop |
@@ -48,8 +49,8 @@ RUNNING commits before existing application Run, with no DB transaction spanning
 model/tool/test execution. SUCCEEDED does not mean DONE.
 
 Stale RUNNING work stops explicitly on restart; QUEUED work can recover. There is
-no exactly-once guarantee, job retry/cancellation, external broker or frontend job
-UX. Synchronous /run and separate Resume stay compatible. Preview is still
+no exactly-once guarantee, job retry/cancellation or external broker.
+Synchronous /run and separate Resume stay compatible. Preview is still
 deterministic fake-only and Basic-protected. [Full contract](EXECUTION_JOBS.md).
 
 ## Real Project onboarding
@@ -75,4 +76,20 @@ only configures Demo Calculator's fake runtime; arbitrary Projects stay unconfig
 - [Repository reads](REPOSITORY_TOOLS.md), [Mutation](MUTATION.md), [Execution](EXECUTION.md).
 
 Collections are bounded prefixes with honest truncation. No load-all, search,
-generated OpenAPI client, background queue or product auth is implied.
+generated OpenAPI client, distributed queue or product auth is implied.
+
+## Browser execution requests (Task 21)
+
+The execution panel shows one recovered/accepted request and a native disclosure
+of up to ten recent jobs. Only QUEUED/RUNNING requests poll, 1500 ms after each read
+settles, without overlap. Navigation/unmount/terminal status stops polling. Job
+status never substitutes for TaskState; SUCCEEDED does not imply DONE or tests PASS.
+Terminal detection refreshes Task/Timeline and already-opened evidence only.
+
+Duplicate creation errors recover persisted history; uncertain POSTs never retry
+creation. Network warnings retain the active identity and offer manual history
+refresh. Missing jobs stop their polling and recover history. Resume remains a
+separate synchronous transition; DONE/FAILED use the existing synchronous terminal
+check. Preview remains deterministic synthetic only and local execution retains
+trusted backend authorization. No backend change, migration or dependency is added.
+[Frontend behavior](FRONTEND.md#execution-recovery-and-polling-task-21).

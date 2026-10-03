@@ -134,9 +134,10 @@ authoritative. No automatic repository/test discovery or Project creation occurs
 
 ## Current limitations
 
-Phase 1 uses SQLite, synchronous browser Run and a single-process host admitting
-one workflow at a time. Backend async requests have a durable queue and one local
-worker; job status remains separate from Task/evidence truth. There is no distributed worker system,
+Phase 1 uses SQLite, durable async browser Run and a single-process host admitting
+one workflow at a time. The browser recovers active requests from history and
+polls only while active. The durable queue has one local worker; job status remains
+separate from Task/evidence truth. There is no distributed worker system,
 public multi-tenant SaaS, production auth/RBAC, remote clone or autonomous shell.
 Evidence views are bounded prefixes with explicit truncation and manual freshness.
 Unresolved calls, tests or writes need explicit reconciliation; Resume is not

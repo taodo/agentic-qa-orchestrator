@@ -16,6 +16,7 @@ function mocks(override?: (url: string, options: RequestInit) => Response | Prom
   return vi.mocked(fetch).mockImplementation((input, options = {}) => {
     const url = String(input), custom = override?.(url, options);
     if (custom) return Promise.resolve(custom);
+    if (url.includes('/executions?')) return Promise.resolve(response(page([])));
     if (url.includes('/timeline?')) return Promise.resolve(response(page([event('z', 'FIRST'), event('a', 'SECOND', 2)])));
     const key = url.split('/').pop()!.split('?')[0] as EvidenceKey;
     if (key in evidence) return Promise.resolve(response(page<unknown>(evidence[key])));
@@ -26,11 +27,11 @@ const count = (suffix: string) => vi.mocked(fetch).mock.calls.filter(([url]) => 
 function select(name: string) { fireEvent.click(screen.getByRole('link', { name })); }
 
 describe('Task operator console sections and evidence', () => {
-  it('defaults to Overview and reads only Task and Timeline', async () => {
+  it('defaults to Overview and reads Task, Timeline and execution history only', async () => {
     mocks(); open(); await screen.findByRole('region', { name: 'Overview' });
     expect(screen.getByRole('link', { name: 'Overview', current: 'page' })).toBeInTheDocument();
     expect(screen.getByText(task.requirement)).toBeVisible(); expect(screen.getByText('Current invocation ID')).toBeVisible();
-    expect(fetch).toHaveBeenCalledTimes(2); expect(screen.queryByRole('region', { name: 'Artifacts' })).not.toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(3); expect(screen.queryByRole('region', { name: 'Artifacts' })).not.toBeInTheDocument();
   });
   it('preserves selected section in URL, browser history and direct loads', async () => {
     mocks(); open('/tasks/task-a?view=artifacts'); await screen.findByText('artifact-z');
@@ -45,7 +46,7 @@ describe('Task operator console sections and evidence', () => {
   });
   it('falls back to Overview for an invalid view without evidence calls', async () => {
     mocks(); open('/tasks/task-a?view=invalid'); await screen.findByRole('region', { name: 'Overview' });
-    expect(screen.getByRole('link', { name: 'Overview', current: 'page' })).toBeInTheDocument(); expect(fetch).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('link', { name: 'Overview', current: 'page' })).toBeInTheDocument(); expect(fetch).toHaveBeenCalledTimes(3);
   });
   it('keeps Timeline API order and approved correlation IDs', async () => {
     mocks(url => url.includes('/timeline?') ? response(page([{ ...event('z', 'FIRST'), correlation: { invocation_id: 'inv-a', artifact_id: 'art-a', test_run_id: 'run-a', decision_id: 'dec-a' } }, event('a', 'SECOND', 2)], true)) : undefined);
@@ -72,7 +73,7 @@ describe('Task operator console sections and evidence', () => {
     mocks(url => url.includes(`/${key}?`) ? response(page([])) : undefined); open(`/tasks/task-a?view=${key}`);
     expect(await screen.findByText(`No persisted ${names[key].toLowerCase()} yet.`)).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: `Refresh ${names[key]}` }));
-    await waitFor(() => expect(count(`/${key}?`)).toBe(2)); expect(fetch).toHaveBeenCalledTimes(4);
+    await waitFor(() => expect(count(`/${key}?`)).toBe(2)); expect(fetch).toHaveBeenCalledTimes(5);
   });
   it.each(Object.keys(names) as EvidenceKey[])('%s uses public error feedback and operator-only retry', async key => {
     mocks(url => url.includes(`/${key}?`) ? response({ error: { code: 'PERSISTENCE_ERROR', message: 'Persistence operation failed' }, stack: 'secret-body' }, 500) : undefined);
@@ -131,15 +132,16 @@ describe('Run and Resume evidence refresh', () => {
     const pending = deferred<Response>(); let completed = false;
     mocks((url, options) => {
       if (options.method === 'POST') return pending.promise;
-      if (url.endsWith('/task-a')) return response({ ...task, state: mode === 'resume' && !completed ? 'BLOCKED' : 'CREATED', resume_state: mode === 'resume' && !completed ? 'RESEARCHING' : null });
+      if (url.endsWith('/task-a')) return response({ ...task, state: mode === 'resume' ? completed ? 'RESEARCHING' : 'BLOCKED' : 'DONE', resume_state: mode === 'resume' && !completed ? 'RESEARCHING' : null });
       if (url.includes('/artifacts?')) return response(page([{ ...artifact, id: completed ? 'refreshed-artifact' : artifact.id }]));
       if (url.includes('/timeline?')) return response(page([event('z', completed ? 'REFRESHED_TIMELINE' : 'INITIAL_TIMELINE')]));
     }); open('/tasks/task-a?view=artifacts'); await screen.findByText('artifact-z'); select('Errors'); await screen.findByText(errorRecord.message);
-    const control = screen.getByRole('button', { name: mode === 'resume' ? 'Resume' : 'Run' }); fireEvent.click(control); fireEvent.click(control);
+    const control = screen.getByRole('button', { name: mode === 'resume' ? 'Resume' : 'Run (terminal check)' });
+    await waitFor(() => expect(control).toBeEnabled()); fireEvent.click(control); fireEvent.click(control);
     expect(control).toBeDisabled(); expect(screen.getByRole('button', { name: 'Refresh Errors' })).toBeDisabled();
     expect(count(mode === 'resume' ? '/resume' : '/run')).toBe(1);
     completed = true; await act(async () => pending.resolve(mode === 'safe-stop' ? response({ error: { code: 'RUNTIME_STOPPED', message: 'Task execution stopped' } }, 409) : response(task)));
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole('button', { name: mode === 'resume' ? 'Run' : 'Run (terminal check)' })).toBeEnabled());
     expect(count('/timeline?')).toBe(2); expect(count('/artifacts?')).toBe(2); expect(count('/errors?')).toBe(2);
     for (const key of ['invocations', 'test-runs', 'decisions', 'gates']) expect(count(`/${key}?`)).toBe(0);
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url).endsWith('/task-a'))).toHaveLength(2);
@@ -149,7 +151,10 @@ describe('Run and Resume evidence refresh', () => {
   });
   it('does not perform old-route refreshes when a Run resolves after navigation', async () => {
     const pending = deferred<Response>(); mocks((url, options) => options.method === 'POST' ? pending.promise : undefined);
-    open('/tasks/task-a'); await screen.findByRole('button', { name: 'Run' }); fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    open('/tasks/task-a'); await screen.findByRole('button', { name: 'Run' });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled());
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    expect(vi.mocked(fetch).mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
     fireEvent.click(screen.getByRole('link', { name: 'Other Task' })); await screen.findByText('artifact-z');
     const before = vi.mocked(fetch).mock.calls.length; await act(async () => pending.resolve(response(task)));
     expect(fetch).toHaveBeenCalledTimes(before); expect(screen.getByLabelText('Current URL')).toHaveTextContent('/tasks/task-b');

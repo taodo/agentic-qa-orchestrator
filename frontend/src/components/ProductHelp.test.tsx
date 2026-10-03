@@ -20,7 +20,7 @@ it('provides a focusable inline help control and explains Project, Task, Run and
   expect(document.getElementById(control.getAttribute('aria-controls')!)).toBeVisible();
   expect(screen.getByText(/software identity that owns/)).toBeVisible();
   expect(screen.getByText(/One QA requirement/)).toBeVisible();
-  expect(screen.getByText(/Executes the configured workflow/)).toBeVisible();
+  expect(screen.getByText(/Creates a durable execution request/)).toBeVisible();
   expect(screen.getByText(/After Run, inspect Overview/)).toBeVisible();
   expect(screen.getByText('Add division support and reject division by zero.')).toBeVisible();
   expect(screen.getByText(/deterministic and synthetic/)).toBeVisible();

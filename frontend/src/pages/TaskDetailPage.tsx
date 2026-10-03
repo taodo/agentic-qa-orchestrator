@@ -3,6 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { getArtifacts, getDecisions, getErrors, getGates, getInvocations, getTask, getTestRuns, getTimeline, runTask, resumeTask } from '../api/tasks';
 import { publicError, type ApiError } from '../api/client';
 import { useResource } from '../app/useResource';
+import { useTaskExecution } from '../app/useTaskExecution';
+import { ExecutionPanel } from '../components/ExecutionPanel';
 import { LoadingState, ErrorState } from '../components/Feedback';
 import { DateTime } from '../components/DateTime';
 import { StatusBadge } from '../components/StatusBadge';
@@ -27,20 +29,33 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
     refreshers.current.set(key, refresh);
     return () => { refreshers.current.delete(key); };
   }, []);
+  const refreshEvidence = useCallback(async () => {
+    await Promise.all([task.reload(), timeline.reload(), ...Array.from(refreshers.current.values(), refresh => refresh())]);
+  }, [task.reload, timeline.reload]);
+  const execution = useTaskExecution(taskId, refreshEvidence);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const gate = useRef(false);
   const [busy, setBusy] = useState<'run' | 'resume'>();
   const [error, setError] = useState<ApiError>();
+  const locked = !!busy || execution.active || execution.creating || execution.refreshing || execution.checking || !execution.verified;
   async function act(action: 'run' | 'resume') {
-    if (gate.current) return;
+    if (gate.current || locked) return;
     gate.current = true; setBusy(action); setError(undefined);
-    try { if (action === 'run') await runTask(taskId); else await resumeTask(taskId); }
+    const synchronous = action === 'resume' || task.data?.state === 'DONE' || task.data?.state === 'FAILED';
+    try {
+      if (!synchronous) await execution.create();
+      else if (action === 'run') await runTask(taskId);
+      else await resumeTask(taskId);
+    }
     catch (failure) { if (mounted.current) setError(publicError(failure)); }
     finally {
       // Safe stops may still commit evidence. Only opened panels exist in the registry.
       if (mounted.current) {
-        await Promise.all([task.reload(), timeline.reload(), ...Array.from(refreshers.current.values(), refresh => refresh())]);
+        if (synchronous) {
+          await refreshEvidence();
+          if (mounted.current) await execution.refresh();
+        }
         if (mounted.current) { gate.current = false; setBusy(undefined); }
       }
     }
@@ -50,16 +65,18 @@ export function TaskDetailPage({ taskId }: { taskId: string }) {
     const next = new URLSearchParams(params); next.set('view', section);
     return `?${next.toString()}`;
   }
-  const panelProps = { taskId, register, busy: !!busy };
+  const panelProps = { taskId, register, busy: !!busy || execution.refreshing };
   return <>
-    <header className="page-header"><p className="eyebrow">Workspace / Task inspector</p><h1>{detail?.title || 'Task Detail'}</h1>{detail && <div className="task-heading"><StatusBadge state={detail.state} /><Link to={`/projects/${detail.project_id}`}>View Project</Link><Id value={detail.id} /></div>}</header>
+    <header className="page-header"><p className="eyebrow">Workspace / Task inspector</p><h1>{detail?.title || 'Task Detail'}</h1>{detail && <div className="task-heading"><span>Task state:</span><StatusBadge state={detail.state} /><Link to={`/projects/${detail.project_id}`}>View Project</Link><Id value={detail.id} /></div>}</header>
     {task.loading && <LoadingState>Loading Task…</LoadingState>}{task.error && <ErrorState error={task.error} retry={busy ? undefined : () => void task.reload()} />}
-    {detail && <section className="panel execution-controls" aria-label="Execution controls"><div className="panel-heading"><h2>Execution</h2><div className="actions"><button type="button" disabled={!!busy || task.loading || !!task.error} onClick={() => void act('run')}>{detail.state === 'DONE' || detail.state === 'FAILED' ? 'Run (terminal check)' : 'Run'}</button>{detail.state === 'BLOCKED' && detail.resume_state && <button type="button" disabled={!!busy || task.loading || !!task.error} onClick={() => void act('resume')}>Resume</button>}</div></div>
-      <p className="muted">Run waits for completion or a safe stop. Inspect Overview, Timeline and the evidence sections afterward. Resume only restores the stored state; click Run separately afterward.</p>
+    {detail && <section className="panel execution-controls" aria-label="Execution controls"><div className="panel-heading"><h2>Execution</h2><div className="actions"><button type="button" disabled={locked || task.loading || !!task.error} onClick={() => void act('run')}>{detail.state === 'DONE' || detail.state === 'FAILED' ? 'Run (terminal check)' : 'Run'}</button>{detail.state === 'BLOCKED' && detail.resume_state && <button type="button" disabled={locked || task.loading || !!task.error} onClick={() => void act('resume')}>Resume</button>}</div></div>
+      <p className="muted">Run creates a durable execution request. You can leave or refresh this page and recover its status from the host. Task state and evidence determine the QA outcome. Resume only restores the stored state; click Run separately afterward.</p>
       {detail.state === 'BLOCKED' && <p className="notice">This Task is blocked. Run does not resume it.</p>}
-      {busy && <LoadingState>{busy === 'run' ? 'Running — waiting for the synchronous API request to complete…' : 'Resuming — recording the state transition…'}</LoadingState>}
+      {busy === 'resume' && <LoadingState>Resuming — recording the state transition…</LoadingState>}
+      {busy === 'run' && (detail.state === 'DONE' || detail.state === 'FAILED') && <LoadingState>Checking the terminal Task — waiting for the synchronous API…</LoadingState>}
       {error && <ErrorState error={error} />}
     </section>}
+    {detail && <ExecutionPanel {...execution} refresh={execution.refresh} disabled={!!busy} />}
     <nav className="section-nav" aria-label="Task sections">{sections.map(section => <Link key={section} to={sectionUrl(section)} aria-current={selected === section ? 'page' : undefined}>{labels[section]}</Link>)}</nav>
     <div hidden={selected !== 'overview'}>{detail && <section className="panel" aria-label="Overview"><div className="panel-heading"><h2>Overview</h2><button type="button" disabled={!!busy || task.loading} onClick={() => void task.reload()}>Refresh Overview</button></div>
       <h3>Requirement</h3><p className="prose">{detail.requirement}</p>
