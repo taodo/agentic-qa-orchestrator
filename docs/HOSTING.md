@@ -163,7 +163,7 @@ DB/config private, restrict local access, and do not expose this host publicly
 without a trusted access boundary. Task 16 is not an internet production service.
 
 Task 17 wraps the same ASGI/config/state/assets boundaries with a temporary HTTP
-Basic gate in explicit `--preview-demo` mode. Only this mode permits `0.0.0.0`;
+Basic gate in explicit `--preview-demo` mode. This and explicit `--hosted-demo` permit `0.0.0.0`;
 it rejects OPENAI_API_KEY and uses only the fake runtime. Credentials are required
 from the environment before filesystem/database startup. It never reads local
 JSON runtime configuration. The local defaults above remain unchanged. See
@@ -339,3 +339,28 @@ rechecks reconciliation before executing them. Public preview retains only fake
 runtime and metadata assessment, unchanged Basic protection and exact GET /health
 exemption. Real local bind remains loopback-only. No migration or dependency is
 added. [Read-only command and operator playbooks](RECONCILIATION.md).
+
+## Persistent hosted synthetic mode (Task 23)
+
+`qa-sentinel serve --hosted-demo` uses provider environment QA_SENTINEL_DATA_DIR
+as an explicit absolute root and fixes the database to state.sqlite3 underneath.
+It rejects --database, local JSON/Project bindings, linked roots, source/asset
+overlap and any OPENAI_API_KEY. Auth preflight precedes database IO. Only the
+seeded Demo Calculator UUID receives the accepted fake bundle; no real adapter,
+reader, mutation or pytest service is constructed. No target workspace is stored
+in the data root; an empty stable host-owned temporary fake identity supplies
+the existing binding contract. One process/Uvicorn/execution worker remains fixed.
+
+The dedicated hosted_container command fixes external bind, frontend assets and
+PORT parsing, and rejects /tmp for durable state. Use the documented provider
+disk rather than a temporary data root. Host-only RuntimeStatus adds hosted-demo;
+GET /auth/session returns safe mode on non-session hosts and mode plus independent
+CSRF proof behind hosted authentication. API v1 business contracts, workflow,
+job lifecycle and reconciliation do not change. No migration/dependency is added.
+
+Session access is single-operator only, with independent environment signing
+secret, Secure/HttpOnly/SameSite=Strict cookie, fixed eight-hour expiry, protected
+logout and unsafe-request CSRF. Local demo/real have no product auth and remain
+loopback-only; existing preview Basic/ephemeral semantics remain supported.
+[Access protocol and safe codes](HOSTED_ACCESS.md),
+[separate optional paid deployment](DEPLOYMENT.md#optional-persistent-hosted-demo-task-23).

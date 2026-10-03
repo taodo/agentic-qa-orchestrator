@@ -9,8 +9,8 @@ from qa_sentinel.projects import ProjectWorkspaceBinding
 from .config import canonical_path, overlaps, HostError
 
 
-def demo_bundle(factory, database):
-    root = canonical_path(database.parent / "demo-workspace")
+def demo_bundle(factory, database, *, identity_root=None):
+    root = canonical_path(identity_root if identity_root is not None else database.parent / "demo-workspace")
     # Even the identity-only workspace must not overlap platform source or assets/state.
     from pathlib import Path
     if overlaps(root, Path(__file__).resolve().parents[3]) or database.is_relative_to(root):

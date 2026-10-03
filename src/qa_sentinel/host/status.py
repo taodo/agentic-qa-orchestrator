@@ -9,7 +9,7 @@ from .onboarding import model_key_present
 
 class RuntimeStatus(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal["local", "demo", "preview-demo"]
+    mode: Literal["local", "demo", "preview-demo", "hosted-demo"]
     project_id: UUID
     project_key: ProjectKey
     runtime_configured: bool

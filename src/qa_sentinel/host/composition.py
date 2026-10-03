@@ -16,6 +16,8 @@ from .config import HostConfig, HostError
 from .database import bootstrap_database
 from .demo import demo_bundle
 from .preview import preview_credentials
+from .access import hosted_credentials
+from .hosted import preflight_storage, hosted_identity_root
 from .preflight import real_components
 from .admission import ExecutionAdmission
 from .worker import ExecutionWorker
@@ -40,14 +42,18 @@ def compose(config: HostConfig) -> HostComposition:
     try:
         if config.mode == "preview-demo":
             preview_credentials()  # Direct composition fails closed too, before DB IO.
+        if config.mode == "hosted-demo":
+            hosted_credentials()
+            preflight_storage(config)
         prepared = []
         if config.mode == "local":
             if not os.environ.get("OPENAI_API_KEY", "").strip():
                 raise HostError("HOST_MODEL_KEY_REQUIRED")
             prepared = [(project, real_components(project)) for project in config.projects]
         engine, factory = bootstrap_database(config.database)
-        if config.mode in {"demo", "preview-demo"}:
-            bundles = [demo_bundle(factory, config.database)]
+        if config.mode in {"demo", "preview-demo", "hosted-demo"}:
+            bundles = [demo_bundle(factory, config.database,
+                identity_root=hosted_identity_root(config) if config.mode == "hosted-demo" else None)]
         else:
             bundles = []
             for project, (reader, mutation, execution, request) in prepared:

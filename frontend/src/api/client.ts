@@ -1,4 +1,5 @@
 import type { ApiErrorEnvelope } from './types';
+import { accessExpired, csrfHeaders, loginRecovery } from './access';
 
 export class ApiError extends Error {
   constructor(public readonly code: string, message: string, public readonly status?: number) { super(message); }
@@ -18,13 +19,18 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
 
 // Explicit same-origin transport for the host namespace; API v1 stays unchanged.
 export async function requestPath<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (accessExpired()) throw new ApiError('HOST_AUTH_REQUIRED', 'Sign in again to continue.', 401);
   let response: Response;
-  try { response = await fetch(path, { ...options, headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers } }); }
+  try { response = await fetch(path, { ...options, credentials: 'same-origin', headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...options.headers, ...csrfHeaders(options.method ?? 'GET') } }); }
   catch { throw new ApiError('NETWORK_ERROR', 'Unable to reach QA Sentinel API.'); }
   let payload: unknown;
   try { payload = await response.json(); }
   catch { throw new ApiError('INVALID_RESPONSE', 'QA Sentinel API returned an unreadable response.', response.status); }
   if (!response.ok) {
+    if (response.status === 401 && isEnvelope(payload) && payload.error.code === 'HOST_AUTH_REQUIRED') {
+      loginRecovery();
+      throw new ApiError('HOST_AUTH_REQUIRED', 'Sign in again to continue.', 401);
+    }
     if (isEnvelope(payload)) throw new ApiError(payload.error.code, payload.error.message, response.status);
     throw new ApiError('HTTP_ERROR', 'QA Sentinel API could not complete the request.', response.status);
   }

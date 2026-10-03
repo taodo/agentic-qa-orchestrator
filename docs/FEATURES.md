@@ -5,6 +5,7 @@ explicit trusted local setup and safe host readiness. Task 20 adds backend durab
 execution requests with a single host worker. Task 21 adds async browser Run,
 active-job recovery, polling and lightweight recent execution history.
 Task 22 adds derived read-only crash safety assessment and guarded continuation.
+Task 23 adds optional persistent hosted synthetic demo and single-operator sessions.
 [Product Guide](PRODUCT_GUIDE.md) provides interpretation/walkthrough;
 [PRD](PRD.md) explains boundaries. Backend ownership below identifies existing
 layers, not new endpoints or services.
@@ -105,3 +106,18 @@ Task panel expose fixed guidance without secrets/paths/raw failures. No TaskStat
 evidence repair, automatic replay, mutation restoration, migration or dependency
 is added. Interrupted jobs are assessed separately from pending core work.
 [Full contract and playbooks](RECONCILIATION.md).
+
+## Persistent hosted demo (Task 23)
+
+| Feature | Purpose | Ownership | Operator action | Limits |
+| --- | --- | --- | --- | --- |
+| hosted-demo | Durable synthetic portfolio state | Explicit host mode, fixed data-root SQLite, normal Alembic startup | Owner chooses separate paid disk profile | Only Demo Calculator fake runtime; no real models/read/write/pytest; one instance/process/worker |
+| Session access | Protect app/API/assets with single-operator login | Host middleware and provider environment verifier/signing secret | Sign in over HTTPS; Sign out explicitly | Stateless eight-hour Secure/HttpOnly/SameSite=Strict cookie; no users/RBAC/session table |
+| CSRF / login recovery | Protect unsafe cookie-authenticated actions | Session-bound proof and same-origin host checks; in-memory frontend transport | Reauthenticate, inspect state/history, then act explicitly | No action replay/localStorage; logout never cancels jobs or changes Task state |
+
+render.yaml stays free/ephemeral/Basic; render.hosted.yaml is a separate optional
+paid-disk profile. Logical Project identity never stores a workspace. Same-path
+hosted restarts preserve Projects/Tasks/evidence/jobs, with accepted interrupted
+job and reconciliation rules. No state/gate/budget/business DTO, migration or
+dependency change. This is a single-operator portfolio access boundary, not
+production multi-user identity/RBAC. [Access](HOSTED_ACCESS.md), [Deployment](DEPLOYMENT.md).

@@ -335,3 +335,26 @@ and keyed Task routing discard late responses on navigation/unmount. Job termina
 and synchronous-action evidence refresh also reread reconciliation without opening
 lazy evidence sections. Job status never changes TaskState. Preview remains
 synthetic fake-only and Basic-protected. [Meaning and limits](RECONCILIATION.md).
+
+## Hosted session transport (Task 23)
+
+Production bootstrap reads the host-owned GET /auth/session before mounting the
+existing app. Only hosted-demo's validated independent CSRF proof is held in
+module memory; no credential, cookie or unknown projection field is retained or
+rendered. Local/demo/Basic host mode projections, standalone 404 and Vite's HTML
+fallback retain the existing non-session behavior. The optional runtime status
+allowlist also accepts hosted-demo without exposing configuration.
+
+The shell shows HOSTED DEMO · Synthetic and Sign out only after hosted bootstrap.
+Unsafe POST/PATCH/PUT/DELETE calls carry X-QA-Sentinel-CSRF in that mode, including
+one explicit logout POST. The HttpOnly cookie is managed by the browser; no
+localStorage/sessionStorage is used. HOST_AUTH_REQUIRED (401) navigates to /login
+once and stops further transport from that page. No action is replayed. Logout
+errors keep explicit retry; a session-bound CSRF failure never triggers a retry.
+The minimal login form belongs to the server; no SPA/assets load before auth.
+
+TaskState/job/reconciliation/polling ownership and lazy evidence behavior stay
+unchanged. Sign-in recovery requires fresh history/state inspection, and sign-out
+does not cancel backend work. Narrow topbars wrap, keeping logout accessible.
+Production CSP allows existing same-origin bundles/styles and blocks external
+script assets. [Hosted access](HOSTED_ACCESS.md) documents expiry and trust limits.

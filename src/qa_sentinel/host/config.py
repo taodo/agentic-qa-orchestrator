@@ -52,17 +52,25 @@ class LocalProjectConfig(BaseModel):
 
 class HostConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
-    mode: Literal["demo", "local", "preview-demo"]
+    mode: Literal["demo", "local", "preview-demo", "hosted-demo"]
     host: Literal["127.0.0.1", "::1", "0.0.0.0"] = "127.0.0.1"
     port: int = Field(default=8000, ge=1, le=65535, strict=True)
     database: Path
     frontend_dist: Path
+    data_dir: Path | None = None
     projects: tuple[LocalProjectConfig, ...] = ()
 
-    @field_validator("database", "frontend_dist")
+    @field_validator("database", "frontend_dist", "data_dir")
     @classmethod
     def path(cls, value):
-        return canonical_path(value)
+        return canonical_path(value) if value is not None else None
+
+    @field_validator("data_dir", mode="before")
+    @classmethod
+    def absolute_data(cls, value):
+        if value is not None and not Path(value).is_absolute():
+            raise ValueError("Hosted root must be absolute")
+        return value
 
     @model_validator(mode="after")
     def boundaries(self):
@@ -74,10 +82,19 @@ class HostConfig(BaseModel):
             raise ValueError("Database must be outside frontend assets")
         if self.database.is_relative_to(Path(__file__).resolve().parents[1]):
             raise ValueError("Database must be outside package source")
-        if self.mode != "preview-demo" and self.host == "0.0.0.0":
-            raise ValueError("External bind requires explicit preview-demo mode")
-        if (self.mode in {"demo", "preview-demo"} and self.projects) or (self.mode == "local" and not self.projects):
+        if self.mode not in {"preview-demo", "hosted-demo"} and self.host == "0.0.0.0":
+            raise ValueError("External bind requires explicit public synthetic mode")
+        if (self.mode != "local" and self.projects) or (self.mode == "local" and not self.projects):
             raise ValueError("Mode requires explicit matching configuration")
+        if self.mode == "hosted-demo":
+            if self.data_dir is None or self.database != self.data_dir / "state.sqlite3":
+                raise ValueError("Hosted database must use the fixed data root")
+            if overlaps(self.data_dir, self.frontend_dist) or overlaps(self.data_dir, Path(__file__).resolve().parents[1]):
+                raise ValueError("Hosted data must not overlap application assets/source")
+            if self.data_dir.exists() and not self.data_dir.is_dir():
+                raise ValueError("Hosted data root must be a directory")
+        elif self.data_dir is not None:
+            raise ValueError("Data root is hosted-only")
         if len({p.key for p in self.projects}) != len(self.projects):
             raise ValueError("Duplicate project keys")
         for index, project in enumerate(self.projects):
