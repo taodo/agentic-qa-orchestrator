@@ -28,4 +28,7 @@
 .product-help p:first-child{margin-top:18px}
 .product-help dt{font-weight:600;margin-top:12px}
 .product-help dd{margin:4px 0 16px;color:#aebed0}
+.execution-panel{margin-top:16px;overflow-wrap:anywhere}
+.execution-history{margin-top:18px;min-width:0}
+.execution-history summary{cursor:pointer;max-width:100%;white-space:normal;margin-bottom:18px}
 @media(max-width:620px){.section-nav{gap:2px}.section-nav a{padding:8px}.expanded-json{max-height:420px}.record-heading{gap:8px}}

@@ -9,8 +9,9 @@ Task 18 adds product documentation and lightweight static frontend onboarding
 only. Task 19 adds explicit local init/validate and host-only readiness status/UI;
 no core/API v1, migration, model, dependency or preview execution boundary changes.
 Task 20 adds backend durable execution jobs and shared single-host admission with
-additive migration 0003. Frontend Run stays synchronous; job lifecycle never replaces
-Task state/evidence. Read [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
+additive migration 0003. Task 21 adds async browser Run, persisted active-job recovery
+and bounded polling; job lifecycle never replaces Task state/evidence. Read
+[PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md) first. Entries below describe historical task
 checkpoints; their then-unimplemented scope is not a current capability inventory.
 
@@ -355,3 +356,22 @@ claim/completion persistence stops further execution without retry. There is no
 exactly-once, multiprocess lease, cancellation or automatic core reconciliation.
 [Execution jobs](EXECUTION_JOBS.md) covers details. Wait for ChatGPT review and user
 approval before Task 21; Task 21 is not implemented.
+
+## Task 21 — Frontend async Run and execution progress
+
+Browser Run creates one durable execution request for nonterminal Tasks. Typed
+transport checks public job fields/lifecycle/ownership and bounded history, with
+no retained unknown fields. A per-Task session recovers history on mount, serializes
+GETs and polls QUEUED/RUNNING at 1500 ms after each settled read. Terminal,
+navigation and unmount stop timers; stale Task/job responses cannot update another
+Task. Duplicate creation errors recover backend history, and no POST is retried.
+
+Task state/evidence remains QA truth; SUCCEEDED never fabricates DONE. Terminal
+jobs refresh Task/Timeline, recent history and only opened evidence panels. Resume
+remains synchronous and separate; DONE/FAILED retain synchronous terminal checks.
+Safe warnings/manual refresh preserve uncertain identity. Status text uses a polite
+live region; native history disclosure and wrapping metadata keep narrow layouts
+usable. Preview remains Basic-protected synthetic fake-only; local readiness does
+not authorize execution. No backend change, migration, dependency or global state.
+[Frontend](FRONTEND.md#execution-recovery-and-polling-task-21) documents limitations.
+Wait for ChatGPT review and user approval before Task 22; Task 22 is not implemented.

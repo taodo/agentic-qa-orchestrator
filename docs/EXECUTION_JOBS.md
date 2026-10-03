@@ -78,8 +78,8 @@ terminal check without rerunning agents.
 or the existing safe stop. It does not enqueue. Resume remains synchronous,
 restores BLOCKED → resume_state and requires separate execution. Active jobs block
 same-Task synchronous Run/Resume; global overlap remains fail-fast RUNTIME_STOPPED.
-The existing frontend still uses synchronous Run and separate Resume. Task 20
-adds no frontend polling/job UX.
+Task 20 kept browser Run synchronous. Task 21 now creates async jobs for browser
+Run and retains synchronous terminal checks and separate Resume.
 
 ## One host worker and shared admission
 
@@ -147,3 +147,20 @@ network/provider calls denied. They cover migration preservation/downgrade,
 duplicate writers, FIFO ties, lifecycle constraints, detached DTOs, commit-before-work
 and closed transactions, shared admission, bounded shutdown, stale RUNNING/queued
 recovery, API compatibility and preview isolation.
+
+## Browser recovery (Task 21)
+
+Task Detail reads the newest ten requests, recovers QUEUED/RUNNING and polls only
+that active identity, with one 1500 ms timeout after the previous GET settles.
+Terminal detection refreshes Task, Timeline, opened evidence and job history.
+SUCCEEDED never assigns Task DONE. Navigation/unmount stops timers and discards
+late Task/job responses. GETs are serialized and no-store; Run is disabled until
+history is verified and while known active work exists. Duplicate creation errors
+recover history; POST is never automatically retried. Network warnings preserve
+identity; missing-job 404 stops polling and reads history before explicit recovery.
+
+The browser cannot prove host liveness or exactly-once execution. Refresh/recovery
+depends on persisted host state; ephemeral preview loss is not browser recovery.
+No localStorage, global queue state, cancellation or job retry is introduced.
+Preview is still synthetic fake-only; readiness is informative, not authorization.
+[Frontend details](FRONTEND.md#execution-recovery-and-polling-task-21).

@@ -12,7 +12,7 @@ export function ProductHelp() {
       <dl>
         <dt>Project</dt><dd>The software identity that owns your Tasks. Creating a Project does not configure a workspace or runtime.</dd>
         <dt>Task</dt><dd>One QA requirement within a Project. Open the Project to create a Task, then open the Task to inspect it.</dd>
-        <dt>Run</dt><dd>Executes the configured workflow and waits for completion or a safe stop. Resume only restores a blocked Task's stored state; click Run separately afterward.</dd>
+        <dt>Run</dt><dd>Creates a durable execution request for the configured workflow. You can leave or refresh and recover its status. Task state and evidence determine the outcome. Resume only restores a blocked Task's stored state; click Run separately afterward.</dd>
         <dt>Evidence</dt><dd>After Run, inspect Overview and Timeline, then Artifacts, Invocations, Test Runs, Errors, Decisions and Gates. A safe stop may still produce evidence.</dd>
       </dl>
       <p>For the demo, open Demo Calculator and create a Task titled <strong>Division support</strong> with requirement <strong>Add division support and reject division by zero.</strong></p>

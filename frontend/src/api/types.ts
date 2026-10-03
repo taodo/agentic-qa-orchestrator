@@ -1,6 +1,13 @@
 // Manual transport contracts matching Task 13. UUIDs/datetimes are JSON strings.
 export type UUID = string;
 export type Timestamp = string;
+export type ExecutionJobStatus = 'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'STOPPED' | 'FAILED';
+export type ExecutionJobError = 'RUNTIME_STOPPED' | 'EXECUTION_INTERRUPTED' | 'EXECUTION_FAILED';
+export interface ExecutionJobView {
+  id: UUID; task_id: UUID; project_id: UUID; status: ExecutionJobStatus;
+  created_at: Timestamp; started_at: Timestamp | null; finished_at: Timestamp | null;
+  safe_error_code: ExecutionJobError | null;
+}
 export type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 export type TaskState = 'CREATED' | 'RESEARCHING' | 'PLANNING' | 'IMPLEMENTING' | 'TESTING' | 'ANALYZING' | 'INVESTIGATING' | 'REVIEWING' | 'BLOCKED' | 'FAILED' | 'DONE';
 export type AgentName = 'RESEARCHER' | 'PLANNER' | 'IMPLEMENTER' | 'TEST_ANALYZER' | 'INVESTIGATOR' | 'REVIEWER';

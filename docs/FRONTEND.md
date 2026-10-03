@@ -1,9 +1,10 @@
-# Frontend operator dashboard (Tasks 14–15)
+# Frontend operator dashboard (Tasks 14–21)
 
 For first-time operation, start with [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md). Earlier task-specific startup/scope statements
 below describe their checkpoint; Tasks 16–17 provide local and protected demo
-hosting, Task 18 adds static onboarding/copy, and Task 19 adds host readiness.
+hosting, Task 18 adds static onboarding/copy, Task 19 adds host readiness, and
+Task 21 uses Task 20 durable execution jobs for browser Run.
 
 The Web is a local operator/control dashboard over the accepted Task 13 API.
 React, TypeScript and Vite live in the separate `frontend/` workspace. Python/core
@@ -68,7 +69,7 @@ The UI shows safe API errors when no backend is listening.
 | --- | --- |
 | /projects | Project registry → GET /projects?limit=50 |
 | /projects/:projectId | Project metadata and tasks → GET /projects/{id}, GET /projects/{id}/tasks?limit=50 |
-| /tasks/:taskId?view=overview | Task operator console → GET /tasks/{id}, GET /tasks/{id}/timeline?limit=100; evidence loads on section open |
+| /tasks/:taskId?view=overview | Task operator console → GET /tasks/{id}, GET /tasks/{id}/timeline?limit=100, GET /tasks/{id}/executions?limit=10; evidence loads on section open |
 
 All API paths above have the `/api/v1` prefix. Sidebar navigation contains only
 the implemented Projects destination. Detail screens link to related persisted
@@ -91,20 +92,52 @@ unbounded download or generalized pagination in this phase.
 
 ## Run and Resume
 
-Run posts once to `/tasks/{id}/run` and waits for synchronous completion. Both
-execution controls are disabled while it is pending, with a clear waiting status.
-An immediate ref guard prevents repeated same-action requests before React renders.
-After either success or a safe stop, Task, timeline and already-opened evidence
-panels are re-fetched so committed state/evidence is visible. Backend responses remain the authority; returned state
-is never optimistically assigned in the browser.
+For nonterminal Tasks, Run posts once to `/tasks/{id}/executions`, accepting a 202
+job snapshot. The execution panel separates QUEUED/RUNNING/SUCCEEDED/STOPPED/FAILED
+from the header's persisted Task state. SUCCEEDED means the application returned
+normally; it never sets DONE or proves tests passed. When the tracked request
+becomes terminal, Task, Timeline, execution history and only already-opened
+evidence panels refresh. Run/Resume are disabled while checking history, submitting,
+refreshing terminal evidence or while a job is active. Initial history failure
+requires explicit recovery before controls become available.
 
 BLOCKED with a persisted resume_state exposes Resume, posting only `/resume`.
 Afterward reads refresh; **no automatic Run occurs**. The operator explicitly
-clicks Run separately. Run on BLOCKED does not imply continuation, and terminal
-Tasks retain an explicitly labeled idempotent backend check. No transition graph
-is reproduced here. No polling, time-based retry, background job, WebSocket or SSE.
-These local controls do not serialize separate browser tabs or other clients;
-existing backend/host concurrency and reconciliation limits remain unchanged.
+clicks Run separately. Run on BLOCKED does not imply continuation. DONE/FAILED
+Tasks retain **Run (terminal check)** through synchronous `/run`; they never enqueue.
+No transition graph is reproduced here. Backend admission and ownership remain
+authoritative across browsers; these controls do not provide distributed locking.
+
+## Execution recovery and polling (Task 21)
+
+`api/executions.ts` checks response shape, exact job statuses, timestamp/code
+lifecycle, Task/job identity and bounded collections, selecting only safe fields.
+It retains no queue sequence, runtime or unknown response field. GET requests use
+no-store. `useTaskExecution` owns a per-Task session with serialized reads and a
+single **1500 ms timeout after each settled poll**, rather than overlapping interval
+ticks. It polls only QUEUED/RUNNING; terminal jobs, navigation and unmount clear
+timers and abort/discard pending responses. Status text has a polite live region;
+unchanged poll snapshots do not announce another tick. Native controls/disclosure
+and wrapping metadata keep recent history usable on narrow screens.
+
+Mount/reload reads the newest ten persisted execution requests, in backend order,
+recovering an active request without creating one. Recent terminal history does
+not poll. A duplicate POST error reads history and recovers the server's active
+job. POST creation is never automatically retried, including network uncertainty;
+uncertain creation performs only a recovery GET. GET polling failures retain the
+active identity and show fixed guidance, with conservative active-only GET retry
+and **Refresh execution history**. A missing-job 404 stops its polling, reads
+history and offers safe recovery guidance; the same missing identity stays paused
+until explicit refresh. All POSTs/reads are guarded against stale route sessions.
+History checking cannot race creation, and manual reads cannot overlap a poll.
+
+No browser persistence, global state, job retry/cancellation, WebSocket/SSE or
+cross-Project job dashboard is added. Recoverability depends on the host/database;
+preview state remains ephemeral. Standalone API factories need the documented
+host worker. The frontend does not infer host liveness from TaskState or grant
+execution from readiness. Preview remains Basic-protected deterministic synthetic
+only; real local mode uses the same transport under existing backend safeguards.
+[Execution contracts and restart limits](EXECUTION_JOBS.md).
 
 ## API and safety boundary
 
@@ -113,11 +146,12 @@ helper prefixes `/api/v1`, serializes JSON, returns typed payloads and maps non-
 responses to the public error envelope. Bad/non-JSON responses and network/unknown
 errors receive generic messages; raw bodies, exceptions and request values are
 never displayed or logged. Public messages render as escaped React text. There
-is no hidden retry, auth framework, tokens, localStorage/IndexedDB domain cache
-or provider access. Transport types are manual mirrors of Task 13 JSON contracts;
-they are compile-time types, not a second backend validation/business engine.
+is no hidden POST retry, auth framework, tokens, localStorage/IndexedDB domain cache
+or provider access. Existing Task/evidence types mirror Task 13 JSON contracts;
+execution transport adds defensive runtime parsing for the Task 20 job contract.
+Neither is a second workflow/business engine.
 
-GET loading/empty/error states are explicit, with operator-triggered Retry/Refresh.
+Evidence GET loading/empty/error states are explicit, with operator-triggered Retry/Refresh.
 The read hook discards stale responses after navigation/re-fetch; detail components
 reset by route identity. All mutation feedback stays within the current screen.
 Dates use browser-local presentation, retaining the exact API timestamp in a title;
@@ -133,7 +167,8 @@ No accessibility certification is claimed.
 Vitest/jsdom/React Testing Library tests mock every fetch and forbid unmocked fetch
 and XMLHttpRequest. They cover routing, Project/Task forms and isolation, stale
 navigation reads, safe errors, date/state rendering, API-order timeline, single
-pending Run, durable refresh and separate Resume without auto-run. No real network
+pending creation, active recovery, nonoverlapping/stale-safe polling, terminal job
+refresh without inferred DONE and separate Resume without auto-run. No real network
 or provider call is made by these tests. A supplementary headless browser check
 uses intercepted in-memory API fixtures to inspect desktop screens and the
 390-pixel layout; those fixtures are not part of the product or a backend bootstrap.
@@ -150,7 +185,7 @@ Overview. Run/Resume and their feedback remain above the sections on every view.
 Overview and Timeline load initially, including on a deep-linked evidence view.
 Other sections mount only when first opened and retain in-memory data while the
 operator switches sections within that Task. There is no eager evidence fetch,
-automatic retry, polling or workflow state simulation.
+automatic evidence retry/polling or workflow state simulation.
 
 | Section / query value | Existing Task 13 endpoint | Presentation |
 | --- | --- | --- |
@@ -167,7 +202,7 @@ All paths have `/api/v1` prepended by the shared typed request helper. API calls
 remain in `api/tasks.ts`. `EvidencePanel` reuses the latest-request-wins read hook,
 with independent loading/error/empty states, explicit Refresh and an opened-panel
 refresh registry. Refresh updates only the selected collection and is disabled
-while pending. After Run **or** Resume, Task/Timeline and registered panels refresh,
+while pending. After an async request becomes terminal, a terminal check **or** Resume, Task/Timeline and registered panels refresh,
 including after safe-stop errors. Unopened panels are never fetched merely because
 an action completed. Both execution controls remain disabled through the refresh.
 Task route identity remounts the console; late reads are discarded and an action
@@ -202,7 +237,7 @@ opened panels. Fetch/XHR remain mocked/forbidden and tests make no real network 
 provider calls. Python backend contracts and dependencies remain unchanged.
 
 Current limits: trusted local/dev API without auth, separately composed backend,
-bounded prefixes, manual freshness and in-memory per-Task evidence. No source
+bounded prefixes, manual evidence freshness and in-memory per-Task evidence. No source
 editor/diff engine, terminal, analytics, notifications, global state framework,
 settings or product auth is implemented. The current full-stack host and temporary
 preview Basic gate are documented in the Task 16–17 sections below.

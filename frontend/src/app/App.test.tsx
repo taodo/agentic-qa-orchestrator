@@ -9,7 +9,8 @@ import { project, task, page, event, response, deferred } from '../test/fixtures
 
 function open(path = '/projects') { return render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>); }
 function mockRoutes(handler: (url: string, options: RequestInit) => Promise<Response> | Response) {
-  return vi.mocked(fetch).mockImplementation((input, options = {}) => Promise.resolve(handler(String(input), options)));
+  return vi.mocked(fetch).mockImplementation((input, options = {}) => Promise.resolve(
+    String(input).includes('/executions?') ? response(page([])) : handler(String(input), options)));
 }
 function taskReads(value = task, events = [event('z', 'STATE_TRANSITIONED')]) {
   return mockRoutes(url => url.includes('/timeline?') ? response(page(events)) : response(value));
@@ -143,15 +144,15 @@ describe('Task Detail and explicit controls', () => {
     expect(events[0]).toHaveTextContent('FIRST_EVENT'); expect(events[1]).toHaveTextContent('SECOND_EVENT');
     expect(events[0]).toHaveTextContent('ORCHESTRATOR'); expect(events[0]).toHaveTextContent('to_state');
   });
-  it('posts Run exactly once, disables both controls while pending, and refreshes Task/timeline', async () => {
+  it('keeps synchronous terminal checks and refreshes Task/timeline', async () => {
     const pending = deferred<Response>(); let done = false;
     const calls = mockRoutes((url, options) => {
       if (options.method === 'POST') return pending.promise;
       if (url.includes('/timeline?')) return response(page([event('z', done ? 'RUN_COMPLETE' : 'READY')]));
-      return response({ ...task, state: done ? 'DONE' : 'BLOCKED', resume_state: done ? null : 'RESEARCHING' });
+      return response({ ...task, state: 'DONE' });
     }); open('/tasks/task-a'); await screen.findByRole('heading', { name: task.title });
-    const run = screen.getByRole('button', { name: 'Run' }); fireEvent.click(run); fireEvent.click(run);
-    expect(run).toBeDisabled(); expect(screen.getByRole('button', { name: 'Resume' })).toBeDisabled();
+    const run = screen.getByRole('button', { name: 'Run (terminal check)' }); await waitFor(() => expect(run).toBeEnabled()); fireEvent.click(run); fireEvent.click(run);
+    expect(run).toBeDisabled();
     expect(screen.getByText(/waiting for the synchronous API/)).toBeInTheDocument();
     expect(calls.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
     expect(calls.mock.calls.find(([, options]) => options?.method === 'POST')?.[0]).toBe('/api/v1/tasks/task-a/run');
@@ -162,7 +163,7 @@ describe('Task Detail and explicit controls', () => {
   });
   it('shows Run errors safely and still refreshes durable evidence', async () => {
     const calls = mockRoutes((url, options) => options.method === 'POST' ? response({ error: { code: 'RUNTIME_STOPPED', message: 'Task execution stopped; inspect persisted evidence' } }, 409) : url.includes('/timeline?') ? response(page([])) : response(task));
-    open('/tasks/task-a'); await screen.findByRole('heading', { name: task.title }); fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    open('/tasks/task-a'); await screen.findByRole('heading', { name: task.title }); await waitFor(() => expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(await screen.findByText('RUNTIME_STOPPED')).toBeInTheDocument(); await waitFor(() => expect(screen.getByRole('button', { name: 'Run' })).toBeEnabled());
     expect(calls.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1);
     expect(calls.mock.calls.filter(([url]) => String(url).includes('/timeline?'))).toHaveLength(2);
@@ -172,7 +173,7 @@ describe('Task Detail and explicit controls', () => {
     const calls = mockRoutes((url, options) => {
       if (options.method === 'POST') return pending.promise;
       return url.includes('/timeline?') ? response(page([])) : response({ ...task, state: resumed ? 'RESEARCHING' : 'BLOCKED', resume_state: resumed ? null : 'RESEARCHING' });
-    }); open('/tasks/task-a'); await screen.findByRole('button', { name: 'Resume' }); fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+    }); open('/tasks/task-a'); await screen.findByRole('button', { name: 'Resume' }); await waitFor(() => expect(screen.getByRole('button', { name: 'Resume' })).toBeEnabled()); fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
     expect(screen.getByText('BLOCKED')).toBeInTheDocument();
     expect(calls.mock.calls.find(([, options]) => options?.method === 'POST')?.[0]).toBe('/api/v1/tasks/task-a/resume');
     resumed = true; await act(async () => pending.resolve(response({ ...task, state: 'RESEARCHING' })));
