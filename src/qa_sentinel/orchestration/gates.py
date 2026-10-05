@@ -8,7 +8,7 @@ from qa_sentinel.domain.enums import (
 from qa_sentinel.domain.gate import GateCheck, GateEvaluation
 from qa_sentinel.domain.test_run import TestRun
 from qa_sentinel.schemas.research import ResearchOutput
-from qa_sentinel.schemas.plan import PlannerOutput
+from qa_sentinel.schemas.plan import PlannerOutput, ImplementationStepKind
 from qa_sentinel.schemas.implementation import ImplementationOutput
 from qa_sentinel.schemas.test_result import TestAnalysisOutput
 from qa_sentinel.schemas.investigation import InvestigationOutput
@@ -49,6 +49,10 @@ class PlanGate:
             _check("READY", output.decision == PlannerDecision.READY_FOR_IMPLEMENTATION,
                    "Plan is not ready for implementation"),
             _check("STEPS_PRESENT", bool(ids), "No implementation steps"),
+            _check("IMPLEMENTING_STEP_KINDS", all(s.kind in {
+                ImplementationStepKind.CODE_CHANGE, ImplementationStepKind.STATIC_REVIEW
+            } for s in output.implementation_steps),
+                "Executable verification belongs in test_strategy and TESTING, not implementation_steps"),
             _check("CRITERIA_PRESENT", bool(ac_ids), "No acceptance criteria"),
             _check("UNIQUE_STEP_IDS", len(ids) == len(known), "Duplicate step IDs"),
             _check("UNIQUE_CRITERION_IDS", len(ac_ids) == len(set(ac_ids)), "Duplicate criterion IDs"),

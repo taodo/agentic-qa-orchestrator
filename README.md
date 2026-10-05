@@ -139,6 +139,15 @@ Preview remains deterministic synthetic demo only; only Demo Calculator has a
 fake runtime. Readiness is a manual snapshot, and backend execution checks remain
 authoritative. No automatic repository/test discovery or Project creation occurs.
 
+## Controlled real repair
+
+Task 26 hardens Planner stage semantics: implementation work stays in IMPLEMENTING;
+pytest verification stays in test_strategy / TESTING. Declared test execution in
+implementation_steps is rejected at PlanGate, with no extra Implementer powers.
+[Controlled StayFinder operator runbook](docs/CONTROLLED_REPAIR_DEMO.md) describes
+blind diagnosis, evidence inspection and manual reset. The live repair rerun remains
+an operator step; automated fixture success is not a StayFinder completion claim.
+
 ## Documentation index
 
 | Start here | Implementation reference |

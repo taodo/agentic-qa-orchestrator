@@ -43,3 +43,18 @@ APPROVE remains a review recommendation, not DONE. No ReviewGate is implemented.
 
 Schemas live in src/qa_sentinel/schemas. They are frozen and reject extra fields.
 No prompts or agent implementations exist.
+
+## Task 26 additive Planner stage declaration
+
+Current ImplementationStep includes kind: CODE_CHANGE, STATIC_REVIEW or
+TEST_EXECUTION. PlanGate permits only the first two in implementation_steps;
+approved executable verification belongs to test_strategy and TESTING. Source/test
+file edits remain code work; source-based attestation is not executing commands.
+Every required implementation step still needs a unique COMPLETED result, with no
+extra step or requires_replan bypass. Canonical controlled output commands_executed
+remains empty; Implementer has no pytest/shell/package-manager/provider tools.
+
+Legacy stored plans without kind load as CODE_CHANGE; strict provider schemas
+require explicit kind on new responses. This declaration cannot prove the meaning
+of arbitrary descriptions and does not authorize execution or widen mutation policy.
+[Detailed boundary and limitation](CONTROLLED_REPAIR_DEMO.md#planner-stage-boundary).

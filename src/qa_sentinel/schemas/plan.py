@@ -1,12 +1,22 @@
-from pydantic import BaseModel, ConfigDict
+from enum import StrEnum
+from pydantic import BaseModel, ConfigDict, Field
 from qa_sentinel.domain.enums import PlannerDecision
 from qa_sentinel.domain.types import NonBlank
+
+
+class ImplementationStepKind(StrEnum):
+    CODE_CHANGE = "CODE_CHANGE"
+    STATIC_REVIEW = "STATIC_REVIEW"
+    TEST_EXECUTION = "TEST_EXECUTION"
 
 
 class ImplementationStep(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     id: NonBlank
-    description: NonBlank
+    description: NonBlank = Field(description="Work performable or source-attestable during IMPLEMENTING; never executable verification")
+    # Legacy persisted plans omit kind. Strict provider schemas require it on new output.
+    kind: ImplementationStepKind = Field(default_factory=lambda: ImplementationStepKind.CODE_CHANGE,
+        description="Declare CODE_CHANGE for source/test-file edits or STATIC_REVIEW for source-based checks; TEST_EXECUTION belongs to test_strategy/TESTING and is rejected by PlanGate")
     files: tuple[NonBlank, ...]
     depends_on: tuple[NonBlank, ...]
 
@@ -27,11 +37,13 @@ class PlannerOutput(BaseModel):
     decision: PlannerDecision
     summary: NonBlank
     assumptions: tuple[NonBlank, ...]
-    implementation_steps: tuple[ImplementationStep, ...]
+    implementation_steps: tuple[ImplementationStep, ...] = Field(
+        description="Required IMPLEMENTING work only: authorized code changes or source-based review. Do not duplicate executable verification here")
     files_to_create: tuple[NonBlank, ...]
     files_to_modify: tuple[NonBlank, ...]
     acceptance_criteria: tuple[AcceptanceCriterion, ...]
-    test_strategy: tuple[TestStrategyItem, ...]
+    test_strategy: tuple[TestStrategyItem, ...] = Field(
+        description="Executable verification owned by TESTING through the approved deterministic pytest runner, with acceptance criterion references")
     risks: tuple[NonBlank, ...]
     rollback_considerations: tuple[NonBlank, ...]
     open_questions: tuple[NonBlank, ...]

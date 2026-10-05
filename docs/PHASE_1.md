@@ -14,7 +14,9 @@ and bounded polling; job lifecycle never replaces Task state/evidence. Task 22
 adds derived crash assessment; Task 23 adds optional persistent hosted fake-only
 demo with single-operator sessions. Task 24 adds read-only operational visibility;
 Task 25 adds local-real CLI proving for external targets with backend test cwd.
-Neither introduces workflow truth or public real execution. Read
+Neither introduces workflow truth or public real execution. Task 26 hardens Planner
+stage declarations after the first real run exposed duplicated TESTING work inside
+implementation steps; live repair completion is still pending operator rerun. Read
 [PRD](PRD.md), [Product Guide](PRODUCT_GUIDE.md) and
 [Feature Reference](FEATURES.md) first. Entries below describe historical task
 checkpoints; their then-unimplemented scope is not a current capability inventory.
@@ -463,3 +465,29 @@ independently verified clean baseline remain operator requirements.
 [Real targets](REAL_TARGETS.md) documents StayFinder's clean reference and exact
 Windows examples without hard-coded product paths or automated target provisioning.
 No controlled defect, repair demonstration, browser testing or Task 26 is included.
+
+## Task 26 — Controlled real repair contract hardening
+
+The first operator StayFinder run reported passed Research/Plan gates, a diagnosed
+production guard defect and a valid proposal, but stopped before mutation/TESTING:
+the Plan required pytest execution as implementation work. ImplementationGate's
+all-steps-completed rule was correct; controlled Implementer has no such capability.
+
+The fix adds typed ImplementationStep.kind, prompt/schema guidance and a narrow
+PlanGate IMPLEMENTING_STEP_KINDS check. CODE_CHANGE/STATIC_REVIEW are permitted;
+TEST_EXECUTION belongs to test_strategy and is rejected with safe workflow reason
+PLAN_STAGE_CAPABILITY_MISMATCH via the existing PLANNING stop path. Legacy plan
+loading remains compatible; new strict provider schemas require the declaration.
+No prose classifier claims semantic certainty about mislabelled or legacy steps.
+
+Offline application/real-workflow regressions use accepted repository evidence,
+one authorized whole-file SHA-bound mutation and real backend pytest in temporary
+repositories. They verify Implementer never executes commands, actual required
+steps remain mandatory, misplaced execution stops at planning, failing tests cannot
+reach DONE, and test_strategy authorizes no test weakening. Existing stale-source,
+reconciliation, public fake-only and runner paths remain intact. No migration,
+dependency, frontend/UX, state-machine or mutation/test service change is added.
+[Controlled repair runbook](CONTROLLED_REPAIR_DEMO.md) documents prerequisites,
+blind requirement, inspection and operator-only reset. Live StayFinder rerun:
+NOT RUN during this code fix; no claim of a completed real repair demonstration.
+No merge or Task 27 work is included.

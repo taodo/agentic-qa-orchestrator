@@ -376,7 +376,12 @@ class WorkflowRunner:
         backward = ((agent == AgentName.PLANNER and target == S.RESEARCHING) or
                     (agent == AgentName.REVIEWER and target == S.IMPLEMENTING))
         if gate.result != G.PASS and not backward:
-            self._stop(task, "STAGE_GATE_REJECTED", BlockerReason.REQUIREMENT_AMBIGUITY, gate, correlation)
+            reason = "STAGE_GATE_REJECTED"
+            if agent == AgentName.PLANNER and any(
+                c.check == "IMPLEMENTING_STEP_KINDS" and c.result == G.FAIL for c in gate.checks
+            ):
+                reason = "PLAN_STAGE_CAPABILITY_MISMATCH"
+            self._stop(task, reason, BlockerReason.REQUIREMENT_AMBIGUITY, gate, correlation)
             return
         self.workflow.transition(task_id=task.id, to_state=target, gate_evaluation=gate,
             reason_code="STRUCTURED_STAGE_ROUTE", reason_details="Route selected from typed output and deterministic gate",

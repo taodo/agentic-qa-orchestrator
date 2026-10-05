@@ -79,7 +79,14 @@ accepts a provider-neutral ModelResponse envelope for real invocation metadata.
 Researcher instructions require FACT/INFERENCE/UNKNOWN distinctions, supplied
 evidence, dependencies, constraints, risks, and blocking unknowns. Planner
 instructions require stable step/AC IDs, explicit dependencies, test traceability,
-and honest NEEDS_RESEARCH/BLOCKED results.
+and honest NEEDS_RESEARCH/BLOCKED results. Task 26 adds explicit implementation
+step kinds and schema descriptions: CODE_CHANGE/STATIC_REVIEW for implementing;
+executable verification belongs only in test_strategy / TESTING. Planner must not
+duplicate test execution as implementation work. PlanGate rejects declared
+TEST_EXECUTION and the Implementer reports unsupported execution as BLOCKED/replan,
+never fabricated completion. New strict provider schemas require kind while legacy
+persisted plans load without a migration. This is a typed declaration, not a prose
+classifier; see the [documented limitation](CONTROLLED_REPAIR_DEMO.md#planner-stage-boundary).
 
 Selected context is serialized as sorted compact JSON in a user-role message;
 policy instructions are separate. Researcher receives requirement, intentionally

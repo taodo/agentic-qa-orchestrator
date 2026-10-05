@@ -279,6 +279,18 @@ partial application failure rolls back; stale source or uncertain write/persiste
 completion requires reconciliation. DELETE, arbitrary shell, Git rollback and
 model-owned file tools are unsupported. [Mutation](MUTATION.md), [Execution](EXECUTION.md).
 
+## Controlled repair demonstration
+
+After clean target proving, an operator can prepare an intentionally defective
+external scenario and use normal Project-owned Task Run. Planner implementation
+steps must describe code work or source-based review; executable verification
+belongs to test_strategy / TESTING. PlanGate rejects declared TEST_EXECUTION work
+before Implementer, while ImplementationGate still requires every actual step
+COMPLETED with no extra/duplicate results or requires_replan bypass. A typed kind
+is not semantic proof of prose, and a blocked immutable Plan is not silently edited.
+[Operator runbook and limitation](CONTROLLED_REPAIR_DEMO.md). No new public execution
+or UI capability is introduced; a live StayFinder rerun is still required.
+
 ## Real Project onboarding
 
 Before the first controlled repair on an external trusted target, use the local

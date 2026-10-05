@@ -40,7 +40,7 @@ threshold in gates. Explicit BLOCKED statuses take precedence over failed checks
 | Gate | Deterministic rules |
 | --- | --- |
 | RESEARCH_GATE | PASS: research_complete and no blocking unknown; BLOCKED: blocking unknown; otherwise FAIL. |
-| PLAN_GATE | READY plus steps/criteria present, unique IDs, valid dependencies, no self-dependency, and valid test strategy AC refs; NEEDS_RESEARCH is FAIL for implementation readiness; BLOCKED is BLOCKED. |
+| PLAN_GATE | READY plus steps/criteria present, unique IDs, valid dependencies, no self-dependency, IMPLEMENTING-only declared step kinds (CODE_CHANGE/STATIC_REVIEW), and valid test strategy AC refs; NEEDS_RESEARCH is FAIL for implementation readiness; BLOCKED is BLOCKED. |
 | IMPLEMENTATION_GATE | COMPLETED, all required step IDs completed, no missing/extra/duplicate results, no requires_replan deviation; BLOCKED is BLOCKED; otherwise FAIL. |
 | TEST_GATE | COMPLETED + PASS is PASS; COMPLETED + FAIL/UNKNOWN or FAILED is FAIL; INCOMPLETE is BLOCKED. Run task identity must match. |
 | ANALYSIS_GATE | PASS/no groups and FAIL/at least one group are sufficient (gate PASS); contradictions FAIL; explicit BLOCKED is BLOCKED. |
@@ -54,7 +54,11 @@ SKIPPED steps therefore fail: a free-form deviation cannot be deterministically
 associated with a skipped step. No domain contract is expanded in Task 3.
 
 PlanGate validates dependency references and direct self-dependencies; general
-multi-step dependency cycle detection is deferred. Open questions, known issues,
+multi-step dependency cycle detection is deferred. Task 26 also rejects declared
+TEST_EXECUTION implementation steps; executable verification belongs to TESTING.
+Kind is not a semantic classifier of arbitrary prose. Legacy steps without kind
+load as CODE_CHANGE; new strict provider output declares kind explicitly.
+[Stage contract and limitation](CONTROLLED_REPAIR_DEMO.md#planner-stage-boundary). Open questions, known issues,
 commands, and investigation confidence do not drive hidden prose/threshold rules.
 Gate PASS means sufficiency for that gate, not test success, review approval, or DONE.
 
