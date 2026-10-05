@@ -18,10 +18,10 @@ class MutationService:
         return sha256(str(self.config.workspace_root).encode("utf-8")).hexdigest()
 
     def build_snapshots(self, plan):
-        creates, modifies = self.policy.authorization(plan)
+        creates, sources = self.policy.snapshot_scope(plan)
         snapshots = []
         total = 0
-        for name in sorted(modifies):
+        for name in sorted(sources):
             if name in creates and not os.path.lexists(self.policy.target(name)):
                 continue
             data, text, _ = self.policy.read_text(self.policy.target(name), self.config.max_source_file_bytes)

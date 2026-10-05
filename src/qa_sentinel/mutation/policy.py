@@ -6,6 +6,7 @@ import os
 import stat
 from pydantic import ValidationError
 from qa_sentinel.schemas.mutation import ImplementationProposal, MutationOperation as Op
+from qa_sentinel.schemas.plan import ImplementationStepKind, modification_paths
 from .contracts import MutationConfig, PolicyDecision, MutationFailure
 
 PROTECTED = {".git", ".github", ".env", ".aws", ".ssh", ".azure", ".codex", ".agents", ".venv",
@@ -60,17 +61,28 @@ class MutationPolicy:
             raise MutationFailure("PARENT_DIRECTORY_MISSING")
         return resolved
 
-    def authorization(self, plan):
+    def _scopes(self, plan):
         creates = set(plan.files_to_create)
-        modifies = set(plan.files_to_modify) | {f for step in plan.implementation_steps for f in step.files}
-        paths = creates | modifies
+        modifies = modification_paths(plan)
+        sources = modifies | {f for step in plan.implementation_steps
+            if step.kind == ImplementationStepKind.STATIC_REVIEW for f in step.files}
+        # Apply the existing protections to the complete source/write union.
+        paths = creates | sources
         if len(paths) > self.config.max_source_files:
             raise MutationFailure("SOURCE_LIMIT")
         if len({p.casefold() for p in paths}) != len(paths):
             raise MutationFailure("INVALID_PLAN_AUTHORIZATION")
         for path in sorted(paths):
             self.target(path)
+        return creates, modifies, sources
+
+    def authorization(self, plan):
+        creates, modifies, _ = self._scopes(plan)
         return creates, modifies
+
+    def snapshot_scope(self, plan):
+        creates, _, sources = self._scopes(plan)
+        return creates, sources
 
     @staticmethod
     def read_text(path, limit, *, allow_links=False):

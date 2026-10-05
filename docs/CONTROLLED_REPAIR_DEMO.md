@@ -98,7 +98,10 @@ Task 26 adds a typed ImplementationStep.kind declaration:
 
 - CODE_CHANGE: authorized production-code or test-file changes.
 - STATIC_REVIEW: checks attestable from supplied source, such as comparing the
-  lock/transaction code for preservation; no execution claim.
+  lock/transaction code for preservation; no execution claim. Review-only files
+  remain available in bounded snapshots but grant no write authority unless
+  independently authorized by files_to_modify, a CODE_CHANGE step, or files_to_create
+  for the corresponding operation.
 - TEST_EXECUTION: downstream work, rejected inside implementation_steps by
   PlanGate's IMPLEMENTING_STEP_KINDS check.
 
@@ -125,8 +128,11 @@ classifier or keyword heuristic. The prompt/Implementer refusal boundary remains
 necessary. Legacy persisted plans without kind load as CODE_CHANGE for compatibility;
 the existing strict provider schema requires explicit kind on new outputs. This
 fallback makes no semantic assertion about legacy descriptions, and no old artifact
-is edited or automatically reaccepted/repaired. Kind changes neither mutation
-path authorization nor any workflow state; it is a plan-readiness check.
+is edited or automatically reaccepted/repaired. Kind also narrows mutation scope:
+STATIC_REVIEW-only paths are source context, not write-authorized paths. Legacy
+CODE_CHANGE authorization remains compatible. The [mutation boundary](MUTATION.md#source-selection-and-limits)
+shares write-scope calculation with the prompt and preserves all source limits.
+No workflow state or execution capability is added.
 
 ## Evidence inspection and post-run verification
 

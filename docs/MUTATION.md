@@ -63,12 +63,21 @@ and no changed files, subject to existing gate/stop semantics.
 Deterministic code validates the exact same-task accepted PLAN artifact, completed
 Planner invocation and PASS gate on the actual transition/event. Every attempt
 gets fresh current-byte snapshots outside a DB transaction. MODIFY authorization
-is files_to_modify plus all implementation-step files. CREATE authorization is
-files_to_create only. An absent step file also authorized for CREATE has no source
-snapshot; a later repair can explicitly MODIFY that existing step file with its
-fresh hash. Prior artifacts and investigation text cannot broaden plan authorization.
+is files_to_modify plus CODE_CHANGE step files. Legacy steps without kind load as
+CODE_CHANGE and retain their original write scope. STATIC_REVIEW-only files do not
+authorize writes; an independent files_to_modify entry or CODE_CHANGE step can still
+authorize MODIFY. CREATE authorization remains files_to_create only. Both the prompt
+projection and policy use the same declared modification-path calculation.
 
-Only selected existing authorized files are read. Exact bytes are SHA-256 hashed
+Source snapshot scope additionally includes STATIC_REVIEW files needed for
+attestation. Visibility of those bytes is not write authorization. The complete
+source/create union still receives the existing containment, protected-path,
+case-alias and file-count checks, and all snapshots share the existing UTF-8,
+per-file and aggregate byte limits. An absent source path also authorized for
+CREATE has no snapshot; a later repair can explicitly MODIFY that existing path
+with its fresh hash. Prior artifacts and investigation text cannot broaden scope.
+
+Only selected existing source-scope files are read. Exact bytes are SHA-256 hashed
 and strictly decoded as UTF-8 without normalization. NUL-containing/undecodable
 content, special files, directories and hardlink aliases are rejected. Source is
 user/context JSON separate from system instructions. Embedded instructions cannot

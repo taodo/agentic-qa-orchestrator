@@ -308,3 +308,100 @@ def test_create_atomic_publication_refuses_racing_target(target, monkeypatch):
     result = service.apply(plan, service.build_snapshots(plan), proposal(mutation("new.py", operation="CREATE")))
     assert result.decision.reason_code == "CREATE_TARGET_EXISTS"
     assert root.joinpath("new.py").read_bytes() == b"newer writer\n"
+
+
+def review_scope_plan(plan):
+    data = plan.model_dump(mode="json")
+    data["files_to_modify"] = []
+    data["implementation_steps"] = [
+        dict(id="step-1", kind="CODE_CHANGE", description="Repair application", files=["app.py"], depends_on=[]),
+        dict(id="preserve", kind="STATIC_REVIEW", description="Attest unchanged guardrail source",
+             files=["guardrail.py"], depends_on=["step-1"]),
+    ]
+    return type(plan).model_validate(data)
+
+
+def scope_request(plan, sources):
+    context = ImplementationContext(task_id=uuid4(), attempt=1, plan=plan,
+        plan_artifact_id=uuid4(), source_files=sources)
+    return json.loads(build_request(AgentName.IMPLEMENTER, context, ModelSettings(model="mock-only")).user_input)
+
+
+@pytest.mark.parametrize("operation", ["MODIFY", "CREATE"])
+def test_review_only_snapshot_never_authorizes_mutation(target, operation):
+    service, plan = target
+    plan = review_scope_plan(plan)
+    root = service.config.workspace_root
+    original = b"guardrail = 1\n"
+    (root / "guardrail.py").write_bytes(original)
+    sources = service.build_snapshots(plan)
+    assert {s.path for s in sources} == {"app.py", "guardrail.py"}
+    assert next(s for s in sources if s.path == "guardrail.py").content.encode() == original
+    request = scope_request(plan, sources)
+    assert {s["path"] for s in request["source_files"]} == {"app.py", "guardrail.py"}
+    assert request["authorized_modify_paths"] == ["app.py"] and request["authorized_create_paths"] == []
+    # Validate the entire set before applying even the authorized first repair.
+    result = service.apply(plan, sources, proposal(mutation(),
+        mutation("guardrail.py", before=original.decode(), operation=operation)))
+    assert not result.success and result.decision.reason_code == "PATH_NOT_AUTHORIZED"
+    assert result.applied == () and result.rollback == "NOT_NEEDED"
+    assert (root / "app.py").read_bytes() == b"old\n"
+    assert (root / "guardrail.py").read_bytes() == original
+    assert not list(root.glob(".qa-mutation-*"))
+
+
+@pytest.mark.parametrize("authorization", ["files_to_modify", "CODE_CHANGE", "legacy"])
+def test_review_file_independent_write_authorization_is_compatible(target, authorization):
+    service, plan = target
+    data = review_scope_plan(plan).model_dump(mode="json")
+    if authorization == "files_to_modify":
+        data["files_to_modify"] = ["guardrail.py"]
+    else:
+        step = dict(id="edit-guardrail", kind="CODE_CHANGE", description="Authorized guardrail change",
+            files=["guardrail.py"], depends_on=[])
+        if authorization == "legacy": del step["kind"]
+        data["implementation_steps"].append(step)
+    plan = type(plan).model_validate(data)
+    root = service.config.workspace_root
+    (root / "guardrail.py").write_bytes(b"old\n")
+    sources = service.build_snapshots(plan)
+    assert scope_request(plan, sources)["authorized_modify_paths"] == ["app.py", "guardrail.py"]
+    result = service.apply(plan, sources, proposal(mutation("guardrail.py")))
+    assert result.success and [f.path for f in result.applied] == ["guardrail.py"]
+    assert (root / "guardrail.py").read_bytes() == b"new\n"
+    assert (root / "app.py").read_bytes() == b"old\n"
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_code_change_step_alone_retains_write_authorization(target, legacy):
+    service, plan = target
+    data = plan.model_dump(mode="json")
+    data["files_to_modify"] = []
+    if legacy: del data["implementation_steps"][0]["kind"]
+    plan = type(plan).model_validate(data)
+    sources = service.build_snapshots(plan)
+    assert scope_request(plan, sources)["authorized_modify_paths"] == ["app.py"]
+    assert service.apply(plan, sources, proposal(mutation())).success
+    assert service.config.workspace_root.joinpath("app.py").read_bytes() == b"new\n"
+
+
+@pytest.mark.parametrize("config", [dict(max_source_files=1), dict(max_source_file_bytes=8),
+    dict(max_source_total_bytes=8)])
+def test_review_snapshots_retain_existing_source_bounds(target, config):
+    service, plan = target
+    root = service.config.workspace_root
+    (root / "guardrail.py").write_bytes(b"guardrail = 1\n")
+    bounded = MutationService(MutationConfig(root, **config))
+    with pytest.raises(MutationFailure, match="SOURCE_LIMIT"):
+        bounded.build_snapshots(review_scope_plan(plan))
+    assert (root / "app.py").read_bytes() == b"old\n"
+
+
+@pytest.mark.parametrize("path,code", [(".env", "PROTECTED_PATH"), ("../guardrail.py", "WORKSPACE_ESCAPE"),
+    ("APP.py", "INVALID_PLAN_AUTHORIZATION")])
+def test_review_snapshots_retain_protected_path_and_alias_checks(target, path, code):
+    service, plan = target
+    data = review_scope_plan(plan).model_dump(mode="json")
+    data["implementation_steps"][1]["files"] = [path]
+    with pytest.raises(MutationFailure, match=code):
+        service.build_snapshots(type(plan).model_validate(data))

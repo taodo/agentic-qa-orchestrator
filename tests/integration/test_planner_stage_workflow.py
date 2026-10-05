@@ -49,6 +49,7 @@ class Inventory:
             return 'confirmed'
 """
 FIXED = BROKEN.replace('self.available < 0', 'self.available <= 0')
+PRESERVATION = 'guardrail_policy = "preserve_existing_behavior"\n'
 TESTS = """from concurrent.futures import ThreadPoolExecutor
 from inventory import Inventory
 
@@ -77,7 +78,7 @@ def repair_plan():
             dict(id="repair", kind="CODE_CHANGE", description="Reject non-positive availability",
                  files=["backend/inventory.py"], depends_on=[]),
             dict(id="preserve", kind="STATIC_REVIEW", description="Compare source to preserve the lock and other behavior",
-                 files=["backend/inventory.py"], depends_on=["repair"])],
+                 files=["backend/inventory.py", "backend/preservation.py"], depends_on=["repair"])],
         files_to_create=[], files_to_modify=["backend/inventory.py"],
         acceptance_criteria=[dict(id=f"AC-{i}", description=description, verification="Existing deterministic pytest evidence")
             for i, description in enumerate(("Available room confirms", "Exhausted room rejects", "Concurrent last room does not overbook"), 1)],
@@ -104,10 +105,15 @@ def plan_response(value):
     return respond
 
 
-def implementation_response(content=FIXED, *, weaken_tests=False):
+def implementation_response(content=FIXED, *, weaken_tests=False, change_review_only=False):
     def respond(call):
         data = json.loads(call["input"][0]["content"])
-        source, = data["source_files"]
+        sources = {s["path"]: s for s in data["source_files"]}
+        assert set(sources) == {"backend/inventory.py", "backend/preservation.py"}
+        assert sources["backend/preservation.py"]["content"] == PRESERVATION
+        assert data["authorized_modify_paths"] == ["backend/inventory.py"]
+        assert data["authorized_create_paths"] == []
+        source = sources["backend/inventory.py"]
         assert source["path"] == "backend/inventory.py" and source["content"] == BROKEN
         assert source["sha256"] == sha256(BROKEN.encode()).hexdigest()
         assert [s["kind"] for s in data["accepted_plan"]["implementation_steps"]] == ["CODE_CHANGE", "STATIC_REVIEW"]
@@ -116,6 +122,10 @@ def implementation_response(content=FIXED, *, weaken_tests=False):
         if weaken_tests:
             mutations.append(dict(path="backend/tests/test_inventory.py", operation="MODIFY",
                 expected_sha256=sha256(TESTS.encode()).hexdigest(), content="def test_fake(): pass\n", reason="Unauthorized weakening attempt"))
+        if change_review_only:
+            review = sources["backend/preservation.py"]
+            mutations.append(dict(path=review["path"], operation="MODIFY", expected_sha256=review["sha256"],
+                content="guardrail_policy = \"weakened\"\n", reason="Attempted review-only mutation"))
         return ImplementationProposal(implementation_status="COMPLETED", implementation_summary="Proposed guard repair",
             plan_steps=[dict(step_id=s["id"], status="COMPLETED") for s in data["accepted_plan"]["implementation_steps"]],
             mutations=mutations, tests_added_or_modified=[], assumptions=[], known_issues=[], deviations=[])
@@ -149,6 +159,7 @@ def setup(factory, tmp_path, mock):
     (root / "frontend").mkdir()
     (root / "backend/inventory.py").write_text(BROKEN, encoding="utf-8", newline="\n")
     (tests / "test_inventory.py").write_text(TESTS, encoding="utf-8", newline="\n")
+    (root / "backend/preservation.py").write_text(PRESERVATION, encoding="utf-8", newline="\n")
     project = Project(key="temporary-inventory", name="Prepared offline inventory fixture")
     with UnitOfWork(factory) as uow:
         uow.projects.add(project)
@@ -200,6 +211,7 @@ def test_controlled_repair_advances_to_testing_only_existing_runner_executes(mig
     def apply(plan, sources, proposal):
         with UnitOfWork(factory) as uow: assert uow.tasks.get(h.task.id).state == S.IMPLEMENTING
         assert len(proposal.mutations) == 1 and not subprocess_calls
+        assert {s.path for s in sources} == {"backend/inventory.py", "backend/preservation.py"}
         mutations.append(proposal)
         return original_apply(plan, sources, proposal)
     def popen(argv, **kwargs):
@@ -218,6 +230,7 @@ def test_controlled_repair_advances_to_testing_only_existing_runner_executes(mig
     assert result.state == (S.DONE if repaired else S.BLOCKED)
     assert len(mutations) == len(subprocess_calls) == 1
     assert (h.root / "backend/tests/test_inventory.py").read_text() == TESTS
+    assert (h.root / "backend/preservation.py").read_text() == PRESERVATION
     assert (h.root / "backend/inventory.py").read_text() == (FIXED if repaired else BROKEN + "\n# Incomplete synthetic repair\n")
     with UnitOfWork(factory) as uow:
         artifacts = uow.artifacts.list_by_task(h.task.id)
@@ -278,3 +291,25 @@ def test_test_strategy_does_not_authorize_test_weakening(migrated_factory, tmp_p
         assert any(error.code == "PATH_NOT_AUTHORIZED" for error in uow.history.list_errors(h.task.id))
         assert not any(a.artifact_type == AT.IMPLEMENTATION for a in uow.artifacts.list_by_task(h.task.id))
     assert len(mock.calls) == 5
+
+
+def test_review_only_mutation_rejected_before_any_apply_or_testing(migrated_factory, tmp_path, mock_openai, monkeypatch):
+    factory, _, _ = migrated_factory
+    mock = mock_openai(initial_outputs(repair_plan()) + [implementation_response(change_review_only=True)])
+    h = setup(factory, tmp_path, mock)
+    def forbidden(*args, **kwargs): pytest.fail("Unauthorized review-only mutation reached application or pytest")
+    monkeypatch.setattr(h.mutation, "apply", forbidden)
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    assert h.app.run_task(h.task.id).state == S.FAILED
+    assert (h.root / "backend/inventory.py").read_text() == BROKEN
+    assert (h.root / "backend/preservation.py").read_text() == PRESERVATION
+    assert (h.root / "backend/tests/test_inventory.py").read_text() == TESTS
+    with UnitOfWork(factory) as uow:
+        assert not uow.history.list_test_runs(h.task.id)
+        assert any(error.code == "PATH_NOT_AUTHORIZED" for error in uow.history.list_errors(h.task.id))
+        events = uow.history.list_events(h.task.id)
+        captured, = [e for e in events if e.event_type == "IMPLEMENTATION_SOURCE_CAPTURED"]
+        assert {s["path"] for s in captured.payload["sources"]} == {"backend/inventory.py", "backend/preservation.py"}
+        assert not any(e.event_type in {"MUTATION_RESERVED", "MUTATION_APPLIED", "TEST_EXECUTION_STARTED"} for e in events)
+        assert not any(a.artifact_type == AT.IMPLEMENTATION for a in uow.artifacts.list_by_task(h.task.id))
+    assert len(mock.calls) == 5 and not mock.queue

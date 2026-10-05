@@ -50,6 +50,10 @@ Current ImplementationStep includes kind: CODE_CHANGE, STATIC_REVIEW or
 TEST_EXECUTION. PlanGate permits only the first two in implementation_steps;
 approved executable verification belongs to test_strategy and TESTING. Source/test
 file edits remain code work; source-based attestation is not executing commands.
+STATIC_REVIEW-only files remain visible in bounded source snapshots but cannot be
+mutated unless independently authorized for the operation. MODIFY scope is
+files_to_modify plus CODE_CHANGE files; CREATE scope is files_to_create only.
+Legacy kind-less steps load as CODE_CHANGE and preserve their write authorization.
 Every required implementation step still needs a unique COMPLETED result, with no
 extra step or requires_replan bypass. Canonical controlled output commands_executed
 remains empty; Implementer has no pytest/shell/package-manager/provider tools.

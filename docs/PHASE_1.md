@@ -486,8 +486,14 @@ repositories. They verify Implementer never executes commands, actual required
 steps remain mandatory, misplaced execution stops at planning, failing tests cannot
 reach DONE, and test_strategy authorizes no test weakening. Existing stale-source,
 reconciliation, public fake-only and runner paths remain intact. No migration,
-dependency, frontend/UX, state-machine or mutation/test service change is added.
+dependency, frontend/UX, state-machine change or new mutation/test service is added.
 [Controlled repair runbook](CONTROLLED_REPAIR_DEMO.md) documents prerequisites,
 blind requirement, inspection and operator-only reset. Live StayFinder rerun:
 NOT RUN during this code fix; no claim of a completed real repair demonstration.
+The blocking Task 26 review finding is also addressed: STATIC_REVIEW-only paths
+remain available as bounded implementation snapshots but grant no write permission.
+Prompt projection and MutationPolicy share CODE_CHANGE/files_to_modify scope;
+CREATE still requires files_to_create. Legacy plans retain write authorization.
+Focused offline cases cover rejected review-only writes, independent authorization,
+source bounds/protected paths and the unchanged workflow runner.
 No merge or Task 27 work is included.

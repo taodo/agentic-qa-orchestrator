@@ -82,7 +82,9 @@ instructions require stable step/AC IDs, explicit dependencies, test traceabilit
 and honest NEEDS_RESEARCH/BLOCKED results. Task 26 adds explicit implementation
 step kinds and schema descriptions: CODE_CHANGE/STATIC_REVIEW for implementing;
 executable verification belongs only in test_strategy / TESTING. Planner must not
-duplicate test execution as implementation work. PlanGate rejects declared
+duplicate test execution as implementation work. STATIC_REVIEW-only paths are
+source context, not writes; prompt and mutation policy share a modification-path
+calculation using files_to_modify plus CODE_CHANGE files. PlanGate rejects declared
 TEST_EXECUTION and the Implementer reports unsupported execution as BLOCKED/replan,
 never fabricated completion. New strict provider schemas require kind while legacy
 persisted plans load without a migration. This is a typed declaration, not a prose

@@ -16,7 +16,7 @@ class ImplementationStep(BaseModel):
     description: NonBlank = Field(description="Work performable or source-attestable during IMPLEMENTING; never executable verification")
     # Legacy persisted plans omit kind. Strict provider schemas require it on new output.
     kind: ImplementationStepKind = Field(default_factory=lambda: ImplementationStepKind.CODE_CHANGE,
-        description="Declare CODE_CHANGE for source/test-file edits or STATIC_REVIEW for source-based checks; TEST_EXECUTION belongs to test_strategy/TESTING and is rejected by PlanGate")
+        description="Declare CODE_CHANGE for source/test-file edits or STATIC_REVIEW for source-based checks; STATIC_REVIEW files alone authorize only source visibility, not writes. TEST_EXECUTION belongs to test_strategy/TESTING and is rejected by PlanGate")
     files: tuple[NonBlank, ...]
     depends_on: tuple[NonBlank, ...]
 
@@ -47,3 +47,16 @@ class PlannerOutput(BaseModel):
     risks: tuple[NonBlank, ...]
     rollback_considerations: tuple[NonBlank, ...]
     open_questions: tuple[NonBlank, ...]
+
+
+def modification_paths(plan: PlannerOutput) -> set[str]:
+    """Declared write scope shared by prompt projection and deterministic policy.
+
+    Legacy steps load as CODE_CHANGE. Review-only visibility grants no writes;
+    explicit files_to_modify or an independent CODE_CHANGE step still may.
+    Workspace containment, limits and freshness remain MutationPolicy's job.
+    """
+    return set(plan.files_to_modify) | {
+        path for step in plan.implementation_steps
+        if step.kind == ImplementationStepKind.CODE_CHANGE for path in step.files
+    }
