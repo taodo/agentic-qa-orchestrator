@@ -7,6 +7,7 @@ from .types import NonBlank, Count
 class Task(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=False)
     id: UUID = Field(default_factory=uuid4)
+    project_id: UUID = Field(frozen=True)
     title: NonBlank
     requirement: NonBlank
     state: TaskState = TaskState.CREATED

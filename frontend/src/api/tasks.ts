@@ -1,0 +1,12 @@
+import { request } from './client';
+import type { ArtifactView, CollectionPage, DecisionView, ErrorView, GateEvaluationView, InvocationView, TaskDetail, TestRunView, TimelineEntry } from './types';
+export const getTask = (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}`);
+export const getTimeline = (id: string) => request<CollectionPage<TimelineEntry>>(`/tasks/${encodeURIComponent(id)}/timeline?limit=100`);
+export const runTask = (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/run`, { method: 'POST' });
+export const resumeTask = (id: string) => request<TaskDetail>(`/tasks/${encodeURIComponent(id)}/resume`, { method: 'POST' });
+export const getArtifacts = (id: string) => request<CollectionPage<ArtifactView>>(`/tasks/${encodeURIComponent(id)}/artifacts?limit=100`);
+export const getInvocations = (id: string) => request<CollectionPage<InvocationView>>(`/tasks/${encodeURIComponent(id)}/invocations?limit=100`);
+export const getTestRuns = (id: string) => request<CollectionPage<TestRunView>>(`/tasks/${encodeURIComponent(id)}/test-runs?limit=100`);
+export const getErrors = (id: string) => request<CollectionPage<ErrorView>>(`/tasks/${encodeURIComponent(id)}/errors?limit=100`);
+export const getDecisions = (id: string) => request<CollectionPage<DecisionView>>(`/tasks/${encodeURIComponent(id)}/decisions?limit=100`);
+export const getGates = (id: string) => request<CollectionPage<GateEvaluationView>>(`/tasks/${encodeURIComponent(id)}/gates?limit=100`);

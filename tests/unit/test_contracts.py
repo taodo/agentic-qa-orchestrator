@@ -28,11 +28,11 @@ def research():
 
 
 def plan():
-    return dict(decision="READY_FOR_IMPLEMENTATION", summary="Plan", assumptions=[], implementation_steps=["step-1"], files_to_create=[], files_to_modify=[], acceptance_criteria=[dict(id="AC-1", description="Expected behavior")], test_strategy=[dict(description="Test behavior", acceptance_criteria_refs=["AC-1"])], risks=[], rollback_considerations=[], open_questions=[])
+    return dict(decision="READY_FOR_IMPLEMENTATION", summary="Plan", assumptions=[], implementation_steps=[dict(id="step-1", description="Implement behavior", files=["app.py"], depends_on=[])], files_to_create=[], files_to_modify=[], acceptance_criteria=[dict(id="AC-1", description="Expected behavior", verification="Assert expected result")], test_strategy=[dict(description="Test behavior", acceptance_criteria_refs=["AC-1"])], risks=[], rollback_considerations=[], open_questions=[])
 
 
 def implementation():
-    return dict(implementation_status="COMPLETED", plan_steps=["step-1"], changed_files=["app.py"], tests_added_or_modified=[], commands_executed=[], deviations=[dict(description="Changed approach", requires_replan=True)], assumptions=[], known_issues=[])
+    return dict(implementation_status="COMPLETED", plan_steps=[dict(step_id="step-1", status="COMPLETED")], changed_files=[dict(path="app.py", change_type="MODIFIED", reason="Implement behavior")], tests_added_or_modified=[], commands_executed=[dict(command="recorded command", exit_code=0)], deviations=[dict(description="Changed approach", requires_replan=True)], assumptions=[], known_issues=[])
 
 
 def analysis():
@@ -40,11 +40,11 @@ def analysis():
 
 
 def investigation():
-    return dict(status="ROOT_CAUSE_IDENTIFIED", root_cause="Wrong condition", evidence=["report:1"], confidence=0.9, recommended_action="Fix condition", alternative_hypotheses=[], additional_evidence_needed=[])
+    return dict(status="ROOT_CAUSE_IDENTIFIED", root_cause="Wrong condition", evidence=["report:1"], confidence=0.9, recommended_action=dict(type="CODE_FIX", description="Fix condition"), alternative_hypotheses=[], additional_evidence_needed=[])
 
 
 def review():
-    return dict(decision="REQUEST_CHANGES", requirement_coverage=[dict(acceptance_criterion_id="AC-1", summary="Reviewed", evidence_refs=["report:1"])], issues=[dict(severity="HIGH", description="Defect", evidence_refs=["report:1"])], test_gaps=[], implementation_risks=[], unverified_assumptions=[])
+    return dict(decision="REQUEST_CHANGES", requirement_coverage=[dict(acceptance_criterion_id="AC-1", status="UNVERIFIED", summary="Reviewed", evidence_refs=["report:1"])], issues=[dict(severity="HIGH", description="Defect", evidence_refs=["report:1"])], test_gaps=[], implementation_risks=[], unverified_assumptions=[])
 
 
 def test_canonical_states_and_agent_names():
@@ -105,16 +105,16 @@ def test_invalid_failure_classification():
 def records():
     task=uuid4(); now=datetime.now(timezone.utc)
     return [
-        Task(id=task,title="Task",requirement="Requirement"),
+        Task(project_id=uuid4(), id=task,title="Task",requirement="Requirement"),
         Artifact(task_id=task,artifact_type="RESEARCH",schema_version="0.1",producer_agent="RESEARCHER",content={"summary":"Evidence"}),
         AgentInvocation(task_id=task,agent="RESEARCHER",model="model-id",reasoning_effort="low",attempt=1,status="COMPLETED",started_at=now,finished_at=now),
         DecisionRecord(task_id=task,decision_type="TRANSITION",decision_source="orchestrator",reason_code="READY",reason_details="Evidence accepted"),
-        ErrorRecord(task_id=task,error_type="TEST_FAILURE",code="ASSERTION",severity="ERROR",owner="TEST_TARGET",retryable=False,blocking=True,source="pytest",message="Assertion failed"),
+        ErrorRecord(task_id=task,error_type="TEST_FAILURE",code="ASSERTION",severity="ERROR",owner="TEST_TARGET",retryable=False,blocking=True,source=dict(actor=dict(type="TOOL", id="test-runner"), invocation_id=uuid4(), tool="pytest"),message="Assertion failed"),
         GateEvaluation(task_id=task,gate_name="review",result="PASS",checks=[dict(check="evidence",result="PASS")]),
         Transition(task_id=task,from_state="CREATED",to_state="RESEARCHING",trigger="start",decision_id=uuid4()),
-        Event(task_id=task,event_type="created",actor="orchestrator",correlation=uuid4(),payload={"state":"CREATED"}),
-        AuditRecord(task_id=task,actor="orchestrator",action="read",resource="artifact",decision="allow",policy="least_privilege",metadata={}),
-        RunRecord(task_id=task,implementation_artifact_id=uuid4(),status="PASSED",environment="local",started_at=now,finished_at=now,passed_count=1,failed_count=0,skipped_count=0),
+        Event(task_id=task,event_type="created",actor=dict(type="ORCHESTRATOR", id="qa-sentinel"),correlation=dict(decision_id=uuid4()),payload={"state":"CREATED"}),
+        AuditRecord(task_id=task,actor=dict(type="ORCHESTRATOR", id="qa-sentinel"),action="read",resource="artifact",decision="allow",policy="least_privilege",metadata={}),
+        RunRecord(task_id=task,implementation_artifact_id=uuid4(),execution_status="COMPLETED",outcome="PASS",environment="local",started_at=now,finished_at=now,passed_count=1,failed_count=0,skipped_count=0),
     ]
 
 

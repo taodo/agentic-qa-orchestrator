@@ -25,6 +25,8 @@ class ArtifactType(StrEnum):
     RESEARCH = "RESEARCH"
     PLAN = "PLAN"
     IMPLEMENTATION = "IMPLEMENTATION"
+    IMPLEMENTATION_PROPOSAL = "IMPLEMENTATION_PROPOSAL"
+    REPOSITORY_EVIDENCE = "REPOSITORY_EVIDENCE"
     TEST_RESULT = "TEST_RESULT"
     TEST_ANALYSIS = "TEST_ANALYSIS"
     INVESTIGATION = "INVESTIGATION"
@@ -36,6 +38,7 @@ class GateResult(StrEnum):
     BLOCKED = "BLOCKED"
 
 class AgentInvocationStatus(StrEnum):
+    STARTED = "STARTED"
     COMPLETED = "COMPLETED"
     BLOCKED = "BLOCKED"
     FAILED = "FAILED"
@@ -107,7 +110,40 @@ class ReviewIssueSeverity(StrEnum):
     MEDIUM = "MEDIUM"
     LOW = "LOW"
 
-class TestRunStatus(StrEnum):
-    PASSED = "PASSED"
+class TestExecutionStatus(StrEnum):
+    COMPLETED = "COMPLETED"
+    INCOMPLETE = "INCOMPLETE"
     FAILED = "FAILED"
+
+class TestOutcome(StrEnum):
+    PASS = "PASS"
+    FAIL = "FAIL"
+    UNKNOWN = "UNKNOWN"
+
+class ImplementationStepStatus(StrEnum):
+    COMPLETED = "COMPLETED"
     BLOCKED = "BLOCKED"
+    SKIPPED = "SKIPPED"
+
+class ChangeType(StrEnum):
+    CREATED = "CREATED"
+    MODIFIED = "MODIFIED"
+    DELETED = "DELETED"
+
+class InvestigationActionType(StrEnum):
+    CODE_FIX = "CODE_FIX"
+    TEST_FIX = "TEST_FIX"
+    MORE_RESEARCH = "MORE_RESEARCH"
+    HUMAN_ACTION = "HUMAN_ACTION"
+
+class CoverageStatus(StrEnum):
+    COVERED = "COVERED"
+    NOT_COVERED = "NOT_COVERED"
+    UNVERIFIED = "UNVERIFIED"
+
+class ActorType(StrEnum):
+    ORCHESTRATOR = "ORCHESTRATOR"
+    AGENT = "AGENT"
+    TOOL = "TOOL"
+    HUMAN = "HUMAN"
+    SYSTEM = "SYSTEM"

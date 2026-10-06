@@ -14,6 +14,6 @@ class AgentInvocation(BaseModel):
     attempt: Attempt
     status: AgentInvocationStatus
     started_at: datetime
-    finished_at: datetime
+    finished_at: datetime | None = None
     input_context_refs: tuple[NonBlank, ...] = ()
     error_id: UUID | None = None

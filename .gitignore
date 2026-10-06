@@ -2,5 +2,17 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 .venv/
+task4-test-deps/
+task7-sdk-deps/
+task13-api-deps/
+task16-host-deps/
+task17-preview-deps/
+.qa-sentinel/
+qa-sentinel.local.json
+node_modules/
+*.tsbuildinfo
+frontend/.vite/
+frontend/.env.local
+frontend/.env.*.local
 build/
 dist/
