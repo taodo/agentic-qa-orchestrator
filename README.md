@@ -1,180 +1,367 @@
-# QA Sentinel — Agentic QA Orchestrator
+# Agentic QA Orchestrator
 
-QA Sentinel coordinates reasoning agents, deterministic tools, evidence and
-workflow gates to execute and inspect software QA work. A technical Operator can
-follow a requirement from research and planning through implementation, testing
-and independent review.
+**Agentic QA Orchestrator** is a portfolio-grade QA engineering platform that combines reasoning agents with deterministic execution, explicit workflow gates, durable evidence, and controlled source mutation.
 
-## Why it exists
+The project started as **QA Sentinel** and is evolving toward an end-to-end QA orchestration workflow for real software projects.
 
-A passing test, a proposed fix and an approval answer different questions.
-QA Sentinel keeps those records separate, connects them to a Project-owned Task,
-and makes the reasons for progression or a safe stop inspectable.
+> **Agents reason. Tools act. Evidence records reality. The orchestrator controls progression.**
 
-It coordinates test automation rather than replacing a CI runner or bug tracker.
-Its structured agents are not a chatbot or an unrestricted autonomous coding
-agent: models cannot directly write files, run shell commands or declare DONE.
+## What this project demonstrates
 
-## How it works
+This repository is designed to show more than a collection of AI prompts. It focuses on the engineering problems that appear when AI is allowed to participate in real QA and repair workflows:
 
-**Agents reason. Tools act. Evidence records reality. Orchestrator controls progression.**
+- deterministic workflow/state-machine control
+- typed contracts between agents
+- bounded repository research
+- explicit approval gates
+- controlled whole-file mutation
+- stale-write and workspace-boundary protection
+- trusted pytest execution
+- retries, escalation and reconciliation
+- durable execution jobs
+- audit-friendly evidence
+- local real-project onboarding
+- protected synthetic demo modes
 
-The normal completed path is:
+The core idea is simple: an LLM may propose or reason about work, but it does **not** directly control the filesystem, shell, workflow state, or final approval.
+
+## Current workflow
+
+A normal successful task progresses through:
 
 ```text
-CREATED → RESEARCHING → PLANNING → IMPLEMENTING → TESTING → REVIEWING → DONE
+CREATED
+  ↓
+RESEARCHING
+  ↓
+PLANNING
+  ↓
+IMPLEMENTING
+  ↓
+TESTING
+  ↓
+REVIEWING
+  ↓
+DONE
 ```
 
-Failed product tests can enter ANALYZING and INVESTIGATING before a controlled
-repair/retest. Gates and the accepted state machine own progression; Reviewer
-APPROVE alone cannot set DONE. [State and role guide](docs/PRODUCT_GUIDE.md#workflow-states).
+When tests fail, the workflow can move through structured analysis and investigation before a bounded repair/retest cycle.
 
-**External callers use Application Services, not orchestration internals or
-persistence repositories directly.** The browser uses the API, which delegates
-to the application boundary above the core. [Architecture](docs/ARCHITECTURE.md).
+```text
+TESTING
+  ↓
+ANALYZING
+  ↓
+INVESTIGATING
+  ↓
+IMPLEMENTING
+  ↓
+TESTING
+```
 
-## Quick demo
+Progression is controlled by deterministic gates rather than by an agent simply saying that a task is complete.
 
-In the protected Render preview, use the URL and access credentials supplied
-privately by the owner. For local demo, start the host below. Then:
+## Architecture
 
-1. Open **Demo Calculator** (key `demo-calculator`).
-2. Create a Task titled **Division support** with requirement
-   **Add division support and reject division by zero.**
-3. Open the Task and click **Run**. The fixed synthetic scenario reaches DONE.
-4. Inspect Overview, Timeline, Artifacts, Invocations, Test Runs, Decisions and Gates.
-5. Open **Operations** for bounded execution/activity summaries and Task drill-down.
-   [Operational visibility and limits](docs/OBSERVABILITY.md).
+```text
+                         ┌──────────────────────────┐
+                         │      Requirement         │
+                         └────────────┬─────────────┘
+                                      │
+                                      ▼
+┌──────────────┐   evidence   ┌──────────────────────┐
+│ Researcher   │─────────────▶│    Research Gate     │
+└──────────────┘              └──────────┬───────────┘
+                                         │
+                                         ▼
+┌──────────────┐              ┌──────────────────────┐
+│ Planner      │─────────────▶│      Plan Gate       │
+└──────────────┘              └──────────┬───────────┘
+                                         │
+                                         ▼
+┌──────────────┐  proposal    ┌──────────────────────┐
+│ Implementer  │─────────────▶│ Implementation Gate  │
+└──────────────┘              └──────────┬───────────┘
+                                         │
+                                         ▼
+                              ┌──────────────────────┐
+                              │ Controlled Mutation  │
+                              └──────────┬───────────┘
+                                         │
+                                         ▼
+                              ┌──────────────────────┐
+                              │ Deterministic Pytest │
+                              └──────────┬───────────┘
+                                         │
+                          fail ┌──────────┴──────────┐ pass
+                               ▼                     ▼
+                        Analyzer /             Reviewer
+                        Investigator               │
+                               │                    ▼
+                               └──────────────▶    DONE
+```
 
-**Demo evidence is deterministic and synthetic.** No live AI, source writes,
-real pytest process, API key or external workflow network is involved. A different
-requirement does not make the demo verify arbitrary software.
-[Full walkthrough](docs/PRODUCT_GUIDE.md#demo-mode).
+The main architectural boundary is:
 
-The UI has a Projects registry, Project Detail with owned Tasks, and a Task
-console. Run/Resume sit above eight evidence sections, with expandable Artifact
-JSON, status labels and explicit Refresh controls. This textual walkthrough
-requires no screenshot assets.
+```text
+Reasoning agents
+      │
+      ▼
+Structured contracts
+      │
+      ▼
+Deterministic policies / gates
+      │
+      ▼
+Trusted tools
+      │
+      ▼
+Persisted evidence
+```
 
-## Core concepts
+## Key engineering features
 
-| Concept | Meaning |
+| Area | What is implemented |
 | --- | --- |
-| Project | Logical software identity; creation does not configure a workspace/runtime |
-| Task | One QA requirement owned by exactly one Project |
-| Run | Browser creates a durable job; API /run and terminal checks remain synchronous |
-| Resume | Restores a BLOCKED Task's stored state; Run is separate |
-| Evidence | Distinct Artifacts, Invocations, Test Runs, Errors, Decisions, Gates and Events |
-| Workflow state | Persisted current Task snapshot, not an agent opinion |
-| Reconciliation | Derived crash safety assessment; unresolved evidence blocks continuation |
+| Workflow | Explicit state machine with guarded transitions and terminal protection |
+| Agents | Researcher, Planner, Implementer, Test Analyzer, Investigator and Reviewer |
+| Contracts | Strict Pydantic schemas for agent outputs and evidence |
+| Repository access | Bounded read-only LIST / READ / SEARCH tools for research and planning |
+| Mutation | CREATE / MODIFY only, whole-file proposals, SHA freshness and stale-write protection |
+| Execution | Restricted pytest-only command policy, bounded output and process cleanup |
+| Reliability | Retry budgets, escalation, circuit-breaking and safe blocking |
+| Persistence | SQLite + SQLAlchemy + Alembic with durable task/evidence history |
+| Jobs | Durable QUEUED / RUNNING / SUCCEEDED / STOPPED / FAILED execution jobs |
+| Reconciliation | Read-only crash/recovery assessment before unsafe continuation |
+| API | FastAPI application boundary over orchestration and persistence |
+| UI | React/TypeScript project, task, evidence and operations views |
+| Real projects | Explicit local workspace onboarding and real-target proving |
+| Demo safety | Synthetic fake-only preview/hosted modes separated from real execution |
 
-## Local demo
+## Why the separation matters
 
-From the repository root with Python 3.12+ and Node.js 22.12+:
+The system deliberately keeps several concepts separate:
+
+- **Task state** is not the same as an execution-job status.
+- **Test evidence** is not the same as an Implementer claim.
+- **Reviewer approval** does not directly set `DONE`.
+- **Repository visibility** does not automatically grant write authority.
+- **A model request** does not directly become a filesystem or shell action.
+- **A failed or interrupted run** is preserved as evidence rather than silently retried into success.
+
+This makes the workflow easier to inspect and safer to extend.
+
+## Demo modes
+
+### Synthetic demo
+
+The repository includes a deterministic demo project that requires:
+
+- no OpenAI API key
+- no live model calls
+- no source mutation
+- no real pytest subprocess
+- no external project
+
+This is useful for exploring the state machine, UI, evidence model and operational views safely.
+
+### Real local mode
+
+Real local mode can bind a Project to an explicitly configured local workspace and enable:
+
+- bounded repository research
+- real model-backed reasoning
+- controlled mutation proposals
+- deterministic pytest execution
+- persisted workflow evidence
+
+Real local mode is intentionally loopback-only and operator-controlled.
+
+## Quick start — synthetic demo
+
+Requirements:
+
+- Python 3.12+
+- Node.js 22.12+
+
+From the repository root:
 
 ```shell
 python -m pip install -e ".[test]"
+
 cd frontend
 npm ci
 npm run build
 cd ..
+
 qa-sentinel serve --demo
 ```
 
-Open http://127.0.0.1:8000. Installation/build may download dependencies; demo
-startup/execution need no external network. Local demo is loopback-only, has no
-authentication, and keeps state in `~/.qa-sentinel/demo/state.sqlite3`. Installing
-the package alone starts no server. [Hosting](docs/HOSTING.md).
+Open:
 
-## Public preview
+```text
+http://127.0.0.1:8000
+```
 
-The Render preview is a protected **deterministic synthetic demo only**, marked
-**DEMO PREVIEW · Synthetic**. A temporary HTTP Basic gate protects UI/API; exact
-GET /health is public. It has no product users/RBAC and cannot run real models,
-repository reads, source mutation or real pytest. Other Projects remain
-runtime-unconfigured. Preview SQLite may reset on restart/redeploy; do not enter
-secrets or rely on durable records. The owner supplies the current generated
-HTTPS URL privately; none is hard-coded here. [Deployment](docs/DEPLOYMENT.md).
+Suggested demo flow:
 
-An optional separate **hosted-demo** profile retains SQLite on one paid persistent
-disk and uses single-operator session login instead of Basic. It remains
-deterministic synthetic fake-only: persistence enables no real models, repository,
-mutation or pytest. Secure/HttpOnly/SameSite=Strict cookies expire after eight
-hours; unsafe requests require CSRF and auth failure never replays actions.
-No users/RBAC, auth table or multi-instance deployment is added. The existing
-free preview stays supported and its data is not automatically transferred.
-[Hosted access](docs/HOSTED_ACCESS.md), [optional deployment](docs/DEPLOYMENT.md#optional-persistent-hosted-demo-task-23).
+1. Open **Demo Calculator**.
+2. Create a task named **Division support**.
+3. Use the requirement: **Add division support and reject division by zero.**
+4. Click **Run**.
+5. Inspect the timeline, artifacts, invocations, test runs, decisions and gates.
+6. Open **Operations** to inspect durable execution status.
 
-## Real local mode
+The demo is synthetic by design; changing the requirement does not turn it into arbitrary autonomous software execution.
 
-Real local mode executes against an explicitly configured **trusted local
-workspace**, with an existing Project, matching ProjectWorkspaceBinding,
-OpenAIModelAdapter/RealAgentRuntime, bounded repository reads, controlled
-CREATE/MODIFY proposals and real pytest. OPENAI_API_KEY stays in the local
-environment. This mode remains loopback-only. Prepared tests are trusted
-executable code; policies are not an OS sandbox. Read the
-[operator guide](docs/PRODUCT_GUIDE.md#real-local-mode) and
-[configuration instructions](docs/HOSTING.md#real-local-mode) before running.
+## Real-project proving
 
-## Real Project onboarding
+Before allowing a real workflow to touch a target repository, the project provides explicit target checks.
 
-For an external repository, use local `target-check` for zero-execution checks,
-then explicitly request `target-test` for one approved pytest proving run.
-`--test-cwd backend --pytest-target tests` keeps the full repository binding.
-These commands require an existing Project but no model key; they create no
-Task, TestRun or execution job and authorize no mutation.
-[Real target proving and Windows example](docs/REAL_TARGETS.md).
+Typical operator flow:
 
-Create/select a logical Project in the same database through the UI/API, then stop
-the host. Use `qa-sentinel local init` with explicit absolute database, frontend,
-workspace paths, Project key and repeatable pytest targets to generate nonsecret
-host configuration. `qa-sentinel local validate --config ...` checks existing
-identity and accepted policies read-only, with no model calls, test execution or
-source mutation. OPENAI_API_KEY stays in the local environment and is only
-presence-checked. Start `serve --config ...`, inspect **Runtime readiness** on
-Project Detail, then create a Task and Run. Project persistence never gains a
-workspace path. [Exact commands and safe write semantics](docs/HOSTING.md#real-project-onboarding).
+```text
+Project
+  ↓
+target-check
+  ↓
+target-test
+  ↓
+real-local configuration
+  ↓
+Task Run / Resume
+```
 
-Preview remains deterministic synthetic demo only; only Demo Calculator has a
-fake runtime. Readiness is a manual snapshot, and backend execution checks remain
-authoritative. No automatic repository/test discovery or Project creation occurs.
+`target-check` validates workspace/configuration/policy without running tests or models.
 
-## Documentation index
+`target-test` performs one explicitly approved pytest proving run without creating a QA workflow Task.
 
-| Start here | Implementation reference |
-| --- | --- |
-| [PRD](docs/PRD.md) — purpose, journeys and boundaries | [Architecture](docs/ARCHITECTURE.md) |
-| [Product Guide](docs/PRODUCT_GUIDE.md) — workflow and evidence walkthrough | [Runtime](docs/RUNTIME.md), [State machine](docs/STATE_MACHINE.md) |
-| [Feature Reference](docs/FEATURES.md) — screens, ownership and limits | [Application](docs/APPLICATION.md), [API](docs/API.md) |
-| [Frontend](docs/FRONTEND.md) — UI and development | [Projects](docs/PROJECTS.md), [Database](docs/DATABASE.md), [Execution jobs](docs/EXECUTION_JOBS.md) |
-| [Hosting](docs/HOSTING.md) — local configuration | [Models](docs/MODELS.md), [Execution](docs/EXECUTION.md) |
-| [Real targets](docs/REAL_TARGETS.md) — CLI proving before controlled repair | [Projects](docs/PROJECTS.md), [Execution](docs/EXECUTION.md) |
-| [Deployment](docs/DEPLOYMENT.md) — protected Render demo | [Mutation](docs/MUTATION.md), [Repository evidence](docs/REPOSITORY_TOOLS.md) |
-| [Reconciliation](docs/RECONCILIATION.md) — read-only assessment and operator playbooks | [Execution jobs](docs/EXECUTION_JOBS.md) |
-| [Phase 1](docs/PHASE_1.md) — status and historical checkpoints | [Reliability](docs/RELIABILITY.md), [Agent contracts](docs/AGENT_SPEC_v0.1.md) |
+See [Real targets](docs/REAL_TARGETS.md) and [Hosting](docs/HOSTING.md) for the current operator model.
 
-## Current limitations
+## Safety boundaries
 
-Phase 1 uses SQLite, durable async browser Run and a single-process host admitting
-one workflow at a time. The browser recovers active requests from history and
-polls only while active. The durable queue has one local worker; job status remains
-separate from Task/evidence truth. There is no distributed worker system,
-public multi-tenant SaaS, production auth/RBAC, remote clone or autonomous shell.
-Evidence views are bounded prefixes with explicit truncation and manual freshness.
-Unresolved calls, tests or writes need explicit reconciliation; Resume is not
-automatic recovery. Hidden reasoning/raw provider responses are not stored or
-displayed. [PRD limitations](docs/PRD.md#risks-and-limitations).
+The project intentionally does **not** provide unrestricted autonomy.
 
-## Contributor onboarding and checks
+Current guardrails include:
 
-Before changing workflow semantics, read PRD, Phase 1, Application, Runtime and
-Projects. Before changing frontend, read Product Guide, Features and Frontend.
-Before changing hosting/deployment, read Hosting and Deployment. The index above
-links all of them. Historical task sections describe their checkpoint, not
-additional current capabilities.
+- no arbitrary shell execution
+- no arbitrary executable arguments from agents
+- no DELETE mutations
+- protected path rejection
+- workspace escape and symlink/junction checks
+- stale source detection with SHA-256
+- bounded source/result sizes
+- restricted environment propagation
+- pytest-only trusted execution
+- fake-only public/demo execution modes
+- no hidden chain-of-thought persistence
+- no raw provider-response persistence
+- explicit reconciliation after uncertain runtime outcomes
 
-Run `python -m pytest`. In `frontend/`, run `npm ci`, `npm test -- --run` and
-`npm run build`; then run `git diff --check` at the root. Tests use temporary
-workspaces and mocked providers with no real API keys/costs. For frontend
-development use `npm run dev`; Vite's local API proxy stays separate from the
-full-stack host. See [Frontend](docs/FRONTEND.md).
+Prepared tests are executable code, so these controls are policy boundaries rather than an OS sandbox.
+
+## Project status
+
+The repository now contains the full Phase 1 foundation rather than the original skeleton:
+
+- agent/runtime contracts
+- deterministic workflow and gates
+- persistence and migrations
+- controlled repository tools
+- controlled source mutation
+- deterministic pytest execution
+- reliability and reconciliation
+- FastAPI application/API
+- React operator UI
+- durable execution jobs
+- operations visibility
+- local real-target proving
+
+The next product work focuses on making the experience easier to operate and extending the platform from repair-oriented workflows toward broader QA execution.
+
+Planned direction:
+
+```text
+UX optimization
+    ↓
+Context / token efficiency & cost observability
+    ↓
+PRD / test-case ingestion → structured test specifications
+    ↓
+Controlled API testing
+    ↓
+Controlled Playwright/browser testing
+    ↓
+QA campaign dashboard and traceability
+```
+
+## Repository structure
+
+```text
+src/qa_sentinel/
+├── agents/          reasoning roles and prompts
+├── api/             FastAPI routes and API models
+├── application/     application-service boundary
+├── domain/          workflow/evidence domain models
+├── execution/       deterministic command and pytest execution
+├── host/            local/demo/hosted composition
+├── models/          provider-neutral model abstraction
+├── mutation/        controlled write policy/service
+├── orchestration/   gates, workflow runner and reliability
+├── persistence/     SQLAlchemy repositories and records
+├── repository/      bounded read-only repository access
+└── schemas/         structured agent/tool contracts
+
+frontend/            React + TypeScript operator UI
+alembic/             database migrations
+docs/                architecture, product and operator documentation
+tests/               unit and integration coverage
+```
+
+## Validation
+
+Backend:
+
+```shell
+python -m pytest
+```
+
+Frontend:
+
+```shell
+cd frontend
+npm ci
+npm test -- --run
+npm run build
+```
+
+Repository check:
+
+```shell
+git diff --check
+```
+
+Automated model tests use mocked provider boundaries and do not require a live API key.
+
+## Documentation
+
+Good starting points:
+
+- [Product Guide](docs/PRODUCT_GUIDE.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [PRD](docs/PRD.md)
+- [State Machine](docs/STATE_MACHINE.md)
+- [Runtime](docs/RUNTIME.md)
+- [Repository Tools](docs/REPOSITORY_TOOLS.md)
+- [Mutation Safety](docs/MUTATION.md)
+- [Execution](docs/EXECUTION.md)
+- [Reliability](docs/RELIABILITY.md)
+- [Reconciliation](docs/RECONCILIATION.md)
+- [Real Targets](docs/REAL_TARGETS.md)
+- [Deployment](docs/DEPLOYMENT.md)
+
+## Portfolio note
+
+This project is intentionally built as an engineering portfolio rather than a thin AI demo. The focus is on orchestration, QA evidence, safe execution boundaries, recoverability, auditability and the practical constraints of letting reasoning models participate in software-quality workflows.
+
+The repository name reflects the broader direction: **Agentic QA Orchestrator**.
