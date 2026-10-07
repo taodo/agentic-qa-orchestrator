@@ -94,7 +94,8 @@ host current-revision marker include 0004. No dependency is added.
 Task 2.2 now attaches immutable specification sources and structured requirements
 through the stable Campaign UUID and Project ownership; see
 [Campaign requirements](REQUIREMENTS.md). Ingestion/extraction does not change
-Campaign status. Test specifications remain future Task 2.3 work. Task 2.1 adds none of those child
+Campaign status. Task 2.3 adds [executor-neutral imported/generated test
+specifications](TEST_SPECIFICATIONS.md), without approval/readiness or execution. Task 2.1 adds none of those child
 models, ingestion, extraction, generation, readiness, traceability, execution,
 source mutation or frontend redesign. Future changes to approval invalidation or
 reverse transitions must be explicit contract changes rather than metadata

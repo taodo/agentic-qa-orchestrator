@@ -10,6 +10,10 @@ Project-owned campaign preparation through 0004; see [QA Campaigns](CAMPAIGNS.md
 Task 2.2 adds scoped source ingestion and explicit structured extraction through
 0005; see [Campaign requirements](REQUIREMENTS.md) for bounds and safe outcomes.
 
+Task 2.3 adds executor-neutral test import/design through 0006; see
+[Test specifications](TEST_SPECIFICATIONS.md) for exact import grammars, bounds,
+traceability, idempotency and generation usage.
+
 ## Application factory and host composition
 
 Task 24 adds only read-only operational projections. These routes alone use
@@ -65,6 +69,14 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/requirements | list_campaign_requirements → CollectionPage[CampaignRequirementView] |
 | GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/requirements/{requirement_id} | get_campaign_requirement → CampaignRequirementView |
 | GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/model-usage | get_campaign_model_usage → CampaignModelUsage |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-imports | import_campaign_tests → TestImportView (201) |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-imports | list_campaign_test_imports → CollectionPage[TestImportView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-imports/{import_id} | get_campaign_test_import → TestImportDetail |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/generate-tests | generate_campaign_tests → TestGenerationView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-generations | list_campaign_test_generations → CollectionPage[TestGenerationView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-generations/{generation_id} | get_campaign_test_generation → TestGenerationView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-specifications | list_campaign_test_specifications → CollectionPage[TestSpecificationView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-specifications/{test_spec_id} | get_campaign_test_specification → TestSpecificationView |
 | GET /api/v1/tasks/{task_id} | get_task_detail → TaskDetail |
 | GET /api/v1/tasks/{task_id}/reconciliation | assess_task_reconciliation → ReconciliationAssessmentView |
 | POST /api/v1/tasks/{task_id}/run | run_task → TaskDetail |

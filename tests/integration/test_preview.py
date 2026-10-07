@@ -233,9 +233,10 @@ def test_campaign_routes_keep_preview_basic_access(config):
 def test_preview_content_keeps_basic_access_and_no_real_extractor(config, monkeypatch):
     def forbidden(*args, **kwargs): pytest.fail('Preview cannot construct a real extractor')
     monkeypatch.setattr(composition.RequirementExtractor, '__init__', forbidden)
+    monkeypatch.setattr(composition.TestSpecificationGenerator, '__init__', forbidden)
     web = create_host_app(preview(config))
     app = web.state.host_composition.application
-    assert app._requirement_extractor is None
+    assert app._requirement_extractor is None and app._test_generator is None
     project = app.list_projects().items[0]
     campaign = app.create_campaign(project.id, name='Synthetic PRD')
     with TestClient(web) as client:

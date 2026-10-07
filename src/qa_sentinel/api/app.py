@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from qa_sentinel.application import QASentinelApplication, ApplicationError
-from . import projects, tasks, executions, operations, campaigns, campaign_content
+from . import projects, tasks, executions, operations, campaigns, campaign_content, test_specifications
 from .errors import (
     application_error_handler, validation_error_handler, http_error_handler, internal_error_handler,
 )
@@ -22,6 +22,7 @@ def create_api_app(application: QASentinelApplication) -> FastAPI:
     app.include_router(projects.router, prefix="/api/v1")
     app.include_router(campaigns.router, prefix="/api/v1")
     app.include_router(campaign_content.router, prefix="/api/v1")
+    app.include_router(test_specifications.router, prefix="/api/v1")
     app.include_router(tasks.router, prefix="/api/v1")
     app.include_router(executions.router, prefix="/api/v1")
     app.include_router(operations.router, prefix="/api/v1")

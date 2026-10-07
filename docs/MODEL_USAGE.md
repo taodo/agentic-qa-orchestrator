@@ -141,3 +141,12 @@ change before claiming those guarantees here. No new dependency or migration.
 semantics for dedicated extraction attempts without hidden Tasks/invocations. Its
 Project/Campaign-scoped endpoint is separate from Task/Run evidence windows.
 Missing usage stays unknown; public demo modes do not construct a real extractor.
+
+## Campaign test design (Task 2.3)
+
+[AI test specification generation](TEST_SPECIFICATIONS.md) contributes dedicated
+PLANNER attempts and TEST_SPEC_GENERATION observational purpose to the existing
+bounded Campaign usage projection. It reuses ModelMetadata/UsageTotals without
+TaskState, QA Run or hidden invocation records. Both provider-authoritative values
+and missing/zero usage semantics remain unchanged; deterministic imports add no
+model usage. No price table or provider-response replay is introduced.

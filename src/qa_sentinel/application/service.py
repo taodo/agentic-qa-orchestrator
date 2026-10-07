@@ -9,6 +9,10 @@ from qa_sentinel.domain.campaign_content import (RequirementExtraction, Campaign
     RequirementReviewStatus, ExtractionStatus)
 from qa_sentinel.agents.requirement_extraction import ingest, validate_output, SourceTooLarge
 from qa_sentinel.models.base import ModelError, ModelMetadata
+from qa_sentinel.agents.test_import import parse_import
+from qa_sentinel.agents.test_generation import generation_identity, validate_generation
+from qa_sentinel.domain.test_specification import TestGeneration, TestMarker
+from .test_specifications import (TestImportView, TestImportDetail, TestSpecificationView, TestGenerationView, generation_view, canonical_spec)
 from .campaign_content import (CampaignSourceView, CampaignSourceDetail, CampaignRequirementView,
     ExtractionView, CampaignModelUsage, extraction_view, campaign_usage)
 from qa_sentinel.domain.task import Task
@@ -78,9 +82,10 @@ def persistence_boundary():
 
 
 class QASentinelApplication:
-    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None):
+    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None):
         self._factory = session_factory
         self._requirement_extractor = requirement_extractor
+        self._test_generator = test_generator
         self._resolver = execution_resolver
         # Optional trusted host coordination, never supplied by HTTP/model inputs.
         self._execution_admission = execution_admission
@@ -268,7 +273,8 @@ class QASentinelApplication:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._campaign(uow, project_id, campaign_id)
-            return campaign_usage(project_id, campaign_id, uow.campaign_content.extractions(campaign_id, limit), limit)
+            records=uow.campaign_content.extractions(campaign_id,limit)+uow.test_specifications.generations(campaign_id,limit)
+            return campaign_usage(project_id,campaign_id,sorted(records,key=lambda r:(r.started_at,str(r.id))),limit)
 
     def extract_campaign_requirements(self, project_id, campaign_id, source_id) -> ExtractionView:
         project_id, campaign_id, source_id = map(identifier, (project_id, campaign_id, source_id))
@@ -326,6 +332,134 @@ class QASentinelApplication:
             uow.campaign_content.finish(completed, () if error else requirements)
             uow.commit()
         return extraction_view(completed)
+
+    def import_campaign_tests(self, project_id, campaign_id, *, name, format, content) -> TestImportView:
+        project_id,campaign_id=identifier(project_id),identifier(campaign_id)
+        try:
+            record,cases=parse_import(project_id,campaign_id,name=name,format=format,content=content)
+        except SourceTooLarge:
+            raise ApplicationError(Code.SOURCE_SIZE_LIMIT) from None
+        except (ValueError,TypeError):
+            raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={'qa_job_write':True})
+            self._campaign(uow,project_id,campaign_id)
+            existing=uow.test_specifications.import_identity(record)
+            if existing is not None:return record_view(existing,TestImportView)
+            specs=[]
+            for case,start,end in cases:
+                known,unknown=[],[]
+                for ref in case.requirement_refs:
+                    requirement=uow.test_specifications.resolve_reference(campaign_id,ref)
+                    (unknown if requirement is None else known).append(ref if requirement is None else requirement.id)
+                markers=[]
+                if unknown:markers.append(TestMarker(kind='UNRESOLVED_REQUIREMENT',description='Supplied references cannot be resolved exactly in this Campaign.'))
+                if not known:markers.append(TestMarker(kind='MISSING_TRACEABILITY',description='No known Campaign Requirement is linked.'))
+                try:specs.append(canonical_spec(record,case,known,unknown,markers,start,end))
+                except (ValueError,TypeError):raise ApplicationError(Code.INVALID_INPUT) from None
+            uow.test_specifications.add_import(record,specs)
+            result=record_view(record,TestImportView)
+            uow.commit()
+            return result
+
+    def _test_child(self,uow,project_id,campaign_id,id,kind):
+        self._campaign(uow,project_id,campaign_id)
+        getter={'import':uow.test_specifications.import_record,'generation':uow.test_specifications.generation,'specification':uow.test_specifications.specification}[kind]
+        record=getter(id)
+        if record is None:raise ApplicationError(Code.CAMPAIGN_TEST_CHILD_NOT_FOUND)
+        if (record.project_id,record.campaign_id)!=(project_id,campaign_id):raise ApplicationError(Code.CAMPAIGN_TEST_CHILD_MISMATCH)
+        return record
+
+    def get_campaign_test_import(self,project_id,campaign_id,import_id) -> TestImportDetail:
+        project_id,campaign_id,import_id=map(identifier,(project_id,campaign_id,import_id))
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            return record_view(self._test_child(uow,project_id,campaign_id,import_id,'import'),TestImportDetail)
+
+    def list_campaign_test_imports(self,project_id,campaign_id,*,limit=50) -> CollectionPage[TestImportView]:
+        project_id,campaign_id,limit=identifier(project_id),identifier(campaign_id),list_limit(limit)
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            return self._operational_page(uow.test_specifications.imports(campaign_id,limit),limit,TestImportView)
+
+    def get_campaign_test_specification(self,project_id,campaign_id,test_spec_id) -> TestSpecificationView:
+        project_id,campaign_id,test_spec_id=map(identifier,(project_id,campaign_id,test_spec_id))
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            return record_view(self._test_child(uow,project_id,campaign_id,test_spec_id,'specification'),TestSpecificationView)
+
+    def list_campaign_test_specifications(self,project_id,campaign_id,*,limit=50) -> CollectionPage[TestSpecificationView]:
+        project_id,campaign_id,limit=identifier(project_id),identifier(campaign_id),list_limit(limit)
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            return page(uow.test_specifications.specifications(campaign_id,limit),limit,TestSpecificationView)
+
+    def get_campaign_test_generation(self,project_id,campaign_id,generation_id) -> TestGenerationView:
+        project_id,campaign_id,generation_id=map(identifier,(project_id,campaign_id,generation_id))
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            return generation_view(self._test_child(uow,project_id,campaign_id,generation_id,'generation'))
+
+    def list_campaign_test_generations(self,project_id,campaign_id,*,limit=50) -> CollectionPage[TestGenerationView]:
+        project_id,campaign_id,limit=identifier(project_id),identifier(campaign_id),list_limit(limit)
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            records=uow.test_specifications.generations(campaign_id,limit)
+            items=tuple(generation_view(r) for r in records[:limit])
+            return CollectionPage[TestGenerationView](items=items,total_returned=len(items),truncated=len(records)>limit)
+
+    def generate_campaign_tests(self,project_id,campaign_id,*,requirement_ids) -> TestGenerationView:
+        project_id,campaign_id=identifier(project_id),identifier(campaign_id)
+        if not isinstance(requirement_ids,(list,tuple)) or not 1<=len(requirement_ids)<=20:
+            raise ApplicationError(Code.INVALID_INPUT)
+        ids=tuple(sorted((identifier(id) for id in requirement_ids),key=str))
+        if len(set(ids))!=len(ids):raise ApplicationError(Code.INVALID_INPUT)
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            requirements=[]
+            for id in ids:
+                requirement=uow.campaign_content.requirement(id)
+                if requirement is None:raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_NOT_FOUND)
+                if (requirement.project_id,requirement.campaign_id)!=(project_id,campaign_id):raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
+                requirements.append(requirement)
+            versions,request_hash=generation_identity(requirements)
+            existing=uow.test_specifications.generation_identity(campaign_id,request_hash)
+            if existing is not None:
+                if existing.status=='STARTED':raise ApplicationError(Code.GENERATION_RECONCILIATION_REQUIRED)
+                return generation_view(existing)
+        if self._test_generator is None:raise ApplicationError(Code.GENERATION_NOT_CONFIGURED)
+        try:request=self._test_generator.prepare(requirements)
+        except ModelError:raise ApplicationError(Code.GENERATION_CONTEXT_LIMIT) from None
+        attempt=TestGeneration(project_id=project_id,campaign_id=campaign_id,requirement_versions=versions,request_hash=request_hash,model=request.model)
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={'qa_job_write':True})
+            self._campaign(uow,project_id,campaign_id)
+            existing=uow.test_specifications.generation_identity(campaign_id,request_hash)
+            if existing is not None:
+                if existing.status=='STARTED':raise ApplicationError(Code.GENERATION_RECONCILIATION_REQUIRED)
+                return generation_view(existing)
+            uow.test_specifications.reserve(attempt);uow.commit()
+        # Durable STARTED precedes external work; no transaction spans the one provider call.
+        metadata,error,specs=None,None,()
+        try:
+            response=self._test_generator.generate(request)
+            metadata=ModelMetadata.model_validate(response.metadata.model_dump())
+            output=validate_generation(requirements,response.parsed_output)
+            by_id={r.id:r for r in requirements}
+            prepared=[]
+            for case in output.tests:
+                inherited=[TestMarker(kind=m.kind,description=m.description) for id in case.requirement_ids for m in by_id[id].information_markers]
+                prepared.append(canonical_spec(attempt,case,case.requirement_ids,markers=inherited))
+            specs=tuple(prepared)
+        except ModelError as failure:
+            error=failure.code
+            try:metadata=None if failure.metadata is None else ModelMetadata.model_validate(failure.metadata.model_dump())
+            except (AttributeError,ValidationError):metadata=None
+        except (ValueError,TypeError) as failure:
+            error='GENERATION_INVALID_LINK' if str(failure)=='GENERATION_INVALID_LINK' else 'GENERATION_INVALID_OUTPUT'
+        except Exception:error='MODEL_UNKNOWN_PROVIDER_ERROR'
+        completed=TestGeneration.model_validate({**attempt.model_dump(),'status':'FAILED' if error else 'SUCCEEDED',
+            'finished_at':datetime.now(timezone.utc),'error_code':error,'metadata':metadata})
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            uow.test_specifications.finish(completed,() if error else specs);uow.commit()
+        return generation_view(completed)
 
     def get_operational_summary(self) -> OperationalSummaryView:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:

@@ -167,6 +167,6 @@ to 0005. No dependency is added. Offline tests cover normalization, safety, cont
 bounds, evidence, structured SDK calls, failures/missing usage, crash/concurrency,
 scoping, DB reopen, API/body limits and populated upgrade/downgrade.
 
-Task 2.3 can consume stable requirement identities, ordered criteria, clarification
-markers and cited immutable sources. Test specifications/import/generation,
-requirement approval, readiness, execution and reporting remain later work.
+Task 2.3 now consumes stable requirement identities, ordered criteria, clarification
+markers and cited immutable sources for [imported/generated test specifications](TEST_SPECIFICATIONS.md).
+Requirement/test approval, readiness, execution and reporting remain later work.

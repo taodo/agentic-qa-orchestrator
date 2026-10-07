@@ -7,14 +7,14 @@ from sqlalchemy.engine import URL
 from qa_sentinel.persistence.database import create_engine, create_session_factory
 from .config import HostError, canonical_path
 
-CURRENT_REVISION = "0005"
+CURRENT_REVISION = "0006"
 
 
 def migration_directory() -> Path:
     checkout = Path(__file__).resolve().parents[3] / "alembic"
     installed = Path(sysconfig.get_path("data")) / "share" / "qa-sentinel" / "alembic"
     for path in (checkout, installed):
-        if (path / "env.py").is_file() and (path / "versions" / "0005_campaign_requirements.py").is_file():
+        if (path / "env.py").is_file() and (path / "versions" / "0006_test_specifications.py").is_file():
             return path
     raise HostError("HOST_MIGRATIONS_MISSING")
 

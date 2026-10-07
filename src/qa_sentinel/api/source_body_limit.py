@@ -1,9 +1,9 @@
-"""Bound only source-ingestion JSON before parsing, including chunked bodies."""
+"""Bound explicit Campaign content/design JSON before parsing, including streams."""
 import re
 from .errors import error_response
 
 MAX_SOURCE_BODY_BYTES = 524288
-SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/sources$")
+SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:sources|test-imports|generate-tests)$")
 
 
 class SourceBodyLimit:
