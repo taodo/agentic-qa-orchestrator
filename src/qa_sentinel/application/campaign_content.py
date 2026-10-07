@@ -5,6 +5,8 @@ from typing import Literal
 from qa_sentinel.domain.campaign_content import (SourceType, IngestionStatus, ParseError,
     CampaignRequirement, ExtractionStatus)
 from qa_sentinel.models.base import ContextSelection
+from .test_specifications import TestGenerationView,generation_view
+from qa_sentinel.domain.test_specification import TestGeneration
 from .models import View
 from .model_usage import UsageTotals, UsageGroup, totals, safe_metadata
 
@@ -63,7 +65,7 @@ def extraction_view(record):
 class CampaignModelUsage(View):
     project_id: UUID
     campaign_id: UUID
-    invocations: tuple[ExtractionView, ...]
+    invocations: tuple[ExtractionView | TestGenerationView, ...]
     usage: UsageTotals
     by_agent: tuple[UsageGroup, ...]
     by_model: tuple[UsageGroup, ...]
@@ -85,11 +87,15 @@ def campaign_usage(project_id, campaign_id, records, limit):
         models[record.model if metadata is None else metadata["model"]].append(metadata)
     groups = sorted((UsageGroup(identity=name, usage=totals(items, incomplete=truncated)) for name, items in models.items()),
         key=lambda g: (-(g.usage.total_tokens.known_sum or 0), g.identity))
-    rows = tuple(extraction_view(r) for r in selected)
+    rows = tuple(generation_view(r) if isinstance(r,TestGeneration) else extraction_view(r) for r in selected)
+    agents=defaultdict(list);purposes=defaultdict(list)
+    for record,value in zip(selected,values):
+        agents[record.agent].append(value)
+        purposes["TEST_SPEC_GENERATION" if isinstance(record,TestGeneration) else "REQUIREMENT_EXTRACTION"].append(value)
     usage = totals(values, incomplete=truncated)
     return CampaignModelUsage(project_id=project_id, campaign_id=campaign_id, invocations=rows,
-        usage=usage, by_agent=() if not selected else (UsageGroup(identity="RESEARCHER", usage=usage),),
-        by_stage=() if not selected else (UsageGroup(identity="REQUIREMENT_EXTRACTION", usage=usage),),
+        usage=usage, by_agent=tuple(UsageGroup(identity=name,usage=totals(items,incomplete=truncated)) for name,items in sorted(agents.items())),
+        by_stage=tuple(UsageGroup(identity=name,usage=totals(items,incomplete=truncated)) for name,items in sorted(purposes.items())),
         by_model=tuple(groups[:20]), model_groups_truncated=len(groups)>20, truncated=truncated,
         top_invocations=tuple(row.id for row in sorted((r for r in rows if r.usage.total_tokens.known_sum is not None),
             key=lambda r: (-(r.usage.total_tokens.known_sum or 0), str(r.id)))[:10]))

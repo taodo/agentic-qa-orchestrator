@@ -108,7 +108,10 @@ def test_safe_cli_startup_failure(config, capsys):
     assert "HOST_FRONTEND_BUILD_MISSING" in capsys.readouterr().err
 
 
-def test_demo_full_stack_without_key(config):
+def test_demo_full_stack_without_key(config, monkeypatch):
+    # This smoke test exercises synchronous Run, not queue polling. Keep the idle
+    # worker parked so its empty claim cannot transiently own workflow admission.
+    monkeypatch.setattr(composition.ExecutionWorker, "_loop", lambda worker: worker._stop.wait())
     app = create_host_app(config)
     with TestClient(app) as client:
         assert client.get("/").text.startswith("<!doctype html>")
@@ -144,7 +147,7 @@ def test_restart_migrates_to_head_preserves_operator_data_and_demo_identity(conf
         assert len(projects) == 2 and [p for p in projects if p["key"] == "demo-calculator"][0]["id"] == project["id"]
         assert client.get(f"/api/v1/tasks/{created['id']}").json()["title"] == "Keep task"
         with app.state.host_composition.engine.connect() as connection:
-            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0005"
+            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0006"
 
 
 @pytest.mark.parametrize("path", ["/", "/projects", "/projects/project-a", "/tasks/task-a?view=artifacts", "/index.html"])
@@ -200,6 +203,7 @@ def test_real_local_binding_and_services(config, tmp_path, monkeypatch):
     try:
         from qa_sentinel.agents.requirement_extraction import RequirementExtractor
         assert isinstance(composed.application._requirement_extractor, RequirementExtractor)
+        assert isinstance(composed.application._test_generator, composition.TestSpecificationGenerator)
         bundle = composed.resolver.resolve(owner)
         root = value.projects[0].workspace_root
         assert bundle.binding.project_id == owner and bundle.binding.workspace_root == root

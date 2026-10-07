@@ -15,6 +15,7 @@ from .models import (
 )
 
 __all__ = [
+    "TestImportView", "TestImportDetail", "TestSpecificationView", "TestGenerationView", "ImportFormat",
     "QASentinelApplication", "ApplicationError", "ApplicationErrorCode", "ProjectExecutionBundle",
     "ProjectExecutionResolver", "ProjectView", "TaskSummary", "TaskDetail", "CollectionPage",
     "TimelineEntry", "InvocationView", "ArtifactView", "TestRunView", "ErrorView", "DecisionView",
@@ -27,3 +28,6 @@ __all__ = [
 
 from .campaign_content import CampaignSourceView, CampaignSourceDetail, CampaignRequirementView, ExtractionView, CampaignModelUsage
 from qa_sentinel.domain.campaign_content import SourceType
+
+from .test_specifications import TestImportView, TestImportDetail, TestSpecificationView, TestGenerationView
+from qa_sentinel.domain.test_specification import ImportFormat

@@ -127,6 +127,7 @@ class CampaignRequirementRow(Base):
         UniqueConstraint("extraction_id", "key", name="uq_campaign_requirements_local_key"),
         CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW')", name="ck_campaign_requirements_review"),
         Index("ix_campaign_requirements_campaign", "campaign_id", "created_at", "id"),
+        Index("uq_campaign_requirements_owner", "id", "campaign_id", "project_id", unique=True),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", deferrable=True, initially="DEFERRED"), nullable=False)
@@ -316,3 +317,100 @@ class AcceptanceCriterionRow(Base):
     requirement_id: Mapped[str] = mapped_column(String(36), ForeignKey("requirements.id", deferrable=True, initially="DEFERRED"), nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
     verification_method: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class TestImportRow(Base):
+    __tablename__='campaign_test_imports'
+    __table_args__=(
+        ForeignKeyConstraint(['campaign_id','project_id'],['qa_campaigns.id','qa_campaigns.project_id'],name='fk_test_imports_owner',deferrable=True,initially='DEFERRED'),
+        UniqueConstraint('id','campaign_id','project_id',name='uq_test_imports_owner'),
+        UniqueConstraint('campaign_id','format','content_hash','contract_version',name='uq_test_imports_identity'),
+        CheckConstraint("format IN ('CSV','MARKDOWN','XLSX')",name='ck_test_imports_format'),
+        CheckConstraint("(status='IMPORTED' AND normalized_text IS NOT NULL AND error_code IS NULL AND test_count BETWEEN 1 AND 100) OR (status='REJECTED' AND normalized_text IS NULL AND error_code IS NOT NULL AND test_count=0)",name='ck_test_imports_status'),
+        CheckConstraint('original_bytes BETWEEN 0 AND 65536',name='ck_test_imports_bounds'),
+        Index('ix_test_imports_campaign','campaign_id','created_at','id'),
+    )
+    id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    project_id:Mapped[str]=mapped_column(String(36),ForeignKey('projects.id',deferrable=True,initially='DEFERRED'),nullable=False)
+    campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    name:Mapped[str]=mapped_column(String(200),nullable=False)
+    format:Mapped[str]=mapped_column(String(16),nullable=False)
+    raw_hash:Mapped[str]=mapped_column(String(64),nullable=False)
+    content_hash:Mapped[str]=mapped_column(String(64),nullable=False)
+    contract_version:Mapped[str]=mapped_column(String(32),nullable=False)
+    normalization_version:Mapped[str]=mapped_column(String(32),nullable=False)
+    original_bytes:Mapped[int]=mapped_column(Integer,nullable=False)
+    normalized_text:Mapped[str | None]=mapped_column(Text,nullable=True)
+    status:Mapped[str]=mapped_column(String(16),nullable=False)
+    error_code:Mapped[str | None]=mapped_column(String(32),nullable=True)
+    test_count:Mapped[int]=mapped_column(Integer,nullable=False)
+    created_at:Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+
+class TestGenerationRow(Base):
+    __tablename__='campaign_test_generations'
+    __table_args__=(
+        ForeignKeyConstraint(['campaign_id','project_id'],['qa_campaigns.id','qa_campaigns.project_id'],name='fk_test_generations_owner',deferrable=True,initially='DEFERRED'),
+        UniqueConstraint('id','campaign_id','project_id',name='uq_test_generations_owner'),
+        UniqueConstraint('campaign_id','request_hash','contract_version',name='uq_test_generations_identity'),
+        CheckConstraint("(status='STARTED' AND finished_at IS NULL AND error_code IS NULL AND metadata IS NULL) OR (status='SUCCEEDED' AND finished_at IS NOT NULL AND error_code IS NULL) OR (status='FAILED' AND finished_at IS NOT NULL AND error_code IS NOT NULL)",name='ck_test_generations_lifecycle'),
+        Index('ix_test_generations_campaign','campaign_id','started_at','id'),
+    )
+    id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    project_id:Mapped[str]=mapped_column(String(36),ForeignKey('projects.id',deferrable=True,initially='DEFERRED'),nullable=False)
+    campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    request_hash:Mapped[str]=mapped_column(String(64),nullable=False)
+    contract_version:Mapped[str]=mapped_column(String(32),nullable=False)
+    requirement_versions:Mapped[Any]=mapped_column(JSON,nullable=False)
+    agent:Mapped[str]=mapped_column(String(16),nullable=False)
+    model:Mapped[str]=mapped_column(String(128),nullable=False)
+    status:Mapped[str]=mapped_column(String(16),nullable=False)
+    started_at:Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+    finished_at:Mapped[datetime | None]=mapped_column(ISODateTime(),nullable=True)
+    error_code:Mapped[str | None]=mapped_column(String(64),nullable=True)
+    metadata_json:Mapped[Any]=mapped_column('metadata',JSON(none_as_null=True),nullable=True)
+
+class TestSpecificationRow(Base):
+    __tablename__='campaign_test_specifications'
+    __table_args__=(
+        ForeignKeyConstraint(['campaign_id','project_id'],['qa_campaigns.id','qa_campaigns.project_id'],name='fk_test_specifications_owner',deferrable=True,initially='DEFERRED'),
+        ForeignKeyConstraint(['import_id','campaign_id','project_id'],['campaign_test_imports.id','campaign_test_imports.campaign_id','campaign_test_imports.project_id'],name='fk_test_specifications_import',deferrable=True,initially='DEFERRED'),
+        ForeignKeyConstraint(['generation_id','campaign_id','project_id'],['campaign_test_generations.id','campaign_test_generations.campaign_id','campaign_test_generations.project_id'],name='fk_test_specifications_generation',deferrable=True,initially='DEFERRED'),
+        UniqueConstraint('id','campaign_id','project_id',name='uq_test_specifications_owner'),
+        UniqueConstraint('campaign_id','logical_key',name='uq_test_specifications_key'),
+        UniqueConstraint('import_id','key',name='uq_test_specifications_import_key'),
+        UniqueConstraint('generation_id','key',name='uq_test_specifications_generation_key'),
+        CheckConstraint('(import_id IS NOT NULL AND generation_id IS NULL) OR (generation_id IS NOT NULL AND import_id IS NULL)',name='ck_test_specifications_origin'),
+        CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW')",name='ck_test_specifications_review'),
+        Index('ix_test_specifications_campaign','campaign_id','created_at','id'),
+    )
+    id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    project_id:Mapped[str]=mapped_column(String(36),ForeignKey('projects.id',deferrable=True,initially='DEFERRED'),nullable=False)
+    campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    import_id:Mapped[str | None]=mapped_column(String(36),nullable=True)
+    generation_id:Mapped[str | None]=mapped_column(String(36),nullable=True)
+    key:Mapped[str]=mapped_column(String(64),nullable=False)
+    logical_key:Mapped[str]=mapped_column(String(128),nullable=False)
+    title:Mapped[str]=mapped_column(String(200),nullable=False)
+    test_type:Mapped[str]=mapped_column(String(16),nullable=False)
+    priority:Mapped[str]=mapped_column(String(16),nullable=False)
+    preconditions:Mapped[Any]=mapped_column(JSON,nullable=False)
+    steps:Mapped[Any]=mapped_column(JSON,nullable=False)
+    overall_expected_result:Mapped[str | None]=mapped_column(Text,nullable=True)
+    required_evidence:Mapped[Any]=mapped_column(JSON,nullable=False)
+    information_markers:Mapped[Any]=mapped_column(JSON,nullable=False)
+    unresolved_requirement_refs:Mapped[Any]=mapped_column(JSON,nullable=False)
+    provenance:Mapped[Any]=mapped_column(JSON,nullable=False)
+    review_status:Mapped[str]=mapped_column(String(32),nullable=False)
+    created_at:Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+    updated_at:Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+
+class TestRequirementLinkRow(Base):
+    __tablename__='campaign_test_requirement_links'
+    __table_args__=(
+        ForeignKeyConstraint(['test_spec_id','campaign_id','project_id'],['campaign_test_specifications.id','campaign_test_specifications.campaign_id','campaign_test_specifications.project_id'],name='fk_test_links_spec_owner',deferrable=True,initially='DEFERRED'),
+        ForeignKeyConstraint(['requirement_id','campaign_id','project_id'],['campaign_requirements.id','campaign_requirements.campaign_id','campaign_requirements.project_id'],name='fk_test_links_requirement_owner',deferrable=True,initially='DEFERRED'),
+    )
+    test_spec_id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    requirement_id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    project_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)

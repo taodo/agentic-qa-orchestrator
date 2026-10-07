@@ -1,6 +1,7 @@
+from uuid import UUID
 """Transport input and error schemas; no persistence or workflow behavior."""
 from pydantic import BaseModel, ConfigDict, StrictStr, model_validator, Field
-from qa_sentinel.application import CampaignPreparationStatus, SourceType
+from qa_sentinel.application import CampaignPreparationStatus, SourceType, ImportFormat
 
 
 class RequestModel(BaseModel):
@@ -70,3 +71,13 @@ class IngestSourceRequest(RequestModel):
 
 class ExtractRequirementsRequest(RequestModel):
     pass
+
+
+class ImportTestsRequest(RequestModel):
+    name: StrictStr
+    format: ImportFormat
+    content: StrictStr = Field(max_length=65536)
+
+
+class GenerateTestsRequest(RequestModel):
+    requirement_ids: tuple[UUID, ...] = Field(min_length=1, max_length=20)

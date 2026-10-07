@@ -304,9 +304,10 @@ def test_campaign_routes_keep_session_csrf_and_restart_boundaries(config):
 def test_hosted_content_remains_deterministic_and_csrf_protected(config, monkeypatch):
     def forbidden(*args, **kwargs): pytest.fail('Public mode cannot construct a real extractor')
     monkeypatch.setattr(composition.RequirementExtractor, '__init__', forbidden)
+    monkeypatch.setattr(composition.TestSpecificationGenerator, '__init__', forbidden)
     web = create_host_app(hosted(config))
     app = web.state.host_composition.application
-    assert app._requirement_extractor is None
+    assert app._requirement_extractor is None and app._test_generator is None
     project = app.list_projects().items[0]
     campaign = app.create_campaign(project.id, name='Synthetic PRD')
     with TestClient(web, base_url='https://testserver') as client:
