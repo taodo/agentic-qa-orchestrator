@@ -31,6 +31,14 @@ The existing platform already contains:
 
 Do not assume every historical capability is part of the future product direction. In particular, source mutation/self-repair is legacy/experimental infrastructure, not a feature to expand unless a future task explicitly reintroduces it.
 
+## Accepted Phase 2 preparation boundary
+
+Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources,
+structured Requirements, imported/generated executor-neutral Test Specifications,
+explicit human approval receipts and scoped derived traceability/readiness.
+Campaign APPROVED remains independent of readiness READY. No QA Run or campaign
+executor exists. Migration head is 0007; see [review contracts](CAMPAIGN_REVIEW.md).
+
 ## Product direction
 
 The next product model is QA-campaign oriented:

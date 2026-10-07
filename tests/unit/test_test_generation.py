@@ -80,7 +80,7 @@ def test_distinct_required_clarifications_are_never_silently_truncated():
     from qa_sentinel.domain.test_specification import TestMarker as Marker
     with pytest.raises(ValidationError):canonical_spec(attempt,output.tests[0],[req.id],markers=[Marker(kind='AMBIGUITY',description=f'Missing {i}') for i in range(21)])
 
-@pytest.mark.parametrize('change',[dict(review_status='APPROVED'),dict(provenance=dict(origin='IMPORT',record_id=uuid4(),content_hash='a'*64,contract_version='test-specs-v1',start_line=1,end_line=2)),dict(requirement_ids=[])])
+@pytest.mark.parametrize('change',[dict(review_status='PASS'),dict(provenance=dict(origin='IMPORT',record_id=uuid4(),content_hash='a'*64,contract_version='test-specs-v1',start_line=1,end_line=2)),dict(requirement_ids=[])])
 def test_review_origin_and_link_guarantees(change):
     req=requirement();versions,identity=generation_identity([req]);attempt=GenerationRecord(project_id=req.project_id,campaign_id=req.campaign_id,request_hash=identity,requirement_versions=versions,model='test')
     spec=canonical_spec(attempt,Output(selected_requirement_ids=[req.id],tests=[case([req.id])]).tests[0],[req.id])

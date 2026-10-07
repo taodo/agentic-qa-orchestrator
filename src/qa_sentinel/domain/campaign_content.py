@@ -116,6 +116,7 @@ class RequirementReviewStatus(StrEnum):
     DRAFT = "DRAFT"
     NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
     READY_FOR_REVIEW = "READY_FOR_REVIEW"
+    APPROVED = "APPROVED"
 
 
 class CampaignRequirement(RequirementDraft):

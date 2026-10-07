@@ -70,6 +70,7 @@ class CampaignContentRepository:
         if len(prepared) > 100: raise ValueError("Requirement output limit")
         validate_citations(source, prepared)
         for requirement in prepared:
+            if requirement.review_status == "APPROVED": raise ValueError("Extraction cannot approve requirements")
             if (requirement.project_id, requirement.campaign_id, requirement.extraction_id) != (old.project_id, old.campaign_id, old.id):
                 raise ValueError("Requirement ownership mismatch")
         for requirement in prepared:

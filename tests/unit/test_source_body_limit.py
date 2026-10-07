@@ -44,3 +44,17 @@ def test_empty_stream_chunks_and_utf8_body_are_replayed_exactly():
         scope={'type':'http','method':'POST','path':'/api/v1/projects/p/campaigns/c/sources','headers':[]}
         await SourceBodyLimit(app)(scope,receive,send)
     asyncio.run(run())
+
+
+def test_review_stream_limit_is_separate_and_applies_to_both_child_kinds():
+    async def run(kind):
+        called=[];sent=[]
+        chunks=iter([{'type':'http.request','body':b'x'*4096,'more_body':True},
+                     {'type':'http.request','body':b'x'*4097,'more_body':True}])
+        async def receive():return next(chunks)
+        async def send(message):sent.append(message)
+        async def app(*args):called.append(True)
+        scope={'type':'http','method':'POST','path':f'/api/v1/projects/p/campaigns/c/{kind}/r/review','headers':[]}
+        await SourceBodyLimit(app)(scope,receive,send)
+        assert not called and sent[0]['status']==413 and b'REVIEW_SIZE_LIMIT' in sent[1]['body']
+    for kind in ('requirements','test-specifications'):asyncio.run(run(kind))

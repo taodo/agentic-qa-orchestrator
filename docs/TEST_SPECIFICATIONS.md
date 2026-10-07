@@ -21,10 +21,10 @@ accepted. API, WEB and DATA are descriptive labels only, not supported executors
 
 Types: FUNCTIONAL, REGRESSION, SMOKE, NEGATIVE, BOUNDARY, INTEGRATION, API, WEB,
 DATA, OTHER. Priority: LOW, MEDIUM, HIGH, CRITICAL. Review: DRAFT,
-NEEDS_CLARIFICATION, READY_FOR_REVIEW. There is no APPROVED status. Any information
+NEEDS_CLARIFICATION, READY_FOR_REVIEW and (Task 2.4) APPROVED. Any information
 marker derives NEEDS_CLARIFICATION; otherwise newly produced specs are
 READY_FOR_REVIEW. Neither status certifies behavior or coverage. Task 2.4 owns
-explicit review/approval/readiness.
+[explicit review/approval/readiness](CAMPAIGN_REVIEW.md).
 
 Bounds per case: key 1–64 uppercase letters/digits/underscore/hyphen, title 200
 characters, preconditions at most 20 x 512 characters, 1–20 steps (action/expected

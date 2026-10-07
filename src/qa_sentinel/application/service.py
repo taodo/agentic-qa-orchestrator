@@ -3,6 +3,8 @@ from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from uuid import UUID, uuid5, NAMESPACE_URL
 from pydantic import ValidationError
+from qa_sentinel.domain.campaign_review import ApprovalCommand, ReviewError, assess_readiness
+from .campaign_review import CampaignTraceability, ReviewState, RequirementTrace, TraceLink, Readiness
 from qa_sentinel.domain.project import Project
 from qa_sentinel.domain.campaign import QACampaign, InvalidCampaignTransition
 from qa_sentinel.domain.campaign_content import (RequirementExtraction, CampaignRequirement,
@@ -268,6 +270,67 @@ class QASentinelApplication:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._campaign(uow, project_id, campaign_id)
             return page(uow.campaign_content.requirements(campaign_id, limit), limit, CampaignRequirementView)
+
+    def _review_object(self, uow, project_id, campaign_id, object_id, kind):
+        self._campaign(uow, project_id, campaign_id)
+        if kind == "TEST_SPECIFICATION":
+            return self._test_child(uow, project_id, campaign_id, object_id, 'specification')
+        record = uow.campaign_content.requirement(object_id)
+        if record is None: raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_NOT_FOUND)
+        if (record.project_id, record.campaign_id) != (project_id, campaign_id):
+            raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
+        return record
+
+    def _review(self, project_id, campaign_id, object_id, kind, command=None):
+        project_id, campaign_id, object_id = map(identifier, (project_id, campaign_id, object_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            if command is not None:
+                uow.session.connection(execution_options={"qa_job_write": True})
+            record = self._review_object(uow, project_id, campaign_id, object_id, kind)
+            try:
+                if command is None:
+                    return uow.campaign_reviews.state(record, kind)
+                result = uow.campaign_reviews.approve(record, kind, command)
+            except ReviewError as error:
+                raise ApplicationError(Code(str(error))) from None
+            uow.commit()
+            return result
+
+    @staticmethod
+    def _approval_command(reviewer_label, note, action):
+        try:
+            return ApprovalCommand(reviewer_label=reviewer_label, note=note, action=action)
+        except ValidationError:
+            raise ApplicationError(Code.INVALID_INPUT) from None
+
+    def review_campaign_requirement(self, project_id, campaign_id, requirement_id, *, reviewer_label, note=None, action="APPROVE") -> ReviewState:
+        return self._review(project_id, campaign_id, requirement_id, "REQUIREMENT",
+            self._approval_command(reviewer_label, note, action))
+
+    def get_campaign_requirement_review(self, project_id, campaign_id, requirement_id) -> ReviewState:
+        return self._review(project_id, campaign_id, requirement_id, "REQUIREMENT")
+
+    def review_campaign_test_specification(self, project_id, campaign_id, test_spec_id, *, reviewer_label, note=None, action="APPROVE") -> ReviewState:
+        return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION",
+            self._approval_command(reviewer_label, note, action))
+
+    def get_campaign_test_specification_review(self, project_id, campaign_id, test_spec_id) -> ReviewState:
+        return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION")
+
+    def get_campaign_traceability(self, project_id, campaign_id, *, limit=50) -> CampaignTraceability:
+        project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            requirements, req_more, links, link_more = uow.campaign_reviews.traceability(project_id, campaign_id, limit)
+            return CampaignTraceability(project_id=project_id, campaign_id=campaign_id,
+                requirements=CollectionPage[RequirementTrace](items=requirements, total_returned=len(requirements), truncated=req_more),
+                links=CollectionPage[TraceLink](items=links, total_returned=len(links), truncated=link_more))
+
+    def get_campaign_readiness(self, project_id, campaign_id) -> Readiness:
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            campaign = self._campaign(uow, project_id, campaign_id)
+            return assess_readiness(campaign, uow.campaign_reviews.readiness_counts(project_id, campaign_id))
 
     def get_campaign_model_usage(self, project_id, campaign_id, *, limit=200) -> CampaignModelUsage:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)

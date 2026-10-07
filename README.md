@@ -25,6 +25,10 @@ This repository is designed to show more than a collection of AI prompts. It foc
 
 The core idea is simple: an LLM may propose or reason about work, but it does **not** directly control the filesystem, shell, workflow state, or final approval.
 
+Phase 2 preparation now includes [explicit human approval, Requirement/Test
+traceability and derived Campaign readiness](docs/CAMPAIGN_REVIEW.md). Readiness
+is separate from Campaign preparation status and does not execute tests.
+
 ## Current workflow
 
 A normal successful task progresses through:

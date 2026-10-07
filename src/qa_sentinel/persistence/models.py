@@ -125,7 +125,7 @@ class CampaignRequirementRow(Base):
         ForeignKeyConstraint(["extraction_id", "campaign_id", "project_id"], ["campaign_requirement_extractions.id", "campaign_requirement_extractions.campaign_id", "campaign_requirement_extractions.project_id"], name="fk_campaign_requirements_extraction_owner", deferrable=True, initially="DEFERRED"),
         UniqueConstraint("campaign_id", "logical_key", name="uq_campaign_requirements_key"),
         UniqueConstraint("extraction_id", "key", name="uq_campaign_requirements_local_key"),
-        CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW')", name="ck_campaign_requirements_review"),
+        CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW','APPROVED')", name="ck_campaign_requirements_review"),
         Index("ix_campaign_requirements_campaign", "campaign_id", "created_at", "id"),
         Index("uq_campaign_requirements_owner", "id", "campaign_id", "project_id", unique=True),
     )
@@ -380,7 +380,7 @@ class TestSpecificationRow(Base):
         UniqueConstraint('import_id','key',name='uq_test_specifications_import_key'),
         UniqueConstraint('generation_id','key',name='uq_test_specifications_generation_key'),
         CheckConstraint('(import_id IS NOT NULL AND generation_id IS NULL) OR (generation_id IS NOT NULL AND import_id IS NULL)',name='ck_test_specifications_origin'),
-        CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW')",name='ck_test_specifications_review'),
+        CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW','APPROVED')",name='ck_test_specifications_review'),
         Index('ix_test_specifications_campaign','campaign_id','created_at','id'),
     )
     id:Mapped[str]=mapped_column(String(36),primary_key=True)
@@ -407,6 +407,7 @@ class TestSpecificationRow(Base):
 class TestRequirementLinkRow(Base):
     __tablename__='campaign_test_requirement_links'
     __table_args__=(
+        Index('ix_test_links_campaign_requirement','campaign_id','requirement_id','test_spec_id'),
         ForeignKeyConstraint(['test_spec_id','campaign_id','project_id'],['campaign_test_specifications.id','campaign_test_specifications.campaign_id','campaign_test_specifications.project_id'],name='fk_test_links_spec_owner',deferrable=True,initially='DEFERRED'),
         ForeignKeyConstraint(['requirement_id','campaign_id','project_id'],['campaign_requirements.id','campaign_requirements.campaign_id','campaign_requirements.project_id'],name='fk_test_links_requirement_owner',deferrable=True,initially='DEFERRED'),
     )
@@ -414,3 +415,39 @@ class TestRequirementLinkRow(Base):
     requirement_id:Mapped[str]=mapped_column(String(36),primary_key=True)
     project_id:Mapped[str]=mapped_column(String(36),nullable=False)
     campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)
+
+
+class RequirementReviewRow(Base):
+    __tablename__ = "campaign_requirement_reviews"
+    __table_args__ = (
+        ForeignKeyConstraint(["object_id", "campaign_id", "project_id"], ["campaign_requirements.id", "campaign_requirements.campaign_id", "campaign_requirements.project_id"], name="fk_requirement_reviews_object_owner", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("status='APPROVED'", name="ck_requirement_reviews_status"),
+        CheckConstraint("length(reviewer_label) BETWEEN 1 AND 64 AND (note IS NULL OR length(note) BETWEEN 1 AND 1000) AND length(content_hash)=64", name="ck_requirement_reviews_bounds"),
+        Index("ix_requirement_reviews_campaign", "campaign_id", "object_id"),
+    )
+    object_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    reviewer_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
+class TestSpecificationReviewRow(Base):
+    __tablename__ = "campaign_test_reviews"
+    __table_args__ = (
+        ForeignKeyConstraint(["object_id", "campaign_id", "project_id"], ["campaign_test_specifications.id", "campaign_test_specifications.campaign_id", "campaign_test_specifications.project_id"], name="fk_test_reviews_object_owner", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("status='APPROVED'", name="ck_test_reviews_status"),
+        CheckConstraint("length(reviewer_label) BETWEEN 1 AND 64 AND (note IS NULL OR length(note) BETWEEN 1 AND 1000) AND length(content_hash)=64", name="ck_test_reviews_bounds"),
+        Index("ix_test_reviews_campaign", "campaign_id", "object_id"),
+    )
+    object_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    reviewer_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    approved_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)

@@ -104,7 +104,7 @@ def test_health_openapi_and_no_unversioned_domain_routes(api):
     expected |= {"/api/v1/tasks/{task_id}/executions", "/api/v1/executions/{execution_id}"}
     expected.add("/api/v1/tasks/{task_id}/reconciliation")
     expected |= {"/api/v1/projects/{project_id}/campaigns/{campaign_id}" + suffix for suffix in
-        ("/sources", "/sources/{source_id}", "/sources/{source_id}/extract-requirements", "/requirements", "/requirements/{requirement_id}", "/model-usage", "/test-imports", "/test-imports/{import_id}", "/generate-tests", "/test-generations", "/test-generations/{generation_id}", "/test-specifications", "/test-specifications/{test_spec_id}")}
+        ("/sources", "/sources/{source_id}", "/sources/{source_id}/extract-requirements", "/requirements", "/requirements/{requirement_id}", "/model-usage", "/test-imports", "/test-imports/{import_id}", "/generate-tests", "/test-generations", "/test-generations/{generation_id}", "/test-specifications", "/test-specifications/{test_spec_id}", "/requirements/{requirement_id}/review", "/test-specifications/{test_spec_id}/review", "/traceability", "/readiness")}
     expected |= {"/api/v1/projects/{project_id}/campaigns" + suffix for suffix in ("", "/{campaign_id}", "/{campaign_id}/transitions")}
     expected |= {"/api/v1/operations/" + suffix for suffix in ("summary", "projects", "tasks", "activity")}
     assert set(schema["paths"]) == expected | {"/health"}
@@ -397,7 +397,7 @@ def test_api_import_boundary_and_single_use_case_routes():
                 assert not (node.module or "").startswith(forbidden), path
             elif isinstance(node, ast.Import):
                 assert all(not alias.name.startswith(forbidden) for alias in node.names), path
-        if path.name in {"projects.py", "tasks.py", "operations.py", "campaigns.py", "campaign_content.py", "test_specifications.py"}:
+        if path.name in {"projects.py", "tasks.py", "operations.py", "campaigns.py", "campaign_content.py", "test_specifications.py", "campaign_review.py"}:
             for node in tree.body:
                 if isinstance(node, ast.FunctionDef) and node.decorator_list:
                     calls = [call for call in ast.walk(node) if isinstance(call, ast.Call)
