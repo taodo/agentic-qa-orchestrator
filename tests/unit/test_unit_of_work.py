@@ -18,7 +18,8 @@ def test_explicit_commit_persists_related_records(factory,bundle,store_bundle):
         assert uow.execution_jobs.get(job.id)==job
     with factory() as session:
         for table in Base.metadata.tables.values():
-            assert session.scalar(select(func.count()).select_from(table))==1
+            expected = 0 if table.name == "qa_campaigns" else 1  # Workflow writes never create a Campaign.
+            assert session.scalar(select(func.count()).select_from(table)) == expected
 
 
 @pytest.mark.parametrize("mode",["exception","explicit_rollback","no_commit"])

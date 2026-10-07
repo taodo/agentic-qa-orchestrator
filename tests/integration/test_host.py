@@ -144,7 +144,7 @@ def test_restart_migrates_to_head_preserves_operator_data_and_demo_identity(conf
         assert len(projects) == 2 and [p for p in projects if p["key"] == "demo-calculator"][0]["id"] == project["id"]
         assert client.get(f"/api/v1/tasks/{created['id']}").json()["title"] == "Keep task"
         with app.state.host_composition.engine.connect() as connection:
-            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0003"
+            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0004"
 
 
 @pytest.mark.parametrize("path", ["/", "/projects", "/projects/project-a", "/tasks/task-a?view=artifacts", "/index.html"])

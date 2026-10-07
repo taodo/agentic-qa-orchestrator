@@ -5,7 +5,8 @@ Each domain route validates transport input, calls one application use case and
 serializes its frozen DTO. Routes have no ORM, repositories, workflow engines,
 model calls, tools or transaction ownership. Core and application code do not
 depend on API contracts. Task 13 required no migration; Task 20 adds an operational
-job table through 0003 without changing core workflow policies.
+job table through 0003 without changing core workflow policies. Task 2.1 adds
+Project-owned campaign preparation through 0004; see [QA Campaigns](CAMPAIGNS.md).
 
 ## Application factory and host composition
 
@@ -50,6 +51,11 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | PATCH /api/v1/projects/{project_id} | update_project → ProjectView |
 | GET /api/v1/projects/{project_id}/tasks | list_tasks_for_project → CollectionPage[TaskSummary] |
 | POST /api/v1/projects/{project_id}/tasks | create_task → TaskSummary (201) |
+| POST /api/v1/projects/{project_id}/campaigns | create_campaign → QACampaignView (201) |
+| GET /api/v1/projects/{project_id}/campaigns | list_project_campaigns → CollectionPage[QACampaignView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id} | get_campaign → QACampaignView |
+| PATCH /api/v1/projects/{project_id}/campaigns/{campaign_id} | update_campaign → QACampaignView |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/transitions | transition_campaign → QACampaignView |
 | GET /api/v1/tasks/{task_id} | get_task_detail → TaskDetail |
 | GET /api/v1/tasks/{task_id}/reconciliation | assess_task_reconciliation → ReconciliationAssessmentView |
 | POST /api/v1/tasks/{task_id}/run | run_task → TaskDetail |

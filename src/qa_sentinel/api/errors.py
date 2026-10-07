@@ -9,6 +9,9 @@ from .models import ErrorEnvelope, ErrorDetail
 ERROR_MAPPING = {
     Code.PROJECT_NOT_FOUND: (404, "Project not found"),
     Code.TASK_NOT_FOUND: (404, "Task not found"),
+    Code.CAMPAIGN_NOT_FOUND: (404, "Campaign not found"),
+    Code.PROJECT_CAMPAIGN_MISMATCH: (409, "Campaign does not belong to the requested Project"),
+    Code.CAMPAIGN_INVALID_TRANSITION: (409, "Campaign preparation transition is invalid"),
     Code.PROJECT_KEY_EXISTS: (409, "Project key already exists"),
     Code.PROJECT_TASK_MISMATCH: (409, "Task does not belong to the requested Project"),
     Code.PROJECT_RUNTIME_NOT_CONFIGURED: (409, "Project runtime is not configured"),

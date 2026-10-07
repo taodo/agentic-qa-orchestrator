@@ -11,6 +11,7 @@ from qa_sentinel.domain.enums import (
 from qa_sentinel.domain.references import ActorRef, CorrelationRef, ErrorSource
 from qa_sentinel.domain.gate import GateCheck
 from qa_sentinel.domain.execution_job import ExecutionJobStatus, ExecutionJobError
+from qa_sentinel.domain.campaign import CampaignPreparationStatus
 
 
 class View(BaseModel):
@@ -42,6 +43,16 @@ class ProjectView(View):
     key: str
     name: str
     description: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class QACampaignView(View):
+    id: UUID
+    project_id: UUID
+    name: str
+    objective: str | None
+    status: CampaignPreparationStatus
     created_at: datetime
     updated_at: datetime
 

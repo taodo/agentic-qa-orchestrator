@@ -2,7 +2,8 @@
 from .errors import ApplicationError, ApplicationErrorCode
 from .runtime import ProjectExecutionBundle, ProjectExecutionResolver
 from .service import QASentinelApplication
-from .models import ExecutionJobView
+from .models import ExecutionJobView, QACampaignView
+from .commands import CampaignPreparationStatus
 from .operations import (
     OperationalAttention, OperationalSummaryView, ProjectOperationalSummaryView,
     TaskOperationalSummaryView, OperationalActivityView, OperationalActivityKind,
@@ -17,7 +18,7 @@ __all__ = [
     "QASentinelApplication", "ApplicationError", "ApplicationErrorCode", "ProjectExecutionBundle",
     "ProjectExecutionResolver", "ProjectView", "TaskSummary", "TaskDetail", "CollectionPage",
     "TimelineEntry", "InvocationView", "ArtifactView", "TestRunView", "ErrorView", "DecisionView",
-    "GateEvaluationView",
+    "GateEvaluationView", "QACampaignView", "CampaignPreparationStatus",
     "OperationalAttention", "OperationalSummaryView", "ProjectOperationalSummaryView",
     "TaskOperationalSummaryView", "OperationalActivityView", "OperationalActivityKind",
     "ReconciliationAssessmentView", "ReconciliationIssueView", "ReconciliationStatus", "ReconciliationIssueKind",

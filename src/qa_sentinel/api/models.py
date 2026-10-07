@@ -1,5 +1,6 @@
 """Transport input and error schemas; no persistence or workflow behavior."""
 from pydantic import BaseModel, ConfigDict, StrictStr, model_validator
+from qa_sentinel.application import CampaignPreparationStatus
 
 
 class RequestModel(BaseModel):
@@ -39,3 +40,23 @@ class ErrorEnvelope(RequestModel):
 
 class HealthView(RequestModel):
     status: str = "ok"
+
+
+class CreateCampaignRequest(RequestModel):
+    name: StrictStr
+    objective: StrictStr | None = None
+
+
+class UpdateCampaignRequest(RequestModel):
+    name: StrictStr | None = None
+    objective: StrictStr | None = None
+
+    @model_validator(mode="after")
+    def non_null_name(self):
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Campaign name cannot be null")
+        return self
+
+
+class TransitionCampaignRequest(RequestModel):
+    status: CampaignPreparationStatus
