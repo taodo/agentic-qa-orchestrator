@@ -2,6 +2,7 @@
 from copy import deepcopy
 from qa_sentinel.domain.task import Task
 from qa_sentinel.domain.project import Project
+from qa_sentinel.domain.campaign import QACampaign
 from qa_sentinel.domain.invocation import AgentInvocation
 from qa_sentinel.domain.artifact import Artifact
 from qa_sentinel.domain.transition import Transition
@@ -15,7 +16,7 @@ from qa_sentinel.persistence.records import FailureFingerprint
 from qa_sentinel.persistence.records import Requirement
 from qa_sentinel.persistence.records import AcceptanceCriterionRecord
 from .models import (
-    ProjectRow,
+    ProjectRow, QACampaignRow,
     TaskRow,
     InvocationRow,
     ArtifactRow,
@@ -41,6 +42,18 @@ def project_to_orm(record: Project) -> ProjectRow:
 def project_from_orm(row: ProjectRow) -> Project:
     return Project(id=row.id, key=row.key, name=row.name, description=row.description,
         created_at=row.created_at, updated_at=row.updated_at)
+
+
+def campaign_to_orm(record: QACampaign) -> QACampaignRow:
+    record = QACampaign.model_validate(record.model_dump())
+    return QACampaignRow(id=str(record.id), project_id=str(record.project_id), name=record.name,
+        objective=record.objective, status=record.status.value,
+        created_at=record.created_at, updated_at=record.updated_at)
+
+
+def campaign_from_orm(row: QACampaignRow) -> QACampaign:
+    return QACampaign(id=row.id, project_id=row.project_id, name=row.name, objective=row.objective,
+        status=row.status, created_at=row.created_at, updated_at=row.updated_at)
 
 
 def task_to_orm(record: Task) -> TaskRow:

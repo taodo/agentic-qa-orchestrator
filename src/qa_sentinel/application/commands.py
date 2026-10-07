@@ -2,6 +2,7 @@
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, model_validator
 from qa_sentinel.domain.types import NonBlank
+from qa_sentinel.domain.campaign import CampaignName, CampaignObjective, CampaignPreparationStatus
 
 
 class UpdateProject(BaseModel):
@@ -21,3 +22,20 @@ class CreateTask(BaseModel):
     project_id: UUID
     title: NonBlank
     requirement: NonBlank
+
+
+class UpdateCampaign(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    name: CampaignName | None = None
+    objective: CampaignObjective | None = None
+
+    @model_validator(mode="after")
+    def non_null_name(self):
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Campaign name cannot be null")
+        return self
+
+
+class TransitionCampaign(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    status: CampaignPreparationStatus

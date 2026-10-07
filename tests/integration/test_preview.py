@@ -216,3 +216,15 @@ def test_deployment_manifest_and_image_inputs():
     assert 'CMD ["python", "-m", "qa_sentinel.host.container"]' in docker
     assert 'QA_SENTINEL_PREVIEW_PASSWORD' not in docker and 'OPENAI_API_KEY' not in docker
     assert '!frontend/package-lock.json' in (root / '.dockerignore').read_text()
+
+
+def test_campaign_routes_keep_preview_basic_access(config):
+    with TestClient(create_host_app(preview(config))) as client:
+        project = client.get('/api/v1/projects', headers=header()).json()['items'][0]
+        base = f"/api/v1/projects/{project['id']}/campaigns"
+        assert client.get(base).status_code == 401
+        assert client.post(base, json={'name':'Smoke'}).status_code == 401
+        created = client.post(base, headers=header(), json={'name':'Smoke'})
+        assert created.status_code == 201
+        assert client.get(base, headers=header()).json()['items'][0]['status'] == 'DRAFT'
+        assert client.get(f"/api/v1/projects/{project['id']}/tasks", headers=header()).json()['items'] == []

@@ -49,6 +49,23 @@ class ProjectRow(Base):
     updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
 
 
+class QACampaignRow(Base):
+    __tablename__ = "qa_campaigns"
+    __table_args__ = (
+        CheckConstraint("status IN ('DRAFT','READY_FOR_REVIEW','APPROVED')", name="ck_qa_campaigns_status"),
+        CheckConstraint("length(trim(name)) BETWEEN 1 AND 200", name="ck_qa_campaigns_name"),
+        CheckConstraint("objective IS NULL OR length(objective) <= 4000", name="ck_qa_campaigns_objective"),
+        Index("ix_qa_campaigns_project_created", "project_id", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", name="fk_qa_campaigns_project_id", deferrable=True, initially="DEFERRED"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    objective: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
 class TaskRow(Base):
     __tablename__ = "tasks"
     __table_args__ = (CheckConstraint("implementation_attempt >= 0", name="ck_tasks_implementation_attempt"), CheckConstraint("defect_cycle >= 0", name="ck_tasks_defect_cycle"), CheckConstraint("review_cycle >= 0", name="ck_tasks_review_cycle"),)

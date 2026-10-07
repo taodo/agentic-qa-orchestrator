@@ -16,7 +16,7 @@ def test_0002_to_0003_preserves_tasks_and_all_existing_evidence(migrated_factory
     names = set(inspect(engine).get_table_names()) - {"alembic_version"}
     with engine.connect() as connection:
         snapshot = {name: connection.execute(text(f'SELECT * FROM "{name}"')).all() for name in names}
-    command.upgrade(config, "head")
+    command.upgrade(config, "0003")
     with engine.connect() as connection:
         assert connection.scalar(text("select version_num from alembic_version")) == "0003"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()

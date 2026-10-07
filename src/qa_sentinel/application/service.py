@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 from pydantic import ValidationError
 from qa_sentinel.domain.project import Project
+from qa_sentinel.domain.campaign import QACampaign, InvalidCampaignTransition
 from qa_sentinel.domain.task import Task
 from qa_sentinel.domain.enums import TaskState
 from qa_sentinel.domain.execution_job import ExecutionJob, ExecutionJobStatus as JobStatus, ExecutionJobError
@@ -12,14 +13,14 @@ from qa_sentinel.orchestration.runner import WorkflowRunner
 from qa_sentinel.orchestration.workflow_engine import WorkflowEngine
 from qa_sentinel.orchestration.errors import WorkflowError
 from qa_sentinel.orchestration.state_machine import TERMINAL_STATES
-from .commands import CreateTask, UpdateProject
+from .commands import CreateTask, UpdateProject, UpdateCampaign, TransitionCampaign
 from .errors import ApplicationError, ApplicationErrorCode as Code
 from .runtime import ProjectExecutionResolver
 from .reconciliation import ReconciliationEvidence, ReconciliationStatus, assess
 from .models import (
     CollectionPage, ProjectView, TaskSummary, TaskDetail, TimelineEntry,
     ArtifactView, InvocationView, TestRunView, ErrorView, DecisionView, GateEvaluationView,
-    ExecutionJobView,
+    ExecutionJobView, QACampaignView,
 )
 from .model_usage import TaskModelUsage, assess_usage, MAX_USAGE_EVENTS
 from .operations import (
@@ -134,6 +135,70 @@ class QASentinelApplication:
         limit = list_limit(limit)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             return page(uow.reads.projects(limit), limit, ProjectView)
+
+    def _campaign(self, uow, project_id, campaign_id):
+        self._project(uow, project_id)
+        campaign = uow.campaigns.get(campaign_id)
+        if campaign is None:
+            raise ApplicationError(Code.CAMPAIGN_NOT_FOUND)
+        if campaign.project_id != project_id:
+            raise ApplicationError(Code.PROJECT_CAMPAIGN_MISMATCH)
+        return campaign
+
+    def create_campaign(self, project_id, *, name, objective=None) -> QACampaignView:
+        project_id = identifier(project_id)
+        try:
+            campaign = QACampaign(project_id=project_id, name=name, objective=objective)
+        except ValidationError:
+            raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._project(uow, project_id)
+            uow.campaigns.add(campaign)
+            result = record_view(campaign, QACampaignView)
+            uow.commit()
+            return result
+
+    def get_campaign(self, project_id, campaign_id) -> QACampaignView:
+        project_id, campaign_id = identifier(project_id), identifier(campaign_id)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            return record_view(self._campaign(uow, project_id, campaign_id), QACampaignView)
+
+    def list_project_campaigns(self, project_id, *, limit=50) -> CollectionPage[QACampaignView]:
+        project_id, limit = identifier(project_id), list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._project(uow, project_id)
+            return page(uow.campaigns.list_for_project(project_id, limit=limit), limit, QACampaignView)
+
+    def update_campaign(self, project_id, campaign_id, **changes) -> QACampaignView:
+        project_id, campaign_id = identifier(project_id), identifier(campaign_id)
+        try:
+            command = UpdateCampaign.model_validate(changes)
+        except ValidationError:
+            raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            campaign = self._campaign(uow, project_id, campaign_id).update_metadata(
+                **command.model_dump(exclude_unset=True))
+            uow.campaigns.save_metadata(campaign)
+            result = record_view(campaign, QACampaignView)
+            uow.commit()
+            return result
+
+    def transition_campaign(self, project_id, campaign_id, *, status) -> QACampaignView:
+        project_id, campaign_id = identifier(project_id), identifier(campaign_id)
+        try:
+            command = TransitionCampaign(status=status)
+        except ValidationError:
+            raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            campaign = self._campaign(uow, project_id, campaign_id)
+            try:
+                campaign = campaign.transition(command.status)
+                uow.campaigns.save_transition(campaign)
+            except InvalidCampaignTransition:
+                raise ApplicationError(Code.CAMPAIGN_INVALID_TRANSITION) from None
+            result = record_view(campaign, QACampaignView)
+            uow.commit()
+            return result
 
     def get_operational_summary(self) -> OperationalSummaryView:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:

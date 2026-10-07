@@ -278,3 +278,24 @@ def test_hosted_never_accepts_local_project_binding(config, tmp_path):
     project = LocalProjectConfig(key='other', workspace_root=tmp_path, pytest_targets=('tests',))
     with pytest.raises(ValidationError):
         HostConfig.model_validate({**hosted(config).model_dump(), 'projects': (project,)})
+
+
+def test_campaign_routes_keep_session_csrf_and_restart_boundaries(config):
+    settings = hosted(config)
+    with TestClient(create_host_app(settings), base_url='https://testserver') as client:
+        assert login(client).status_code == 303
+        project = client.get('/api/v1/projects').json()['items'][0]
+        base = f"/api/v1/projects/{project['id']}/campaigns"
+        assert client.post(base, json={'name':'Smoke'}).status_code == 403
+        created = client.post(base, headers=csrf(client), json={'name':'Smoke'})
+        assert created.status_code == 201
+        path = base + '/' + created.json()['id']
+        assert client.patch(path, json={'name':'Unsafe'}).status_code == 403
+        assert client.post(path+'/transitions', json={'status':'READY_FOR_REVIEW'}).status_code == 403
+        assert client.post(path+'/transitions', headers=csrf(client), json={'status':'READY_FOR_REVIEW'}).status_code == 200
+        assert client.get(f"/api/v1/projects/{project['id']}/tasks").json()['items'] == []
+    with TestClient(create_host_app(settings), base_url='https://testserver') as client:
+        assert client.get(path).status_code == 401
+        assert client.patch(path, json={'name':'Unsafe'}).status_code == 401
+        assert login(client).status_code == 303
+        assert client.get(path).json()['status'] == 'READY_FOR_REVIEW'
