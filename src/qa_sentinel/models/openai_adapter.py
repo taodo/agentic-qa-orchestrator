@@ -32,6 +32,7 @@ class OpenAIModelAdapter:
         started = monotonic()
         owned = self._client is None
         client = None
+        metadata = None
         try:
             client = self._get_client(request.timeout_seconds)
             kwargs = dict(model=request.model, instructions=request.system_instructions,
@@ -41,6 +42,15 @@ class OpenAIModelAdapter:
             if request.reasoning_effort is not None:
                 kwargs["reasoning"] = {"effort": request.reasoning_effort}
             response = client.responses.parse(**kwargs)
+            usage = response.usage
+            details = None if usage is None else getattr(usage, "output_tokens_details", None)
+            metadata = ModelMetadata(model=response.model, provider_response_id=response.id,
+                input_tokens=None if usage is None else getattr(usage, "input_tokens", None),
+                output_tokens=None if usage is None else getattr(usage, "output_tokens", None),
+                total_tokens=None if usage is None else getattr(usage, "total_tokens", None),
+                reasoning_tokens=None if details is None else getattr(details, "reasoning_tokens", None),
+                context_selection=request.context_selection, status=response.status,
+                latency_ms=(monotonic() - started) * 1000)
             if any(getattr(part, "type", None) == "refusal"
                    for item in response.output for part in getattr(item, "content", ())):
                 raise ModelError(C.CONTENT_REFUSAL)
@@ -50,14 +60,9 @@ class OpenAIModelAdapter:
             if type(parsed) is not output_type:
                 raise ModelError(C.MALFORMED_RESPONSE)
             output = output_type.model_validate(parsed.model_dump(mode="json"))
-            usage = response.usage
-            metadata = ModelMetadata(model=response.model, provider_response_id=response.id,
-                input_tokens=None if usage is None else usage.input_tokens,
-                output_tokens=None if usage is None else usage.output_tokens,
-                total_tokens=None if usage is None else usage.total_tokens,
-                latency_ms=(monotonic() - started) * 1000)
             return ModelResponse(parsed_output=output, metadata=metadata)
-        except ModelError:
+        except ModelError as failure:
+            failure.metadata = metadata
             raise
         except AuthenticationError:
             raise ModelError(C.AUTHENTICATION) from None
@@ -72,13 +77,13 @@ class OpenAIModelAdapter:
         except APIStatusError as failure:
             raise ModelError(C.SERVER_ERROR if failure.status_code >= 500 else C.INVALID_REQUEST) from None
         except (ValidationError, APIResponseValidationError, json.JSONDecodeError, AttributeError, TypeError):
-            raise ModelError(C.MALFORMED_RESPONSE) from None
+            raise ModelError(C.MALFORMED_RESPONSE, metadata=metadata) from None
         except Exception:
-            raise ModelError(C.UNKNOWN_PROVIDER_ERROR) from None
+            raise ModelError(C.UNKNOWN_PROVIDER_ERROR, metadata=metadata) from None
         finally:
             if owned and client is not None:
                 try:
                     client.close()
                 except Exception:
                     # Never expose request-bearing SDK exception text from cleanup.
-                    raise ModelError(C.UNKNOWN_PROVIDER_ERROR) from None
+                    raise ModelError(C.UNKNOWN_PROVIDER_ERROR, metadata=metadata) from None

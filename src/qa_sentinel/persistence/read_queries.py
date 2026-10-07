@@ -46,3 +46,18 @@ class ReadQueries:
         rows = self.session.execute(select(m.EventRow, insertion, instant).where(m.EventRow.task_id == str(task_id))
             .order_by(instant, insertion).limit(limit + 1))
         return [(mappers.event_from_orm(row), sequence, microseconds) for row, sequence, microseconds in rows]
+
+
+    def model_usage_events(self, task_id, invocation_ids, maximum=6000):
+        # Project only safe metadata, never turn outputs, repository/source bodies or history.
+        if not invocation_ids:
+            return []
+        invocation = m.EventRow.correlation["invocation_id"].as_string()
+        query = select(m.EventRow.id, invocation.label("invocation_id"), m.EventRow.event_type,
+            m.EventRow.timestamp, m.EventRow.payload["turn_index"].label("turn_index"),
+            m.EventRow.payload["model_metadata"].label("metadata")).where(
+            m.EventRow.task_id == str(task_id), invocation.in_([str(i) for i in invocation_ids]),
+            m.EventRow.event_type.in_(("REPOSITORY_SESSION_STARTED", "MODEL_TURN_STARTED",
+                "MODEL_TURN_COMPLETED", "MODEL_TURN_FAILED", "AGENT_COMPLETED", "AGENT_FAILED")))
+        return [dict(row) for row in self.session.execute(query.order_by(
+            literal_column("events.rowid")).limit(maximum + 1)).mappings()]

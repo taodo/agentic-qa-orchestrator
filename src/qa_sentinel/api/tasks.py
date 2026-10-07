@@ -6,6 +6,7 @@ from qa_sentinel.application import (
     ErrorView, DecisionView, GateEvaluationView, InvocationView,
 )
 from .dependencies import Application, CollectionLimit, TimelineLimit
+from qa_sentinel.application.model_usage import TaskModelUsage
 from .errors import ERROR_RESPONSES
 from qa_sentinel.application.reconciliation import ReconciliationAssessmentView
 
@@ -65,3 +66,9 @@ def gates(task_id: UUID, application: Application, limit: CollectionLimit = 50):
 @router.get("/{task_id}/invocations", response_model=CollectionPage[InvocationView])
 def invocations(task_id: UUID, application: Application, limit: CollectionLimit = 50):
     return application.get_task_invocations(task_id, limit=limit)
+
+
+@router.get("/{task_id}/model-usage", response_model=TaskModelUsage)
+def model_usage(task_id: UUID, application: Application, execution_job_id: UUID | None = None,
+                limit: CollectionLimit = 200):
+    return application.get_task_model_usage(task_id, execution_job_id=execution_job_id, limit=limit)
