@@ -31,13 +31,28 @@ The existing platform already contains:
 
 Do not assume every historical capability is part of the future product direction. In particular, source mutation/self-repair is legacy/experimental infrastructure, not a feature to expand unless a future task explicitly reintroduces it.
 
-## Accepted Phase 2 preparation boundary
+## Phase 2 complete: accepted preparation boundary
 
 Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources,
 structured Requirements, imported/generated executor-neutral Test Specifications,
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. No QA Run or campaign
 executor exists. Migration head is 0007; see [review contracts](CAMPAIGN_REVIEW.md).
+
+## Current Phase 3 increment: Task 3.1
+
+The Campaign-first browser shell makes Project → Campaign the primary journey.
+Campaign creation accepts only name and optional objective. Deep-linkable Overview,
+Requirements, Test Specifications, Traceability and Readiness views inspect the
+accepted Phase 2 APIs. Readiness aggregates supply full counts; bounded collections
+and independent traceability limits are disclosed. User-selected records outside a
+list use one scoped detail read, never automatic link fan-out.
+
+Preparation APPROVED, review status, coverage and readiness READY remain distinct.
+No Campaign Run, ingestion, extraction, import, generation, approval or edit UI is
+implemented here. Legacy Tasks and Operations remain functional secondary routes.
+Authentication/session/CSRF, evidence laziness, runtime and backend contracts are
+unchanged. Phase 3.2 and later work must follow their own issue specifications.
 
 ## Product direction
 
@@ -184,6 +199,6 @@ ChatGPT:
 
 ## Phase 1 reminder
 
-The immediate next phase is Context & Token Efficiency. Optimize runtime context selection and token/cost observability without changing product semantics. Keep the work bounded and measurable; do not turn it into a general architecture rewrite.
+Phase 1 Context & Token Efficiency is accepted infrastructure. Optimize runtime context selection and token/cost observability without changing product semantics. Keep the work bounded and measurable; do not turn it into a general architecture rewrite.
 
 The later QA Campaign phases must preserve the execution invariant above and must not depend on source code or self-repair.

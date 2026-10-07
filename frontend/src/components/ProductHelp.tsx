@@ -4,19 +4,19 @@ export function ProductHelp() {
   const [open, setOpen] = useState(false);
   const contentId = useId();
   return <section className="panel product-help" aria-label="Product help">
-    <button type="button" aria-expanded={open} aria-controls={contentId} onClick={() => setOpen(value => !value)}>
-      How QA Sentinel works
-    </button>
+    <button type="button" aria-expanded={open} aria-controls={contentId} onClick={() => setOpen(value => !value)}>How campaigns work</button>
     <div id={contentId} hidden={!open}>
-      <p>QA Sentinel coordinates QA work through agents, deterministic tools and inspectable evidence.</p>
+      <p>Prepare QA work with structured requirements, test specifications and explicit human review.</p>
       <dl>
-        <dt>Project</dt><dd>The software identity that owns your Tasks. Creating a Project does not configure a workspace or runtime.</dd>
-        <dt>Task</dt><dd>One QA requirement within a Project. Open the Project to create a Task, then open the Task to inspect it.</dd>
-        <dt>Run</dt><dd>Creates a durable execution request for the configured workflow. You can leave or refresh and recover its status. Task state and evidence determine the outcome. Resume only restores a blocked Task's stored state; click Run separately afterward.</dd>
-        <dt>Evidence</dt><dd>After Run, inspect Overview and Timeline, then Artifacts, Invocations, Test Runs, Errors, Decisions and Gates. A safe stop may still produce evidence.</dd>
+        <dt>Project</dt><dd>The software identity that owns your QA Campaigns. A repository is optional for campaign preparation.</dd>
+        <dt>QA Campaign</dt><dd>One QA initiative. Create a Campaign inside a Project, then inspect its preparation views.</dd>
+        <dt>Requirements and Test Specifications</dt><dd>Saved requirements carry source evidence. Imported and AI-generated test designs share explicit review status; neither is automatically approved.</dd>
+        <dt>Traceability</dt><dd>Shows which requirements have approved linked tests and which have gaps. Coverage does not prove a test passed.</dd>
+        <dt>Readiness</dt><dd>A derived assessment of preparation, approvals and coverage. Campaign Approved and readiness Ready remain separate.</dd>
       </dl>
-      <p>For the demo, open Demo Calculator and create a Task titled <strong>Division support</strong> with requirement <strong>Add division support and reject division by zero.</strong></p>
-      <p className="notice">Demo evidence is deterministic and synthetic: no live AI, source writes or real test execution. Other Projects remain runtime-unconfigured in demo mode.</p>
+      <p>These views read saved preparation data. Creating a Campaign does not upload a document, generate tests, approve content or start execution.</p>
+      <p className="notice">Demo evidence remains deterministic and synthetic. An empty Campaign stays empty until content is prepared; the browser does not invent requirements or tests.</p>
+      <p className="hint">Historical Task screens are available under Legacy workflows in a Project; Operations remains available separately.</p>
     </div>
   </section>;
 }
