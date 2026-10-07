@@ -86,7 +86,9 @@ inference: a citation may be real while a model interpretation is wrong.
 Missing acceptance criteria require an explicit MISSING_INFORMATION marker.
 Any marker derives NEEDS_CLARIFICATION; otherwise output is READY_FOR_REVIEW.
 DRAFT remains a separate domain review status. There is no requirement approval,
-readiness evaluation, edit/review UI, or test generation in Task 2.2.
+readiness evaluation, edit/review UI, or test generation in Task 2.2. Task 2.4
+adds [explicit APPROVED status and human evidence](CAMPAIGN_REVIEW.md), without
+content editing or automatic approval.
 
 ## Durability, duplication and usage
 

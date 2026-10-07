@@ -37,6 +37,7 @@ class TestSpecificationRepository:
         prepared=[CampaignTestSpecification.model_validate(r.model_dump()) for r in records]
         if len(prepared)>100:raise ValueError('Specification output limit')
         for record in prepared:
+            if record.review_status == "APPROVED": raise ValueError("Import/generation cannot approve tests")
             if (record.project_id,record.campaign_id,record.provenance.record_id)!=(owner.project_id,owner.campaign_id,owner.id):raise ValueError('Specification provenance ownership mismatch')
             expected_hash=owner.content_hash if isinstance(owner,TestImport) else owner.request_hash
             if record.provenance.content_hash!=expected_hash or record.provenance.contract_version!=owner.contract_version:

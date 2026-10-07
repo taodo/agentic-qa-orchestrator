@@ -7,6 +7,10 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.REVIEW_SIZE_LIMIT: (413, "Review request exceeds supported size"),
+    Code.REVIEW_NOT_REVIEWABLE: (409, "Object is not ready for explicit approval"),
+    Code.REVIEW_CONFLICT: (409, "Approval intent conflicts with the immutable review evidence"),
+    Code.REVIEW_EVIDENCE_INVALID: (409, "Review evidence does not match immutable content"),
     Code.CAMPAIGN_TEST_CHILD_NOT_FOUND: (404, "Campaign test record not found"),
     Code.CAMPAIGN_TEST_CHILD_MISMATCH: (409, "Test record does not belong to the requested Campaign"),
     Code.GENERATION_NOT_CONFIGURED: (409, "Test generation is not configured"),
