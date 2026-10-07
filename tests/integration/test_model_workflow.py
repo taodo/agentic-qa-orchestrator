@@ -1,4 +1,5 @@
-from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.application import QASentinelApplication, ProjectExecutionResolver
+from qa_sentinel.projects import ProjectWorkspaceBinding, ProjectRuntimeRegistry
 from qa_sentinel.domain.project import Project
 from uuid import uuid4
 import json
@@ -84,6 +85,13 @@ def test_hybrid_real_sdk_and_real_pytest_done_with_durable_provenance(migrated_f
             persisted = json.dumps([e.model_dump(mode="json") for e in events])
             assert "synthetic-test-credential" not in persisted and "authorization" not in persisted.lower()
             assert "system_instructions" not in persisted and "output_text" not in persisted
+        application = QASentinelApplication(create_session_factory(fresh), ProjectExecutionResolver(ProjectRuntimeRegistry([]), []))
+        usage = application.get_task_model_usage(task.id)
+        assert usage.usage.records == 2 and usage.usage.total_tokens.total == 60
+        assert usage.usage.input_tokens.total == 20 and usage.usage.output_tokens.total == 40
+        assert usage.usage.reasoning_tokens.total is None
+        assert all(i.original_context_chars is not None and i.selected_context_chars is not None
+                   for i in usage.invocations if i.applicable)
     finally:
         fresh.dispose()
 

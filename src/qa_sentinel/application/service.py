@@ -21,6 +21,7 @@ from .models import (
     ArtifactView, InvocationView, TestRunView, ErrorView, DecisionView, GateEvaluationView,
     ExecutionJobView,
 )
+from .model_usage import TaskModelUsage, assess_usage, MAX_USAGE_EVENTS
 from .operations import (
     OperationalAttention, OperationalSummaryView, ProjectOperationalSummaryView,
     TaskOperationalSummaryView, OperationalActivityView,
@@ -399,6 +400,22 @@ class QASentinelApplication:
 
     def get_task_artifacts(self, task_id, *, project_id=None, limit=50) -> CollectionPage[ArtifactView]:
         return self._records(task_id, project_id, limit, "artifacts", ArtifactView)
+
+    def get_task_model_usage(self, task_id, *, project_id=None, execution_job_id=None, limit=200) -> TaskModelUsage:
+        task_id, limit = identifier(task_id), list_limit(limit)
+        project_id = None if project_id is None else identifier(project_id)
+        job_id = None if execution_job_id is None else identifier(execution_job_id)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            task = self._task(uow, task_id, project_id)
+            job = None if job_id is None else uow.execution_jobs.get(job_id)
+            if job_id is not None and job is None:
+                raise ApplicationError(Code.EXECUTION_JOB_NOT_FOUND)
+            if job is not None and (job.task_id != task.id or job.project_id != task.project_id):
+                raise ApplicationError(Code.PROJECT_TASK_MISMATCH)
+            records = uow.reads.invocations(task_id, limit)
+            events = uow.reads.model_usage_events(task_id, [i.id for i in records[:limit]], MAX_USAGE_EVENTS)
+            return assess_usage(task_id, records[:limit], events[:MAX_USAGE_EVENTS], job=job,
+                truncated=len(records) > limit or len(events) > MAX_USAGE_EVENTS)
 
     def get_task_invocations(self, task_id, *, project_id=None, limit=50) -> CollectionPage[InvocationView]:
         return self._records(task_id, project_id, limit, "invocations", InvocationView)

@@ -68,6 +68,11 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/tasks/{task_id}/decisions | get_task_decisions → CollectionPage[DecisionView] |
 | GET /api/v1/tasks/{task_id}/gates | get_task_gate_evaluations → CollectionPage[GateEvaluationView] |
 | GET /api/v1/tasks/{task_id}/invocations | get_task_invocations → CollectionPage[InvocationView] |
+| GET /api/v1/tasks/{task_id}/model-usage | get_task_model_usage → TaskModelUsage |
+
+[Phase 1 model usage](MODEL_USAGE.md) is a separate bounded aggregate, with
+limit default/max 200 and an optional execution_job_id evidence-time window.
+It exposes no provider/source payloads and does not execute workflows.
 
 All collections accept `?limit=50`, capped at 200 except timeline (500).
 For the existing Task 13 collections, zero, negative, non-integer and over-maximum values produce 422; values are never

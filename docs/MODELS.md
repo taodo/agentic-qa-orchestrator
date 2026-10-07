@@ -231,8 +231,12 @@ requiring explicit reconciliation before another provider call.
 Invocation fields store configured model, reasoning effort, attempt, start/finish,
 status, and error linkage. Artifacts use actual configured producer_agent,
 producer_model, and invocation_id. Provider-reported model, bounded response ID,
-input/output/total tokens where available, status, and latency are stored in the
-correlated AGENT_COMPLETED event's model_metadata. Missing usage remains null.
+input/output/total/reasoning tokens where available, context-size diagnostics,
+status and latency are stored in correlated event model_metadata. A usable
+received response retains safe usage even when output fails validation/refusal;
+repository turns retain per-turn metadata. Missing usage remains null.
+[Phase 1 token usage and lossless context selection](MODEL_USAGE.md) defines
+bounded Task/invocation/agent/model/stage reads and unavailable cost semantics.
 There is no schema migration: existing event JSON represents this metadata.
 No raw provider response or reasoning text is stored. Gate PASS still determines
 artifact acceptance and progression; COMPLETED only means contract-valid output.

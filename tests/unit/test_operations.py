@@ -169,6 +169,10 @@ def test_pending_invocation_test_outcome_safe_projection_no_io(app, factory, bun
 
 def test_activity_instant_order_stable_ties_bounds_and_project_latest(app):
     t = task(app)
+    # Project creation uses wall time; pin it with the rest of this historical fixture.
+    with UnitOfWork(app._factory) as uow:
+        project = uow.projects.get(t.project_id).model_copy(update={"updated_at": NOW})
+        uow.projects.save(project); uow.commit()
     first = add_event(app, t, "STATE_TRANSITIONED", payload={"to_state": "DONE", "secret": "never"},
         stamp=NOW + timedelta(days=1), identifier=UUID(int=2))
     second = add_event(app, t, "STATE_TRANSITIONED", payload={"to_state": "SECRET"},

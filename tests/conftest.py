@@ -36,7 +36,7 @@ def mock_openai():
     import httpx
     from openai import OpenAI
     clients = []
-    def make(outputs):
+    def make(outputs, *, usage_override=..., response_status="completed"):
         queue = deque(outputs)
         calls = []
         def respond(request):
@@ -57,10 +57,11 @@ def mock_openai():
                 {"type": "output_text", "text": json.dumps(item.model_dump(mode="json")
                     if hasattr(item, "model_dump") else item), "annotations": []})
             return httpx.Response(200, json={"id": "resp_mock_1", "object": "response", "created_at": 1,
-                "status": "completed", "model": json.loads(request.content)["model"],
+                "status": response_status, "model": json.loads(request.content)["model"],
                 "output": [{"id": "msg_mock_1", "type": "message", "role": "assistant",
                             "status": "completed", "content": [content]}],
-                "usage": {"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}})
+                "usage": ({"input_tokens": 10, "output_tokens": 20, "total_tokens": 30}
+                          if usage_override is ... else usage_override)})
         client = OpenAI(api_key="synthetic-test-credential", max_retries=0,
             http_client=httpx.Client(transport=httpx.MockTransport(respond)))
         clients.append(client)

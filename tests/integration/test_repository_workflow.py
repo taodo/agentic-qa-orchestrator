@@ -1,5 +1,6 @@
+from qa_sentinel.application import QASentinelApplication, ProjectExecutionResolver
 """Mocked real turns, durable read evidence, and unchanged gates/mutation boundary."""
-from qa_sentinel.projects import ProjectWorkspaceBinding
+from qa_sentinel.projects import ProjectWorkspaceBinding, ProjectRuntimeRegistry
 from qa_sentinel.domain.project import Project
 from dataclasses import dataclass
 from pathlib import Path
@@ -377,6 +378,11 @@ def test_refusal_has_no_read_and_no_raw_refusal_persistence(migrated_factory, tm
         persisted = str(uow.history.list_events(h.task.id)) + str(uow.history.list_errors(h.task.id))
         assert "synthetic-sensitive-refusal" not in persisted and "synthetic-test-credential" not in persisted
     assert len(mock.calls) == 1
+    application = QASentinelApplication(factory, ProjectExecutionResolver(ProjectRuntimeRegistry([]), []))
+    usage = application.get_task_model_usage(h.task.id)
+    assert usage.usage.records == 1 and usage.usage.total_tokens.total == 30
+    assert usage.invocations[0].configured_model == "real-researcher"
+
 
 
 def test_explicit_reads_record_drift_without_snapshot_isolation(migrated_factory, tmp_path, mock_openai):

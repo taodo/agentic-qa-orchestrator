@@ -41,11 +41,13 @@ class RealAgentRuntime:
         settings = self._settings(agent_name, context)
         repository = self.repository_turns(agent_name)
         request = build_request(agent_name, context, settings, repository_tools=repository)
+        metadata = None
         try:
             expected = ImplementationProposal if agent_name == AgentName.IMPLEMENTER else OUTPUT_TYPES[agent_name]
             if repository:
                 expected = ResearchTurn if agent_name == AgentName.RESEARCHER else PlannerTurn
             response = self.adapter.generate(request, expected)
+            metadata = response.metadata
             if type(response.parsed_output) is not expected:
                 raise ModelError(ProviderErrorCategory.MALFORMED_RESPONSE)
             output = expected.model_validate(response.parsed_output.model_dump(mode="json"))
@@ -54,5 +56,6 @@ class RealAgentRuntime:
             if isinstance(failure, ValidationError) or failure.category == ProviderErrorCategory.MALFORMED_RESPONSE:
                 # One explicit correction adds instructions to the next call; no hidden repair call.
                 raise ModelError(ProviderErrorCategory.MALFORMED_RESPONSE,
-                                 changed_input=not context.schema_correction) from None
+                                 changed_input=not context.schema_correction,
+                                 metadata=getattr(failure, "metadata", None) or metadata) from None
             raise
