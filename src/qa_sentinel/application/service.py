@@ -1,10 +1,16 @@
 """Use-case boundary. Execution and transitions belong exclusively to core."""
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
-from uuid import UUID
+from uuid import UUID, uuid5, NAMESPACE_URL
 from pydantic import ValidationError
 from qa_sentinel.domain.project import Project
 from qa_sentinel.domain.campaign import QACampaign, InvalidCampaignTransition
+from qa_sentinel.domain.campaign_content import (RequirementExtraction, CampaignRequirement,
+    RequirementReviewStatus, ExtractionStatus)
+from qa_sentinel.agents.requirement_extraction import ingest, validate_output, SourceTooLarge
+from qa_sentinel.models.base import ModelError, ModelMetadata
+from .campaign_content import (CampaignSourceView, CampaignSourceDetail, CampaignRequirementView,
+    ExtractionView, CampaignModelUsage, extraction_view, campaign_usage)
 from qa_sentinel.domain.task import Task
 from qa_sentinel.domain.enums import TaskState
 from qa_sentinel.domain.execution_job import ExecutionJob, ExecutionJobStatus as JobStatus, ExecutionJobError
@@ -72,8 +78,9 @@ def persistence_boundary():
 
 
 class QASentinelApplication:
-    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None):
+    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None):
         self._factory = session_factory
+        self._requirement_extractor = requirement_extractor
         self._resolver = execution_resolver
         # Optional trusted host coordination, never supplied by HTTP/model inputs.
         self._execution_admission = execution_admission
@@ -199,6 +206,126 @@ class QASentinelApplication:
             result = record_view(campaign, QACampaignView)
             uow.commit()
             return result
+
+    def _source(self, uow, project_id, campaign_id, source_id):
+        self._campaign(uow, project_id, campaign_id)
+        source = uow.campaign_content.source(source_id)
+        if source is None:
+            raise ApplicationError(Code.CAMPAIGN_SOURCE_NOT_FOUND)
+        if (source.project_id, source.campaign_id) != (project_id, campaign_id):
+            raise ApplicationError(Code.CAMPAIGN_SOURCE_MISMATCH)
+        return source
+
+    def ingest_campaign_source(self, project_id, campaign_id, *, name, source_type, content) -> CampaignSourceView:
+        project_id, campaign_id = identifier(project_id), identifier(campaign_id)
+        try:
+            source = ingest(project_id, campaign_id, name=name, source_type=source_type, content=content)
+        except SourceTooLarge:
+            raise ApplicationError(Code.SOURCE_SIZE_LIMIT) from None
+        except (ValueError, TypeError):
+            raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            # Reuse the accepted short SQLite writer reservation; no external work here.
+            uow.session.connection(execution_options={"qa_job_write": True})
+            self._campaign(uow, project_id, campaign_id)
+            existing = uow.campaign_content.source_by_content(source)
+            if existing is not None:
+                return record_view(existing, CampaignSourceView)
+            uow.campaign_content.add_source(source)
+            result = record_view(source, CampaignSourceView)
+            uow.commit()
+            return result
+
+    def get_campaign_source(self, project_id, campaign_id, source_id) -> CampaignSourceDetail:
+        project_id, campaign_id, source_id = map(identifier, (project_id, campaign_id, source_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            return record_view(self._source(uow, project_id, campaign_id, source_id), CampaignSourceDetail)
+
+    def list_campaign_sources(self, project_id, campaign_id, *, limit=50) -> CollectionPage[CampaignSourceView]:
+        project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            return self._operational_page(uow.campaign_content.sources(campaign_id, limit), limit, CampaignSourceView)
+
+    def get_campaign_requirement(self, project_id, campaign_id, requirement_id) -> CampaignRequirementView:
+        project_id, campaign_id, requirement_id = map(identifier, (project_id, campaign_id, requirement_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            requirement = uow.campaign_content.requirement(requirement_id)
+            if requirement is None:
+                raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_NOT_FOUND)
+            if (requirement.project_id, requirement.campaign_id) != (project_id, campaign_id):
+                raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
+            return record_view(requirement, CampaignRequirementView)
+
+    def list_campaign_requirements(self, project_id, campaign_id, *, limit=50) -> CollectionPage[CampaignRequirementView]:
+        project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            return page(uow.campaign_content.requirements(campaign_id, limit), limit, CampaignRequirementView)
+
+    def get_campaign_model_usage(self, project_id, campaign_id, *, limit=200) -> CampaignModelUsage:
+        project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            return campaign_usage(project_id, campaign_id, uow.campaign_content.extractions(campaign_id, limit), limit)
+
+    def extract_campaign_requirements(self, project_id, campaign_id, source_id) -> ExtractionView:
+        project_id, campaign_id, source_id = map(identifier, (project_id, campaign_id, source_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            source = self._source(uow, project_id, campaign_id, source_id)
+            existing = uow.campaign_content.extraction_for_source(source_id)
+            if existing is not None:
+                if existing.status == ExtractionStatus.STARTED:
+                    raise ApplicationError(Code.EXTRACTION_RECONCILIATION_REQUIRED)
+                return extraction_view(existing)
+        if source.status != "INGESTED":
+            raise ApplicationError(Code.SOURCE_NOT_INGESTED)
+        if self._requirement_extractor is None:
+            raise ApplicationError(Code.EXTRACTION_NOT_CONFIGURED)
+        try:
+            request = self._requirement_extractor.prepare(source)
+        except ModelError:
+            raise ApplicationError(Code.EXTRACTION_CONTEXT_LIMIT) from None
+        extraction = RequirementExtraction(project_id=project_id, campaign_id=campaign_id, source_id=source.id,
+            source_hash=source.content_hash, model=request.model)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
+            self._source(uow, project_id, campaign_id, source_id)
+            existing = uow.campaign_content.extraction_for_source(source_id)
+            if existing is not None:
+                if existing.status == ExtractionStatus.STARTED:
+                    raise ApplicationError(Code.EXTRACTION_RECONCILIATION_REQUIRED)
+                return extraction_view(existing)
+            uow.campaign_content.reserve(extraction)
+            uow.commit()
+        # No DB transaction is open during provider work. One explicit attempt, no retry loop.
+        metadata, error, requirements = None, None, ()
+        try:
+            response = self._requirement_extractor.extract(request)
+            metadata = ModelMetadata.model_validate(response.metadata.model_dump())
+            output = validate_output(source, response.parsed_output)
+            requirements = tuple(CampaignRequirement(**r.model_dump(), project_id=project_id, campaign_id=campaign_id,
+                extraction_id=extraction.id, logical_key=f"REQ-{source.id.hex}-{r.key}",
+                id=uuid5(NAMESPACE_URL, f"{source.id}:requirements-v1:{r.key}"),
+                review_status=RequirementReviewStatus.NEEDS_CLARIFICATION if r.information_markers else RequirementReviewStatus.READY_FOR_REVIEW)
+                for r in output.requirements)
+        except ModelError as failure:
+            error = failure.code
+            try:
+                metadata = None if failure.metadata is None else ModelMetadata.model_validate(failure.metadata.model_dump())
+            except (AttributeError, ValidationError): metadata = None
+        except (ValueError, TypeError) as failure:
+            error = "EXTRACTION_INVALID_CITATION" if str(failure) == "EXTRACTION_INVALID_CITATION" else "EXTRACTION_INVALID_OUTPUT"
+        except Exception:
+            error = "MODEL_UNKNOWN_PROVIDER_ERROR"
+        completed = RequirementExtraction.model_validate({**extraction.model_dump(),
+            "status": ExtractionStatus.FAILED if error else ExtractionStatus.SUCCEEDED,
+            "finished_at": datetime.now(timezone.utc), "error_code": error, "metadata": metadata})
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.campaign_content.finish(completed, () if error else requirements)
+            uow.commit()
+        return extraction_view(completed)
 
     def get_operational_summary(self) -> OperationalSummaryView:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:

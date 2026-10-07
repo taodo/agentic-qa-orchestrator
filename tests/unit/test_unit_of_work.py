@@ -18,7 +18,7 @@ def test_explicit_commit_persists_related_records(factory,bundle,store_bundle):
         assert uow.execution_jobs.get(job.id)==job
     with factory() as session:
         for table in Base.metadata.tables.values():
-            expected = 0 if table.name == "qa_campaigns" else 1  # Workflow writes never create a Campaign.
+            expected = 0 if table.name in {"qa_campaigns", "campaign_sources", "campaign_requirement_extractions", "campaign_requirements"} else 1  # Workflow writes never create a Campaign.
             assert session.scalar(select(func.count()).select_from(table)) == expected
 
 

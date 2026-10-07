@@ -7,6 +7,8 @@ model calls, tools or transaction ownership. Core and application code do not
 depend on API contracts. Task 13 required no migration; Task 20 adds an operational
 job table through 0003 without changing core workflow policies. Task 2.1 adds
 Project-owned campaign preparation through 0004; see [QA Campaigns](CAMPAIGNS.md).
+Task 2.2 adds scoped source ingestion and explicit structured extraction through
+0005; see [Campaign requirements](REQUIREMENTS.md) for bounds and safe outcomes.
 
 ## Application factory and host composition
 
@@ -56,6 +58,13 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/projects/{project_id}/campaigns/{campaign_id} | get_campaign → QACampaignView |
 | PATCH /api/v1/projects/{project_id}/campaigns/{campaign_id} | update_campaign → QACampaignView |
 | POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/transitions | transition_campaign → QACampaignView |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources | ingest_campaign_source → CampaignSourceView (201) |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources | list_campaign_sources → CollectionPage[CampaignSourceView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources/{source_id} | get_campaign_source → CampaignSourceDetail |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources/{source_id}/extract-requirements | extract_campaign_requirements → ExtractionView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/requirements | list_campaign_requirements → CollectionPage[CampaignRequirementView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/requirements/{requirement_id} | get_campaign_requirement → CampaignRequirementView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/model-usage | get_campaign_model_usage → CampaignModelUsage |
 | GET /api/v1/tasks/{task_id} | get_task_detail → TaskDetail |
 | GET /api/v1/tasks/{task_id}/reconciliation | assess_task_reconciliation → ReconciliationAssessmentView |
 | POST /api/v1/tasks/{task_id}/run | run_task → TaskDetail |

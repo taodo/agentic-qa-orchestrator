@@ -91,8 +91,10 @@ table and its campaigns, leaving existing Project/Task/evidence/job data intact.
 It does not backfill campaigns or create Projects. The packaged migration and
 host current-revision marker include 0004. No dependency is added.
 
-Task 2.2 can attach future inputs/requirements/test specifications through the
-stable Campaign UUID and Project ownership. Task 2.1 adds none of those child
+Task 2.2 now attaches immutable specification sources and structured requirements
+through the stable Campaign UUID and Project ownership; see
+[Campaign requirements](REQUIREMENTS.md). Ingestion/extraction does not change
+Campaign status. Test specifications remain future Task 2.3 work. Task 2.1 adds none of those child
 models, ingestion, extraction, generation, readiness, traceability, execution,
 source mutation or frontend redesign. Future changes to approval invalidation or
 reverse transitions must be explicit contract changes rather than metadata

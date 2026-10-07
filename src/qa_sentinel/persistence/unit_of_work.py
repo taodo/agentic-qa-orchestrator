@@ -4,6 +4,7 @@ from .read_queries import ReadQueries
 from .operations import OperationalQueries
 from .execution_jobs import ExecutionJobRepository
 from .campaigns import QACampaignRepository
+from .campaign_content import CampaignContentRepository
 from .repositories import (
     TaskRepository, ArtifactRepository, InvocationRepository, HistoryRepository,
     FailureFingerprintRepository, RequirementRepository, AcceptanceCriterionRepository,
@@ -23,6 +24,7 @@ class UnitOfWork:
         self.tasks = TaskRepository(self.session)
         self.projects = ProjectRepository(self.session)
         self.campaigns = QACampaignRepository(self.session)
+        self.campaign_content = CampaignContentRepository(self.session)
         self.execution_jobs = ExecutionJobRepository(self.session)
         self.reads = ReadQueries(self.session)
         self.operations = OperationalQueries(self.session)
