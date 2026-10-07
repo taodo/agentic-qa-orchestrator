@@ -33,7 +33,9 @@ class RepositoryToolPolicy:
         if calls_used >= self.config.max_tool_calls_per_agent_invocation:
             raise RepositoryReadFailure("TOOL_CALL_BUDGET_EXHAUSTED", denied=True)
         args = request.arguments
-        if getattr(args, "limit", 1) > (self.config.max_list_results if args.tool == "LIST_FILES" else self.config.max_search_results):
+        # Search limit is a requested output count, capped by the service's host limit.
+        # It cannot authorize more reads/results or bypass the remaining policy checks.
+        if args.tool == "LIST_FILES" and args.limit > self.config.max_list_results:
             raise RepositoryReadFailure("RESULT_LIMIT_EXCEEDED", denied=True)
         if getattr(args, "depth", 0) > self.config.max_depth:
             raise RepositoryReadFailure("DEPTH_LIMIT_EXCEEDED", denied=True)

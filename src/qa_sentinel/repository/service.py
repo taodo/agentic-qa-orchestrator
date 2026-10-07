@@ -59,6 +59,7 @@ class RepositoryReadService:
                 if isinstance(args, ListFilesArgs):
                     output = ListFilesData(entries=entries[:args.limit], truncated=len(entries) > args.limit)
                 elif isinstance(args, SearchTextArgs):
+                    result_limit = min(args.limit, self.config.max_search_results)
                     matches, skipped, scanned_bytes = [], 0, 0
                     for entry in entries:
                         if entry.entry_type != "FILE":
@@ -83,12 +84,13 @@ class RepositoryReadService:
                             snippet = line[start:start + self.config.max_snippet_chars]
                             matches.append(SearchMatch(path=entry.path, line_number=number,
                                 snippet=snippet, snippet_truncated=start > 0 or len(snippet) < len(line), sha256=digest))
-                            if len(matches) > args.limit:
+                            if len(matches) > result_limit:
                                 break
-                        if len(matches) > args.limit:
+                        if len(matches) > result_limit:
                             break
-                    output = SearchTextData(matches=tuple(matches[:args.limit]), truncated=len(matches) > args.limit,
-                                            skipped_files=skipped)
+                    output = SearchTextData(matches=tuple(matches[:result_limit]), truncated=len(matches) > result_limit,
+                                            skipped_files=skipped, result_limit=result_limit,
+                                            limit_capped=args.limit > result_limit)
                 else:
                     raise RepositoryReadFailure("UNSUPPORTED_OPERATION", denied=True)
             size = len(output.model_dump_json().encode("utf-8"))

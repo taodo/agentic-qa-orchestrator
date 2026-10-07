@@ -96,6 +96,31 @@ operator run's immutable incompatible Plan is not rewritten by this fix. After
 review/reconciliation of prior work, the operator should use a fresh Task for a
 fresh Planner output. Resume does not regenerate a completed rejected Plan.
 
+## Repository discovery boundary
+
+A later operator run stopped in RESEARCHING after LIST_FILES succeeded and a
+SEARCH_TEXT request was denied RESULT_LIMIT_EXCEEDED. The typed request accepted
+counts up to 1,000, but policy denied counts above the host ceiling (50 by default)
+before any search. The session then classified that denial POLICY_VIOLATION /
+TERMINAL and blocked the Task. Actual excess matches already had truncation;
+the defect was treating an oversized requested count as a fatal policy violation.
+
+Task 26 now applies min(requested count, host search ceiling), with result_limit
+and limit_capped in successful evidence. truncated still means an extra match was
+observed; it does not mean the requested count was high or assert a total count.
+Researcher and Planner instructions guide explicit progressive listing, relevant
+search, narrower path/query and targeted full-file reads. Source knowledge comes
+from those reads, with no product hint naming this scenario's defect location.
+
+All [repository safety bounds](REPOSITORY_TOOLS.md#authorization-and-bounds),
+policy denials and existing session/reliability rules remain. Scan/byte/context
+exhaustion can still stop a session; count capping cannot authorize more work or
+create a hidden retry. New results retain the original requested count, applied
+count, snippets, hashes and byte accounting in immutable correlated evidence.
+Existing blocked Task/history is not rewritten or automatically resumed by this
+fix. A fresh operator run remains a separate, explicitly authorized live step
+after code review; no live rerun is claimed by these offline regressions.
+
 ## Planner stage boundary
 
 The live finding reported successful research and passed Research/Plan gates,

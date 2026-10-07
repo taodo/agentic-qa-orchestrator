@@ -38,7 +38,9 @@ class SearchTextArgs(Frozen):
     tool: Literal["SEARCH_TEXT"]
     query: str = Field(min_length=1, max_length=256)
     path: RelativePath
-    limit: int = Field(ge=1, le=1000, strict=True)
+    limit: int = Field(ge=1, le=1000, strict=True, description=(
+        "Requested maximum matches, capped by the host search-result ceiling. "
+        "Use a narrower directory or literal query when returned matches are truncated."))
 
 
 class RepositoryToolRequest(Frozen):
@@ -85,6 +87,17 @@ class SearchTextData(Frozen):
     matches: tuple[SearchMatch, ...]
     truncated: bool
     skipped_files: Count
+    # Missing metadata remains valid for immutable evidence recorded before Task 26.
+    result_limit: int | None = Field(default=None, ge=1, le=1000, strict=True)
+    limit_capped: bool = Field(default=False, strict=True)
+
+    @model_validator(mode="after")
+    def bounded_matches(self):
+        if self.result_limit is not None and len(self.matches) > self.result_limit:
+            raise ValueError("Search matches cannot exceed the applied result limit")
+        if self.limit_capped and self.result_limit is None:
+            raise ValueError("Capped search results require an applied result limit")
+        return self
 
 
 class RepositoryToolResult(Frozen):

@@ -14,7 +14,7 @@ from qa_sentinel.agents.scenarios import division_scenario, DIVISION_REQUIREMENT
 from qa_sentinel.models.config import RoleModelConfig
 from qa_sentinel.models.base import ModelSettings
 from qa_sentinel.models.openai_adapter import OpenAIModelAdapter
-from qa_sentinel.schemas.repository import ResearchTurn, PlannerTurn, RepositoryToolRequest
+from qa_sentinel.schemas.repository import ResearchTurn, PlannerTurn, RepositoryToolRequest, RepositoryEvidence
 from qa_sentinel.schemas.mutation import ImplementationProposal
 from qa_sentinel.repository.config import RepositoryReadConfig
 from qa_sentinel.repository.service import RepositoryReadService
@@ -418,3 +418,142 @@ def test_result_commit_failure_reuses_model_request_but_repeats_only_unrecorded_
     monkeypatch.setattr(ArtifactRepository, "add", original)
     assert recreated(h).run(h.task.id).state == S.DONE
     assert len(mock.calls) == 3
+
+
+
+def test_progressive_capped_search_read_research_and_durable_audit(migrated_factory, tmp_path, mock_openai):
+    factory, engine, _ = migrated_factory
+    def broad(call):
+        supplied = json.loads(call["input"][0]["content"])["repository_results"]
+        assert len(supplied) == 1 and supplied[0]["result"]["status"] == "SUCCESS"
+        return tool_turn("SEARCH_TEXT", ".", query="add", limit=1000)
+    def narrower(call):
+        supplied = json.loads(call["input"][0]["content"])["repository_results"]
+        search = supplied[-1]["result"]["data"]
+        assert supplied[-1]["request"]["arguments"]["limit"] == 1000
+        assert len(search["matches"]) == search["result_limit"] == 50
+        assert search["limit_capped"] and search["truncated"]
+        return tool_turn("SEARCH_TEXT", ".", query="def add", limit=10)
+    def targeted(call):
+        supplied = json.loads(call["input"][0]["content"])["repository_results"]
+        search = supplied[-1]["result"]["data"]
+        assert len(search["matches"]) == 1 and not search["truncated"] and not search["limit_capped"]
+        # Choose the discovered file from tool evidence, not a model hint/preloaded snapshot.
+        return tool_turn(path=search["matches"][0]["path"])
+    mock = mock_openai([tool_turn("LIST_FILES", "."), broad, narrower, targeted, cited_research,
+                        final(values()[A.PLANNER], A.PLANNER)])
+    h = setup(factory, tmp_path, mock)
+    h.root.joinpath("README.md").write_bytes(b"add package documentation\n" * 100)
+    before = snapshot(h.root)
+    assert h.runner.run(h.task.id).state == S.DONE
+    assert snapshot(h.root) == before and len(mock.calls) == 6
+    for call in mock.calls:
+        assert call["tools"] == [] and call["tool_choice"] == "none" and not call["store"]
+        assert len(call["input"][0]["content"]) <= 60000
+    fresh = create_engine(str(engine.url))
+    try:
+        with UnitOfWork(create_session_factory(fresh)) as uow:
+            research, = [i for i in uow.invocations.list_by_task(h.task.id) if i.agent == A.RESEARCHER]
+            assert research.status.value == "COMPLETED"
+            reads = sorted([a for a in uow.artifacts.list_by_task(h.task.id)
+                            if a.artifact_type == AT.REPOSITORY_EVIDENCE], key=lambda a: a.content["call_index"])
+            assert [a.content["request"]["arguments"]["tool"] for a in reads] == [
+                "LIST_FILES", "SEARCH_TEXT", "SEARCH_TEXT", "READ_FILE"]
+            assert [a.content["call_index"] for a in reads] == [1, 2, 3, 4]
+            total = 0
+            events = uow.history.list_events(h.task.id)
+            for artifact in reads:
+                result = artifact.content["result"]
+                validated = RepositoryEvidence.model_validate(artifact.content)
+                size = len(validated.result.data.model_dump_json().encode("utf-8"))
+                assert result["returned_bytes"] == size
+                total += size
+                assert any(e.event_type == "REPOSITORY_TOOL_COMPLETED" and
+                           e.correlation.artifact_id == artifact.id and e.payload["returned_bytes"] == size
+                           for e in events)
+            assert total <= h.reader.config.max_total_bytes_per_invocation
+            assert reads[1].content["request"]["arguments"]["limit"] == 1000
+            assert reads[1].content["result"]["data"]["result_limit"] == 50
+            canonical, = [a for a in uow.artifacts.list_by_task(h.task.id) if a.artifact_type == AT.RESEARCH]
+            assert canonical.content["findings"][0]["evidence"] == ["artifact:" + str(a.id) for a in reads]
+            assert not any(e.code == "RESULT_LIMIT_EXCEEDED" for e in uow.history.list_errors(h.task.id))
+            assert not any(e.event_type == "RETRY_SCHEDULED" for e in events)
+            assert any(t.from_state == S.RESEARCHING and t.to_state == S.PLANNING
+                       for t in uow.history.list_transitions(h.task.id))
+    finally:
+        fresh.dispose()
+
+
+def test_capped_search_resume_uses_durable_metadata_without_read_or_model_replay(
+        migrated_factory, tmp_path, mock_openai, monkeypatch):
+    factory, engine, _ = migrated_factory
+    def completed(call):
+        supplied = json.loads(call["input"][0]["content"])["repository_results"]
+        result = supplied[0]["result"]["data"]
+        assert result["result_limit"] == 50 and result["limit_capped"] and not result["truncated"]
+        return final(values()[A.RESEARCHER])
+    mock = mock_openai([tool_turn("SEARCH_TEXT", ".", limit=1000), completed,
+                        final(values()[A.PLANNER], A.PLANNER)])
+    h = setup(factory, tmp_path, mock)
+    original = HistoryRepository.append_event
+    def pause(self, event):
+        if event.event_type == "MODEL_TURN_STARTED" and event.payload["turn_index"] == 2:
+            raise RuntimeError("pause before reserving next model turn")
+        original(self, event)
+    monkeypatch.setattr(HistoryRepository, "append_event", pause)
+    with pytest.raises(RuntimeError):
+        h.runner.run(h.task.id)
+    assert len(mock.calls) == 1
+    monkeypatch.setattr(HistoryRepository, "append_event", original)
+    monkeypatch.setattr(h.reader, "execute", lambda *a, **k: (_ for _ in ()).throw(AssertionError("Read replay")))
+    fresh = create_engine(str(engine.url))
+    try:
+        assert recreated(h, create_session_factory(fresh)).run(h.task.id).state == S.DONE
+    finally:
+        fresh.dispose()
+    assert len(mock.calls) == 3
+    with UnitOfWork(factory) as uow:
+        assert len([i for i in uow.invocations.list_by_task(h.task.id) if i.agent == A.RESEARCHER]) == 1
+        assert len([a for a in uow.artifacts.list_by_task(h.task.id) if a.artifact_type == AT.REPOSITORY_EVIDENCE]) == 1
+
+
+def test_repeated_capped_search_exhausts_existing_turn_budget_without_hidden_retry(
+        migrated_factory, tmp_path, mock_openai, monkeypatch):
+    factory, _, _ = migrated_factory
+    mock = mock_openai([tool_turn("SEARCH_TEXT", ".", limit=1000) for _ in range(9)])
+    h = setup(factory, tmp_path, mock, config={"max_search_results": 1})
+    calls = []
+    original = h.reader.execute
+    def execute(*a, **k):
+        calls.append(k)
+        return original(*a, **k)
+    monkeypatch.setattr(h.reader, "execute", execute)
+    result = h.runner.run(h.task.id)
+    assert result.state == S.BLOCKED and result.resume_state == S.RESEARCHING
+    assert len(calls) == 8 and len(mock.calls) == 9
+    assert [c["calls_used"] for c in calls] == list(range(8))
+    with UnitOfWork(factory) as uow:
+        artifacts = uow.artifacts.list_by_task(h.task.id)
+        reads = sorted([a for a in artifacts if a.artifact_type == AT.REPOSITORY_EVIDENCE],
+                       key=lambda a: a.content["call_index"])
+        assert len(reads) == 9 and not any(a.artifact_type == AT.RESEARCH for a in artifacts)
+        assert all(a.content["result"]["data"]["result_limit"] == 1 for a in reads[:-1])
+        assert reads[-1].content["result"]["error_code"] == "TOOL_CALL_BUDGET_EXHAUSTED"
+        assert reads[-1].content["result"]["data"] is None
+        assert len([i for i in uow.invocations.list_by_task(h.task.id) if i.agent == A.RESEARCHER]) == 1
+        assert not any(e.event_type == "RETRY_SCHEDULED" for e in uow.history.list_events(h.task.id))
+
+
+def test_capped_search_does_not_bypass_total_byte_budget(migrated_factory, tmp_path, mock_openai):
+    factory, _, _ = migrated_factory
+    mock = mock_openai([tool_turn("SEARCH_TEXT", ".", limit=1000) for _ in range(3)])
+    h = setup(factory, tmp_path, mock, config={"max_search_results": 1, "max_total_bytes_per_invocation": 400})
+    assert h.runner.run(h.task.id).state == S.BLOCKED and len(mock.calls) == 2
+    with UnitOfWork(factory) as uow:
+        reads = sorted([a for a in uow.artifacts.list_by_task(h.task.id) if a.artifact_type == AT.REPOSITORY_EVIDENCE],
+                       key=lambda a: a.content["call_index"])
+        assert reads[0].content["result"]["status"] == "SUCCESS"
+        assert 0 < reads[0].content["result"]["returned_bytes"] <= 400
+        assert reads[1].content["result"]["error_code"] == "TOTAL_BYTES_EXCEEDED"
+        assert reads[1].content["result"]["data"] is None and reads[1].content["result"]["returned_bytes"] == 0
+        assert not any(e.event_type == "RETRY_SCHEDULED" for e in uow.history.list_events(h.task.id))

@@ -49,6 +49,23 @@ files fail without partial content. SEARCH_TEXT uses Python literal matching,
 returns one match per matching line, sorted by path then line, with bounded
 snippets, snippet_truncated, full-file SHA-256, result truncation and skipped count.
 Its path is a directory prefix; there is no regex, semantic search or shell.
+Task 26 treats SEARCH_TEXT limit as a requested count: the applied result_limit is
+min(requested limit, host max_search_results), never an increase in host capacity.
+limit_capped reports that the request was reduced. truncated is independently true
+only when an additional matching line was observed beyond the applied count. It
+never invents a total match count. At most the applied count plus one sentinel
+match is collected; the sentinel is not returned or persisted. A high requested
+count with few matches can have limit_capped=true and truncated=false.
+
+Researcher/Planner should list relevant directories, search a selected directory,
+narrow the path or literal query after truncation, then read selected files for
+full-content evidence. Raising the requested count cannot retrieve more than the
+host ceiling. Each discovery step is a new explicit turn with its own UUID and
+consumes the existing invocation budget. No automatic narrowing, provider retry,
+extra recovery allowance, pagination cursor or hidden source hint is introduced.
+New search evidence includes both fields; old immutable evidence remains loadable
+with result_limit=null and limit_capped=false (unknown applied historical limit),
+without rewriting its artifact or claiming it has been revalidated under new rules.
 
 The unchanged OpenAI Responses adapter sends tools=[], tool_choice="none" and
 store=False. Turn intent is schema-native structured output, revalidated with
@@ -149,11 +166,18 @@ and reads. Concurrent runners for the same invocation are not supported.
 Budget exhaustion records typed DENIED evidence without executing another tool;
 TOOL_CALL_BUDGET_EXHAUSTED and TOTAL_BYTES_EXCEEDED become existing WORKFLOW_ERROR
 with STRUCTURAL disposition. Other denied requests (protected/escaping paths,
-role/limit/query violations, reused request IDs) become POLICY_VIOLATION/TERMINAL.
+role/list-limit/depth/query violations, reused request IDs) become POLICY_VIOLATION/TERMINAL.
 Missing/unreadable/invalid-encoding/oversized files and scan failures become
 TOOL_ERROR/STRUCTURAL. Each stops the invocation through existing failure routing;
-there is no follow-up model call after a failed read. ReliabilityService owns any
-application recovery decisions. Provider failures and schema correction retain
+there is no follow-up model call after a failed read. Oversized SEARCH_TEXT counts
+now produce successful capped evidence when all other checks pass, so the next
+ordinary model turn can inspect it and explicitly narrow the query/path. They do
+not generate POLICY_VIOLATION, terminal recovery or a separate retry invocation.
+LIST_FILES count violations retain their existing denial behavior. Scan/byte/file,
+context and call ceilings remain unchanged: a broad search that exceeds enumeration
+or examined-byte bounds still fails closed without partial results. This scoped fix
+does not promise exhaustive root searches of arbitrarily large repositories.
+ReliabilityService owns any application recovery decisions. Provider failures and schema correction retain
 their existing taxonomy and budgets. No sleeps or parallel retry policy are added.
 
 Source content is untrusted user-context evidence, never system instructions.
@@ -180,5 +204,9 @@ source-body injection, read and cite it, allow Planner reads, preserve gates and
 NEEDS_RESEARCH, exercise budget/path/refusal/schema failures, record drift, reopen
 durable evidence, reuse safe results and stop unresolved provider reservations.
 A regression runs real Task 9 mutation and local pytest with source snapshots and
-a non-browsing Reviewer. Normal tests strip OPENAI_API_KEY and forbid live provider
+a non-browsing Reviewer. Task 26 regressions additionally cover over-requested
+search counts, explicit capping versus actual truncation, custom host ceilings,
+progressive listing/search/narrowing/targeted reads, persisted audit metadata,
+restart reuse, unchanged security denials and finite call/byte budgets.
+Normal tests strip OPENAI_API_KEY and forbid live provider
 transport; all model responses use the existing official-SDK MockTransport fixture.

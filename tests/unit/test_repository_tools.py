@@ -222,3 +222,98 @@ def test_frozen_configuration_and_limits(reader):
         RepositoryReadConfig(reader.config.repository_root, allowed_extensions=("*",))
     with pytest.raises(Exception):
         reader.config.max_file_bytes = 0
+
+
+@pytest.mark.parametrize("role", [A.RESEARCHER, A.PLANNER])
+@pytest.mark.parametrize("limit,applied,capped", [(1, 1, False), (50, 50, False),
+                                                (51, 50, True), (1000, 50, True)])
+def test_search_requested_count_cannot_expand_host_evidence(reader, role, limit, applied, capped):
+    reader.config.repository_root.joinpath("calculator.py").write_bytes(
+        ("needle é\n" * 100).encode("utf-8"))
+    result = reader.execute(role, request("SEARCH_TEXT", ".", query="needle", limit=limit))
+    assert result.status == "SUCCESS" and result.error_code is None
+    assert len(result.data.matches) == applied
+    assert result.data.result_limit == applied and result.data.limit_capped is capped
+    assert result.data.truncated
+    assert [m.line_number for m in result.data.matches] == list(range(1, applied + 1))
+    assert result.returned_bytes == len(result.data.model_dump_json().encode("utf-8"))
+    assert result.returned_bytes <= reader.config.max_total_bytes_per_invocation
+
+
+def test_search_capping_is_distinct_from_actual_truncation_and_respects_custom_host(reader):
+    limited = RepositoryReadService(RepositoryReadConfig(reader.config.repository_root, max_search_results=1))
+    result = limited.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", query="def add", limit=1000))
+    assert result.status == "SUCCESS" and len(result.data.matches) == 1
+    assert result.data.result_limit == 1 and result.data.limit_capped
+    assert not result.data.truncated  # One matching line; no fabricated truncation/count.
+    more = limited.execute(A.PLANNER, request("SEARCH_TEXT", ".", query="def", limit=1000))
+    assert len(more.data.matches) == 1 and more.data.truncated
+
+
+@pytest.mark.parametrize("path,code", [("../outside.py", "WORKSPACE_ESCAPE"),
+    ("C:/outside.py", "WORKSPACE_ESCAPE"), ("file.py:stream", "WORKSPACE_ESCAPE"),
+    (".env", "PROTECTED_PATH"), (".git", "PROTECTED_PATH"), ("NUL", "INVALID_PATH")])
+def test_capped_search_still_denies_unsafe_path_before_read(reader, monkeypatch, path, code):
+    monkeypatch.setattr(Path, "open", lambda *a, **k: (_ for _ in ()).throw(AssertionError("No read")))
+    result = reader.execute(A.RESEARCHER, request("SEARCH_TEXT", path, limit=1000))
+    assert result.status == "DENIED" and result.error_code == code
+    assert result.data is None and result.returned_bytes == 0
+
+
+@pytest.mark.parametrize("link_check", ["is_symlink", "is_junction"])
+def test_capped_search_rejects_linked_directory_without_platform_privileges(reader, monkeypatch, link_check):
+    original = getattr(Path, link_check)
+    linked = reader.config.repository_root / "tests"
+    monkeypatch.setattr(Path, link_check, lambda path: path == linked or original(path))
+    result = reader.execute(A.RESEARCHER, request("SEARCH_TEXT", "tests", limit=1000))
+    assert result.status == "DENIED" and result.error_code == "WORKSPACE_ESCAPE"
+    assert "tests/test_calculator.py" not in str(reader.execute(A.RESEARCHER,
+        request("SEARCH_TEXT", ".", limit=1000)))
+
+
+def test_capped_search_preserves_scan_byte_file_encoding_and_total_bounds(reader, monkeypatch):
+    root = reader.config.repository_root
+    root.joinpath("oversized.py").write_bytes(b"def " * (128 * 1024))
+    root.joinpath("invalid.py").write_bytes(b"def \xff")
+    result = reader.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", limit=1000))
+    assert result.status == "SUCCESS" and result.data.skipped_files == 2
+    assert {m.path for m in result.data.matches} == {"calculator.py", "tests/test_calculator.py"}
+    total = RepositoryReadService(RepositoryReadConfig(root, max_total_bytes_per_invocation=1))
+    assert total.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", limit=1000)).error_code == "TOTAL_BYTES_EXCEEDED"
+    scan = RepositoryReadService(RepositoryReadConfig(root, max_search_bytes=1))
+    assert scan.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", limit=1000)).error_code == "SEARCH_SCAN_LIMIT_EXCEEDED"
+    entries = RepositoryReadService(RepositoryReadConfig(root, max_scanned_entries=1))
+    assert entries.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", limit=1000)).error_code == "SCAN_LIMIT_EXCEEDED"
+    assert reader.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", query=" ", limit=1000)).error_code == "INVALID_QUERY"
+    assert reader.execute(A.RESEARCHER, request("SEARCH_TEXT", ".", limit=1000), calls_used=8).error_code == "TOOL_CALL_BUDGET_EXHAUSTED"
+    before = snapshot(root)
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: (_ for _ in ()).throw(AssertionError("No command")))
+    monkeypatch.setattr(Path, "write_bytes", lambda *a, **k: (_ for _ in ()).throw(AssertionError("No source write")))
+    assert reader.execute(A.PLANNER, request("SEARCH_TEXT", ".", limit=1000)).status == "SUCCESS"
+    assert snapshot(root) == before
+
+
+def test_search_limit_metadata_revalidates_and_legacy_evidence_still_loads(reader):
+    from qa_sentinel.schemas.repository import SearchTextData
+    result = reader.execute(A.RESEARCHER, request("SEARCH_TEXT", "."))
+    data = result.data.model_dump(mode="json")
+    legacy = {k: v for k, v in data.items() if k not in {"result_limit", "limit_capped"}}
+    loaded = SearchTextData.model_validate(legacy)
+    assert loaded.result_limit is None and not loaded.limit_capped
+    with pytest.raises(ValidationError):
+        SearchTextData.model_validate({**data, "result_limit": 1})
+    with pytest.raises(ValidationError):
+        SearchTextData.model_validate({**data, "result_limit": None, "limit_capped": True})
+
+
+@pytest.mark.parametrize("role", [A.RESEARCHER, A.PLANNER])
+def test_repository_prompt_explains_bounded_progressive_discovery(workflow_outputs, role):
+    ctx = ResearchContext(task_id=uuid4(), attempt=1, requirement="Research") if role == A.RESEARCHER else (
+        PlanContext(task_id=uuid4(), attempt=1, requirement="Plan", research=workflow_outputs["research"],
+                    research_artifact_id=uuid4()))
+    built = build_request(role, ctx, ModelSettings(model="test"), repository_tools=True)
+    assert "narrow the directory path or literal query instead of increasing the limit" in built.system_instructions
+    assert "result_limit" in built.system_instructions and "limit_capped" in built.system_instructions
+    assert "8 tool calls" in built.system_instructions and "50 search matches" in built.system_instructions
+    assert "StayFinder" not in built.system_instructions
