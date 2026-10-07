@@ -66,6 +66,18 @@ CLI target-check dry-validates this policy; target-test uses the same runner onc
 and projects an ephemeral result, without TestRun conversion/persistence or any
 workflow routing. [Proving semantics](REAL_TARGETS.md#result-persistence-and-trust-limits).
 
+## Trusted target Python — Task 26
+
+LocalProjectConfig/TargetProfile accept an optional python_executable from private
+operator configuration (--target-python for local init/target-check/target-test).
+The existing ExecutionConfig/CommandPolicy validates an absolute native executable,
+rejects scripts and linked paths with bounded file reads, and rechecks on use.
+Both proving and normal workflow TESTING use it through the existing runner.
+CommandRequest still permits only the logical executable python; agents cannot
+select an executable, environment or installation operation. Hosted/demo modes
+reject real project bindings; no HTTP proving/interpreter-selection endpoint exists.
+[Preparation and trust limits](REAL_TARGETS.md#isolated-target-interpreter--task-26).
+
 ## Environment and limits
 
 The full parent environment is never inherited. Child environment contains a baseline

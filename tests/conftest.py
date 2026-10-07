@@ -211,3 +211,16 @@ def calculator_workspace(tmp_path):
             encoding="utf-8")
         return root
     return prepare
+
+
+@pytest.fixture
+def native_target_python(tmp_path):
+    """Prepared native copy for fake-process tests; no venv/install/actual launch."""
+    import shutil
+    from pathlib import Path
+    import sys
+    location = tmp_path / "operator target interpreter"
+    location.mkdir()
+    interpreter = location / ("python.exe" if sys.platform == "win32" else "python3")
+    shutil.copy2(Path(sys.executable).resolve(), interpreter)
+    return interpreter

@@ -50,8 +50,15 @@ def no_proving_side_effects(monkeypatch):
 def test_check_is_deterministic_metadata_only_and_root_binding(external, monkeypatch):
     profile, project = external
     def forbidden(*args, **kwargs): pytest.fail("Dry check read/wrote content")
-    for name in ("read_text", "read_bytes", "write_text", "write_bytes", "open"):
+    # Validation may read a bounded native interpreter header, never target source.
+    original_open = Path.open
+    import sys
+    def interpreter_only(path, *args, **kwargs):
+        if path != Path(sys.executable).resolve() or args != ("rb",): forbidden()
+        return original_open(path, *args, **kwargs)
+    for name in ("read_text", "read_bytes", "write_text", "write_bytes"):
         monkeypatch.setattr(Path, name, forbidden)
+    monkeypatch.setattr(Path, "open", interpreter_only)
     prepared = prepare_target(profile, project, mode="local")
     assert prepared.binding.workspace_root == profile.workspace_root
     assert prepared.execution.workspace_root == profile.workspace_root

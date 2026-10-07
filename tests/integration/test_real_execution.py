@@ -297,12 +297,14 @@ def test_controlled_config_module_identity_and_space_in_workspace(migrated_facto
     assert run.outcome.value == "PASS" and run.passed_count == 3
 
 
-def test_real_start_failure_is_unknown_environment_evidence(migrated_factory, calculator_workspace):
+def test_real_start_failure_is_unknown_environment_evidence(migrated_factory, calculator_workspace, monkeypatch):
     factory, _, _ = migrated_factory
     root = calculator_workspace()
     task, implementation = seed(factory)
     execution = ExecutionService(factory, PytestRunner(CommandRunner(
-        ExecutionConfig(root, python_executable=root / "missing-python.exe"))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
+        ExecutionConfig(root))), workspace_binding=ProjectWorkspaceBinding(project_id=task.project_id, workspace_root=root))
+    def unavailable(*args, **kwargs): raise FileNotFoundError("synthetic unavailable interpreter")
+    monkeypatch.setattr("subprocess.Popen", unavailable)
     run = execution.execute(task_id=task.id, implementation_artifact_id=implementation.id, request=command(root))
     assert run.outcome.value == "UNKNOWN" and run.execution_status.value == "FAILED"
     with UnitOfWork(factory) as uow:

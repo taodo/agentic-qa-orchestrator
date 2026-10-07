@@ -8,6 +8,7 @@ import sys
 from types import MappingProxyType
 from typing import Mapping
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+from .interpreter import target_python
 
 
 class CommandRequest(BaseModel):
@@ -34,7 +35,7 @@ class CommandPolicyDecision(BaseModel):
 @dataclass(frozen=True)
 class ExecutionConfig:
     workspace_root: Path
-    python_executable: Path = Path(sys.executable)
+    python_executable: Path = Path(sys.executable).resolve()
     max_timeout_seconds: float = 120
     max_output_bytes: int = 256 * 1024
     max_report_bytes: int = 1024 * 1024
@@ -59,7 +60,7 @@ class ExecutionConfig:
         if any(not p.is_dir() for p in paths):
             raise ValueError("Explicit Python import paths must be directories")
         object.__setattr__(self, "workspace_root", root)
-        object.__setattr__(self, "python_executable", Path(self.python_executable).resolve())
+        object.__setattr__(self, "python_executable", target_python(self.python_executable))
         object.__setattr__(self, "python_path", paths)
         object.__setattr__(self, "allowed_environment_names", names)
         scope = root if self.pytest_target_root is None else Path(self.pytest_target_root).resolve(strict=True)
@@ -119,6 +120,11 @@ class CommandPolicy:
         tokens = (request.executable, *request.args, request.cwd)
         if len(request.args) > 64 or any(len(t) > 2048 or any(m in t for m in self.SHELL_MARKERS) for t in tokens):
             return decision("COMMAND_NOT_ALLOWED", "Shell-like syntax or oversized command arguments are forbidden.")
+        try:
+            if target_python(self.config.python_executable) != self.config.python_executable:
+                raise ValueError
+        except ValueError:
+            return decision("PYTHON_INTERPRETER_INVALID", "Configured interpreter is unavailable or unsafe.")
         if request.timeout_seconds > self.config.max_timeout_seconds:
             return decision("TIMEOUT_NOT_ALLOWED", "Requested timeout exceeds the configured maximum.")
         try:

@@ -152,7 +152,7 @@ class Harness:
     factory: object
 
 
-def setup(factory, tmp_path, mock):
+def setup(factory, tmp_path, mock, *, target_python=None):
     root = tmp_path / "external inventory repository"
     tests = root / "backend" / "tests"
     tests.mkdir(parents=True)
@@ -167,6 +167,7 @@ def setup(factory, tmp_path, mock):
     binding = ProjectWorkspaceBinding(project_id=project.id, workspace_root=root)
     mutation = MutationService(MutationConfig(root))
     execution = ExecutionConfig(root, pytest_target_root=root / "backend",
+        **({"python_executable": target_python} if target_python is not None else {}),
         python_path=(Path(pytest.__file__).resolve().parents[1],))
     service = ExecutionService(factory, PytestRunner(CommandRunner(execution)), workspace_binding=binding)
     provider = PytestTestResultProvider(service, CommandRequest(cwd=str(root / "backend"), args=("-m", "pytest", "tests")))
@@ -313,3 +314,34 @@ def test_review_only_mutation_rejected_before_any_apply_or_testing(migrated_fact
         assert not any(e.event_type in {"MUTATION_RESERVED", "MUTATION_APPLIED", "TEST_EXECUTION_STARTED"} for e in events)
         assert not any(a.artifact_type == AT.IMPLEMENTATION for a in uow.artifacts.list_by_task(h.task.id))
     assert len(mock.calls) == 5 and not mock.queue
+
+
+def test_separate_target_interpreter_uses_single_existing_workflow_subprocess(migrated_factory, tmp_path, mock_openai, monkeypatch, native_target_python):
+    import io
+    from types import SimpleNamespace
+    from qa_sentinel.execution import command_runner
+    factory, _, _ = migrated_factory
+    mock = mock_openai(initial_outputs(repair_plan()) + [implementation_response(), review_response])
+    h = setup(factory, tmp_path, mock, target_python=native_target_python)
+    calls = []
+    def popen(argv, **kwargs):
+        with UnitOfWork(factory) as uow:
+            assert uow.tasks.get(h.task.id).state == S.TESTING
+            assert any(e.event_type == "MUTATION_APPLIED" for e in uow.history.list_events(h.task.id))
+            assert any(e.event_type == "TEST_EXECUTION_STARTED" for e in uow.history.list_events(h.task.id))
+        calls.append((argv, kwargs))
+        Path(argv[argv.index("--junitxml") + 1]).write_text('<testsuite><testcase/><testcase/><testcase/></testsuite>')
+        return SimpleNamespace(returncode=0, stdout=io.BytesIO(), stderr=io.BytesIO(),
+            wait=lambda **kw: 0, poll=lambda: 0)
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(command_runner, "ProcessTree", lambda p: SimpleNamespace(close=lambda: None))
+    assert h.app.run_task(h.task.id).state == S.DONE
+    argv, kwargs = calls[0]
+    assert len(calls) == 1 and argv[:5] == [str(native_target_python), "-P", "-s", "-m", "pytest"]
+    assert kwargs["cwd"] == str(h.root / "backend") and kwargs["shell"] is False
+    assert argv[argv.index("--rootdir") + 1] == str(h.root)
+    with UnitOfWork(factory) as uow:
+        run, = uow.history.list_test_runs(h.task.id)
+        assert run.outcome.value == "PASS" and run.passed_count == 3
+        assert str(native_target_python) not in str(uow.artifacts.get(run.report_artifact_id).content)
+    assert (h.root / "backend/inventory.py").read_text() == FIXED

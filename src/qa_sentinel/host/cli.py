@@ -40,6 +40,7 @@ def parser(*, target_errors=False):
     init.add_argument("--workspace", type=Path, required=True)
     init.add_argument("--pytest-target", action="append", required=True)
     init.add_argument("--test-cwd", default=".", help="Relative test directory inside the full workspace root (default: .)")
+    init.add_argument("--target-python", type=Path, help="Trusted absolute native target Python path; no scripts or linked paths")
     init.add_argument("--config", type=Path, required=True)
     init.add_argument("--host", choices=("127.0.0.1", "::1"), default="127.0.0.1")
     init.add_argument("--port", type=int, default=8000)
@@ -59,6 +60,7 @@ def parser(*, target_errors=False):
         owner.add_argument("--project-id", type=UUID)
         target.add_argument("--workspace", type=Path, required=True)
         target.add_argument("--test-cwd", default=".")
+        target.add_argument("--target-python", type=Path, help="Same trusted target Python used in local project config")
         target.add_argument("--pytest-target", action="append", required=True)
         target.add_argument("--timeout-seconds", type=float, default=120)
     return value

@@ -123,9 +123,13 @@ full-set validation, rollback and write/persistence reconciliation remain intact
 
 ExecutionConfig → CommandRunner → PytestRunner → TestExecutionService →
 PytestTestResultProvider uses the same root/binding and configured targets. The
-only constructed command is `python -m pytest <targets>` using the host's Python
-interpreter. Install the target's test dependencies into that interpreter before
-serving. No shell/executable/argv/environment configuration field exists. Targets
+only constructed command is `python -m pytest <targets>` using the optional trusted
+project python_executable, or the host interpreter when omitted. Strongly prefer
+isolated prepared host/target environments; set local init --target-python to the
+same target native Python used for CLI proving. Only that private local project
+configuration can select an interpreter; no shell, generic executable/argv or
+environment override is exposed. Prepare target dependencies independently before
+serving; QA Sentinel performs no installation or environment creation. Targets
 must be relative existing test files/directories/node IDs; options and shell-like
 syntax are rejected using the accepted CommandPolicy. Target tests remain trusted
 executable code; this host is not an OS sandbox.

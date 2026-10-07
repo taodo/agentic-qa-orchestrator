@@ -38,9 +38,11 @@ The following is an operator example, not a built-in path, Project or target:
 1. Prepare and independently verify that trusted checkout at the clean reference.
    Verify its baseline and absence of source changes with your normal operator
    tools. Proving does not clone, fetch, inspect Git state or switch branches.
-   Install the target's required test dependencies into the Python environment
-   running QA Sentinel beforehand. The CLI cannot install packages or choose an
-   alternate executable/environment; tests and conftest remain trusted code.
+   Strongly prefer separate prepared environments: QA Sentinel in its own .venv,
+   the target in its own .venv with the target's pinned test dependencies. The
+   operator prepares these independently; QA Sentinel never creates virtualenvs
+   or installs dependencies. Use --target-python for an explicit native Python
+   executable from the target environment; tests/conftest remain trusted code.
 2. Use the existing local UI/API to create/select Project key `stayfinder` in
    your initialized, current-schema QA Sentinel database. Stop the host and
    other execution against that database/workspace before proceeding. Example
@@ -49,7 +51,7 @@ The following is an operator example, not a built-in path, Project or target:
 3. Check the target without execution, from your installed QA Sentinel environment:
 
    ```powershell
-   qa-sentinel local target-check --database C:\private\qa-sentinel\state.sqlite3 --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests
+   qa-sentinel local target-check --database C:\private\qa-sentinel\state.sqlite3 --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --target-python D:\stayfinder-demo\.venv\Scripts\python.exe
    ```
 
    Expect fixed check codes and `Target status: TARGET_READY`, exit 0. This
@@ -60,7 +62,7 @@ The following is an operator example, not a built-in path, Project or target:
 4. Explicitly request one deterministic proving execution:
 
    ```powershell
-   qa-sentinel local target-test --database C:\private\qa-sentinel\state.sqlite3 --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --timeout-seconds 120
+   qa-sentinel local target-test --database C:\private\qa-sentinel\state.sqlite3 --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --target-python D:\stayfinder-demo\.venv\Scripts\python.exe --timeout-seconds 120
    ```
 
    Inspect execution status, PASS/FAIL/UNKNOWN, exit code, duration, counts,
@@ -71,7 +73,7 @@ The following is an operator example, not a built-in path, Project or target:
    desired. For example, with your actual QA Sentinel frontend build path:
 
    ```powershell
-   qa-sentinel local init --database C:\private\qa-sentinel\state.sqlite3 --frontend-dist C:\work\qa-sentinel-repo\frontend\dist --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --config C:\private\qa-sentinel\local.json
+   qa-sentinel local init --database C:\private\qa-sentinel\state.sqlite3 --frontend-dist C:\work\qa-sentinel-repo\frontend\dist --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --target-python D:\stayfinder-demo\.venv\Scripts\python.exe --config C:\private\qa-sentinel\local.json
    qa-sentinel local validate --config C:\private\qa-sentinel\local.json
    ```
 
@@ -87,8 +89,39 @@ Repeat `--pytest-target` for explicitly prepared directory or `.py` file targets
 (maximum 16 distinct targets). `--project-id <UUID>` may replace `--project-key`;
 it must resolve an existing Project. Test cwd defaults to `.`. Timeout is finite,
 positive and at most 120 seconds. `--help` documents both commands. Paths with
-spaces require normal shell argument quoting. No target executable, generic argv,
-custom environment, pytest flags or node IDs are exposed by the proving profile.
+spaces require normal shell argument quoting. Only --target-python selects the
+trusted native target interpreter. Generic argv, shell/wrapper scripts, custom
+environment, pytest flags and node IDs are not exposed by the proving profile.
+
+## Isolated target interpreter — Task 26
+
+Run the QA Sentinel CLI/server from its own prepared environment. Supply exactly
+same target Python to target-check, target-test and local init. The operator example
+above uses D:\stayfinder-demo\.venv\Scripts\python.exe; this is not a product constant.
+local init writes python_executable inside the private host JSON projects entry;
+normal workflow TESTING and CLI proving then use the same ExecutionConfig policy.
+Do not put this value into Project, Task, model output or API request payloads.
+Only the host-owned local config stores it; it is not persisted into SQLite or
+rendered in proving/readiness output. Public/demo configurations cannot accept it.
+
+Explicit paths must be absolute existing executable regular files with a native
+Python filename (python/python3/versioned python on POSIX, python.exe on Windows).
+No symlinks/junctions in any component, UNC/device paths, traversal, ADS, shell
+syntax or control characters are accepted. A bounded binary header check rejects
+scripts disguised as Python; it does not cryptographically prove Python identity
+or discover installed pytest/dependency versions. The operator must trust and
+independently verify the executable/environment. POSIX virtualenvs commonly use
+symlinks; prepare a native copy-based environment outside QA Sentinel instead.
+There is no automatic interpreter probe, fallback, venv creation or installation.
+
+Without python_executable, the canonical QA Sentinel process interpreter is used
+for backward compatibility. This default is unsuitable when host/target pins
+conflict. Invalid explicit settings fail closed, never silently use the host.
+CommandPolicy revalidates the interpreter before each run. As with existing target
+paths, exclusive trusted access is required; concurrent replacement is not an OS
+sandbox guarantee. -P/-s, full-root rootdir/confcutdir, backend cwd, target scope,
+secret-free environment, plugin controls, timeouts and capture limits are unchanged.
+The target environment must already have pytest and the trusted test dependencies.
 
 ## Path and execution policy
 

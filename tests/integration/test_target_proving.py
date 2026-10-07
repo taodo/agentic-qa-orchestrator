@@ -40,7 +40,7 @@ def prepared_target(migrated_factory, tmp_path, monkeypatch):
         uow.tasks.add(task)
         uow.commit()
     # Test-only trusted dependency injection for the bundled Python test environment.
-    # Product CLI has no executable/pythonpath/environment configuration surface.
+    # Product CLI exposes only a trusted native target interpreter, not import paths or environment overrides.
     original = targets.ExecutionConfig
     monkeypatch.setattr(targets, "ExecutionConfig", lambda root, **kw: original(root,
         python_path=(Path(pytest.__file__).resolve().parents[1],), **kw))
@@ -203,3 +203,31 @@ def test_existing_workflow_test_service_keeps_real_evidence_with_subdir(prepared
         assert {event.event_type for event in uow.history.list_events(task.id)} == {
             "PROJECT_WORKSPACE_BOUND", "TEST_EXECUTION_STARTED", "TEST_EXECUTION_COMPLETED"}
     assert str(root) not in database.read_text(errors="ignore")
+
+
+def test_operator_interpreter_round_trip_matches_proving(prepared_target, tmp_path, native_target_python, monkeypatch, capsys):
+    _, database, root, project, _ = prepared_target
+    frontend = tmp_path / "operator-ui"
+    frontend.mkdir()
+    (frontend / "index.html").write_text("<html>UI</html>")
+    config_file = tmp_path / "operator-local.json"
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: pytest.fail("Inert setup/check executed"))
+    assert cli.main(["local", "init", "--database", str(database), "--frontend-dist", str(frontend),
+        "--project-key", project.key, "--workspace", str(root), "--test-cwd", "backend", "--pytest-target", "tests",
+        "--target-python", str(native_target_python), "--config", str(config_file)]) == 0
+    configured = load_local_config(config_file)
+    local = configured.projects[0]
+    assert local.python_executable == native_target_python
+    assert json.loads(config_file.read_text())["projects"][0]["python_executable"] == str(native_target_python)
+    _, _, execution, request = preflight.real_components(local)
+    profile = targets.TargetProfile(mode="local", project_id=project.id, workspace_root=root,
+        test_cwd=local.test_cwd, pytest_targets=local.pytest_targets, python_executable=local.python_executable)
+    prepared = targets.prepare_target(profile, project, mode="local")
+    assert prepared.execution.python_executable == execution.python_executable == native_target_python
+    assert prepared.request == request
+    assert cli.main(arguments(prepared_target, **{"target-python": native_target_python})) == 0
+    assert str(native_target_python) not in capsys.readouterr().out
+    before = snapshot(database, root)
+    assert cli.main(arguments(prepared_target, **{"target-python": root / "missing-python.exe"})) == 1
+    assert "TARGET_PROFILE_INVALID" in capsys.readouterr().out
+    assert snapshot(database, root) == before

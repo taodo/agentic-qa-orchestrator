@@ -4,6 +4,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from qa_sentinel.domain.project import ProjectKey
+from qa_sentinel.execution.interpreter import target_python
 
 
 class HostError(RuntimeError):
@@ -47,6 +48,12 @@ class LocalProjectConfig(BaseModel):
     workspace_root: Path
     pytest_targets: tuple[str, ...] = Field(min_length=1)
     test_cwd: str = "."
+    python_executable: Path | None = None
+
+    @field_validator("python_executable")
+    @classmethod
+    def interpreter(cls, value):
+        return target_python(value) if value is not None else None
 
     @field_validator("test_cwd")
     @classmethod

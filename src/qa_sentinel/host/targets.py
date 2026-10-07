@@ -19,6 +19,7 @@ from qa_sentinel.execution.command_policy import ExecutionConfig, CommandRequest
 from qa_sentinel.execution.command_runner import CommandRunner, ExecutionStatus
 from qa_sentinel.execution.pytest_runner import PytestRunner, interpret
 from .config import canonical_path, overlaps, relative_test_path
+from qa_sentinel.execution.interpreter import target_python
 from .database import CURRENT_REVISION
 
 
@@ -29,6 +30,12 @@ class TargetProfile(BaseModel):
     project_id: UUID
     workspace_root: Path
     test_cwd: str = "."
+    python_executable: Path | None = None
+
+    @field_validator("python_executable")
+    @classmethod
+    def interpreter(cls, value):
+        return target_python(value) if value is not None else None
     pytest_targets: tuple[str, ...] = Field(min_length=1, max_length=16)
     timeout_seconds: float = Field(default=120, gt=0, le=120, allow_inf_nan=False, strict=True)
 
@@ -176,7 +183,11 @@ def prepare_target(profile, project, *, mode):
         MutationConfig(binding.workspace_root)  # No MutationService is constructed or called.
     except (ValueError, OSError, RuntimeError):
         raise TargetFailure(TargetError.TARGET_MUTATION_BOUNDARY_INVALID) from None
-    execution = ExecutionConfig(binding.workspace_root, pytest_target_root=cwd)
+    try:
+        interpreter = {} if profile.python_executable is None else {"python_executable": profile.python_executable}
+        execution = ExecutionConfig(binding.workspace_root, pytest_target_root=cwd, **interpreter)
+    except (ValueError, OSError, RuntimeError):
+        raise TargetFailure(TargetError.TARGET_PYTHON_UNAVAILABLE) from None
     if not execution.python_executable.is_file() or not os.access(execution.python_executable, os.X_OK):
         raise TargetFailure(TargetError.TARGET_PYTHON_UNAVAILABLE)
     request = CommandRequest(cwd=str(cwd), args=("-m", "pytest", *profile.pytest_targets), timeout_seconds=profile.timeout_seconds)
@@ -247,7 +258,8 @@ def target_command(args):
     try:
         project = lookup_project(args.database, key=args.project_key, project_id=args.project_id)
         profile = TargetProfile(mode="local", project_id=project.id, workspace_root=args.workspace,
-            test_cwd=args.test_cwd, pytest_targets=args.pytest_target, timeout_seconds=args.timeout_seconds)
+            test_cwd=args.test_cwd, pytest_targets=args.pytest_target, timeout_seconds=args.timeout_seconds,
+            python_executable=getattr(args, "target_python", None))
         # Host-owned persistence must stay outside the trusted executable target.
         if canonical_path(args.database).is_relative_to(canonical_path(profile.workspace_root)):
             raise TargetFailure(TargetError.TARGET_PROFILE_INVALID)

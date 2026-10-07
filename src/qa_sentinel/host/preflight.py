@@ -15,7 +15,8 @@ def real_components(project):
     cwd = canonical_path(project.workspace_root / project.test_cwd, exists=True)
     if not cwd.is_dir() or not cwd.is_relative_to(project.workspace_root):
         raise HostError("HOST_TEST_POLICY_REJECTED")
-    execution = ExecutionConfig(project.workspace_root, pytest_target_root=cwd)
+    interpreter = {} if project.python_executable is None else {"python_executable": project.python_executable}
+    execution = ExecutionConfig(project.workspace_root, pytest_target_root=cwd, **interpreter)
     request = CommandRequest(cwd=str(cwd), args=("-m", "pytest", *project.pytest_targets))
     # Bounded inspection of explicitly selected targets, never test discovery/execution.
     if not CommandPolicy(execution).evaluate(request).allowed:

@@ -44,11 +44,22 @@ host DB/config/frontend outside the target. For example, substitute your actual
 private host paths and frontend build:
 
 ```powershell
-qa-sentinel local target-check --database C:\private\qa-sentinel\state.sqlite3 --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests
-qa-sentinel local init --database C:\private\qa-sentinel\state.sqlite3 --frontend-dist C:\work\qa-sentinel-repo\frontend\dist --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --config C:\private\qa-sentinel\local.json
+qa-sentinel local target-check --database C:\private\qa-sentinel\state.sqlite3 --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --target-python D:\stayfinder-demo\.venv\Scripts\python.exe
+qa-sentinel local init --database C:\private\qa-sentinel\state.sqlite3 --frontend-dist C:\work\qa-sentinel-repo\frontend\dist --project-key stayfinder --workspace D:\stayfinder-demo --test-cwd backend --pytest-target tests --target-python D:\stayfinder-demo\.venv\Scripts\python.exe --config C:\private\qa-sentinel\local.json
 qa-sentinel local validate --config C:\private\qa-sentinel\local.json
 qa-sentinel serve --config C:\private\qa-sentinel\local.json
 ```
+
+Use separate operator-prepared environments for QA Sentinel and StayFinder. Their
+FastAPI/Uvicorn pins can conflict; do not merge them into one environment. The
+--target-python example above must name the same trusted target Python for clean
+proving and the normal workflow's stored local config. Prepare the target .venv
+and test dependencies manually outside this product; do not put interpreter paths
+into Task/model payloads. See [interpreter constraints](REAL_TARGETS.md#isolated-target-interpreter--task-26),
+including rejection of wrappers and linked paths and the POSIX copy requirement.
+Validation reads only bounded interpreter headers and metadata, performs no
+subprocess/probe, and does not prove target dependency availability. No live rerun
+was performed as part of this interpreter hardening.
 
 Supply OPENAI_API_KEY securely through the local process environment before real
 validation/hosting, never chat, JSON, requirements, source, browser storage or
