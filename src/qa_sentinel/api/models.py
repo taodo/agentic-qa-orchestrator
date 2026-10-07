@@ -1,6 +1,6 @@
 """Transport input and error schemas; no persistence or workflow behavior."""
-from pydantic import BaseModel, ConfigDict, StrictStr, model_validator
-from qa_sentinel.application import CampaignPreparationStatus
+from pydantic import BaseModel, ConfigDict, StrictStr, model_validator, Field
+from qa_sentinel.application import CampaignPreparationStatus, SourceType
 
 
 class RequestModel(BaseModel):
@@ -60,3 +60,13 @@ class UpdateCampaignRequest(RequestModel):
 
 class TransitionCampaignRequest(RequestModel):
     status: CampaignPreparationStatus
+
+
+class IngestSourceRequest(RequestModel):
+    name: StrictStr
+    source_type: SourceType
+    content: StrictStr = Field(max_length=65536)
+
+
+class ExtractRequirementsRequest(RequestModel):
+    pass

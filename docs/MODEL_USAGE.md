@@ -134,3 +134,10 @@ not restore or claim that hardening; current-base repository path/byte/role safe
 and Task 25's existing deterministic execution boundary remain unchanged.
 Integration of accepted Task 26 hardening needs a separately reviewed branch/base
 change before claiming those guarantees here. No new dependency or migration.
+
+## Campaign requirement extraction (Task 2.2)
+
+[Campaign model usage](REQUIREMENTS.md) reuses these provider metadata and metric
+semantics for dedicated extraction attempts without hidden Tasks/invocations. Its
+Project/Campaign-scoped endpoint is separate from Task/Run evidence windows.
+Missing usage stays unknown; public demo modes do not construct a real extractor.

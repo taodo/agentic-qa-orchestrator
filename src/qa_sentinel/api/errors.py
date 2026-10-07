@@ -7,6 +7,16 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.CAMPAIGN_SOURCE_NOT_FOUND: (404, "Campaign source not found"),
+    Code.CAMPAIGN_SOURCE_MISMATCH: (409, "Source does not belong to the requested Campaign"),
+    Code.CAMPAIGN_REQUIREMENT_NOT_FOUND: (404, "Campaign requirement not found"),
+    Code.CAMPAIGN_REQUIREMENT_MISMATCH: (409, "Requirement does not belong to the requested Campaign"),
+    Code.SOURCE_SIZE_LIMIT: (413, "Source exceeds supported size"),
+    Code.SOURCE_NOT_INGESTED: (409, "Source is not ingested"),
+    Code.EXTRACTION_NOT_CONFIGURED: (409, "Requirement extraction is not configured"),
+    Code.EXTRACTION_CONTEXT_LIMIT: (422, "Complete source exceeds the extraction context limit"),
+    Code.EXTRACTION_RECONCILIATION_REQUIRED: (409, "Unresolved extraction requires explicit reconciliation"),
+
     Code.PROJECT_NOT_FOUND: (404, "Project not found"),
     Code.TASK_NOT_FOUND: (404, "Task not found"),
     Code.CAMPAIGN_NOT_FOUND: (404, "Campaign not found"),
@@ -30,7 +40,7 @@ ERROR_MAPPING = {
     Code.PERSISTENCE_ERROR: (500, "Persistence operation failed"),
 }
 
-ERROR_RESPONSES = {status: {"model": ErrorEnvelope} for status in (404, 409, 422, 500)}
+ERROR_RESPONSES = {status: {"model": ErrorEnvelope} for status in (404, 409, 413, 422, 500)}
 
 
 def error_response(status, code, message):

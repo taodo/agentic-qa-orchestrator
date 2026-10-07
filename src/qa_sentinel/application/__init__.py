@@ -19,7 +19,11 @@ __all__ = [
     "ProjectExecutionResolver", "ProjectView", "TaskSummary", "TaskDetail", "CollectionPage",
     "TimelineEntry", "InvocationView", "ArtifactView", "TestRunView", "ErrorView", "DecisionView",
     "GateEvaluationView", "QACampaignView", "CampaignPreparationStatus",
+    "CampaignSourceView", "CampaignSourceDetail", "CampaignRequirementView", "ExtractionView", "CampaignModelUsage", "SourceType",
     "OperationalAttention", "OperationalSummaryView", "ProjectOperationalSummaryView",
     "TaskOperationalSummaryView", "OperationalActivityView", "OperationalActivityKind",
     "ReconciliationAssessmentView", "ReconciliationIssueView", "ReconciliationStatus", "ReconciliationIssueKind",
 ]
+
+from .campaign_content import CampaignSourceView, CampaignSourceDetail, CampaignRequirementView, ExtractionView, CampaignModelUsage
+from qa_sentinel.domain.campaign_content import SourceType

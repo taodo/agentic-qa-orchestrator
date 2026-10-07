@@ -299,3 +299,28 @@ def test_campaign_routes_keep_session_csrf_and_restart_boundaries(config):
         assert client.patch(path, json={'name':'Unsafe'}).status_code == 401
         assert login(client).status_code == 303
         assert client.get(path).json()['status'] == 'READY_FOR_REVIEW'
+
+
+def test_hosted_content_remains_deterministic_and_csrf_protected(config, monkeypatch):
+    def forbidden(*args, **kwargs): pytest.fail('Public mode cannot construct a real extractor')
+    monkeypatch.setattr(composition.RequirementExtractor, '__init__', forbidden)
+    web = create_host_app(hosted(config))
+    app = web.state.host_composition.application
+    assert app._requirement_extractor is None
+    project = app.list_projects().items[0]
+    campaign = app.create_campaign(project.id, name='Synthetic PRD')
+    with TestClient(web, base_url='https://testserver') as client:
+        path = f'/api/v1/projects/{project.id}/campaigns/{campaign.id}'
+        body = dict(name='Synthetic spec', source_type='TEXT', content='Synthetic users can sign in.')
+        assert client.post(path+'/sources', json=body).status_code == 401
+        assert login(client).status_code == 303
+        assert client.post(path+'/sources', json=body).status_code == 403
+        source = client.post(path+'/sources', json=body, headers=csrf(client))
+        assert source.status_code == 201 and source.json()['status'] == 'INGESTED'
+        extract_path = path+'/sources/'+source.json()['id']+'/extract-requirements'
+        assert client.post(extract_path).status_code == 403
+        result = client.post(extract_path, headers=csrf(client))
+        assert result.status_code == 409 and result.json()['error']['code'] == 'EXTRACTION_NOT_CONFIGURED'
+        assert client.get(path+'/requirements').json()['items'] == []
+        assert client.get(path+'/model-usage').json()['invocations'] == []
+        assert app.get_campaign(project.id, campaign.id) == campaign

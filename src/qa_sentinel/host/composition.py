@@ -9,6 +9,7 @@ from qa_sentinel.projects import ProjectRuntimeRegistry, ProjectWorkspaceBinding
 from qa_sentinel.agents.real import RealAgentRuntime
 from qa_sentinel.models.openai_adapter import OpenAIModelAdapter
 from qa_sentinel.models.config import RoleModelConfig
+from qa_sentinel.agents.requirement_extraction import RequirementExtractor
 from qa_sentinel.execution.command_runner import CommandRunner
 from qa_sentinel.execution.pytest_runner import PytestRunner
 from qa_sentinel.execution.service import TestExecutionService, PytestTestResultProvider
@@ -68,7 +69,9 @@ def compose(config: HostConfig) -> HostComposition:
                     PytestTestResultProvider(service, request), reader, mutation))
         resolver = ProjectExecutionResolver(ProjectRuntimeRegistry([b.binding for b in bundles]), bundles)
         admission, wake = ExecutionAdmission(), threading.Event()
-        application = QASentinelApplication(factory, resolver, execution_admission=admission, execution_notify=wake.set)
+        extractor = RequirementExtractor(OpenAIModelAdapter(), RoleModelConfig().researcher) if config.mode == "local" else None
+        application = QASentinelApplication(factory, resolver, execution_admission=admission, execution_notify=wake.set,
+            requirement_extractor=extractor)
         worker = ExecutionWorker(application, admission, wake, on_exit=engine.dispose)
         return HostComposition(application, engine, resolver, worker)
     except Exception as exc:

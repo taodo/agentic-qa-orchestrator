@@ -228,3 +228,23 @@ def test_campaign_routes_keep_preview_basic_access(config):
         assert created.status_code == 201
         assert client.get(base, headers=header()).json()['items'][0]['status'] == 'DRAFT'
         assert client.get(f"/api/v1/projects/{project['id']}/tasks", headers=header()).json()['items'] == []
+
+
+def test_preview_content_keeps_basic_access_and_no_real_extractor(config, monkeypatch):
+    def forbidden(*args, **kwargs): pytest.fail('Preview cannot construct a real extractor')
+    monkeypatch.setattr(composition.RequirementExtractor, '__init__', forbidden)
+    web = create_host_app(preview(config))
+    app = web.state.host_composition.application
+    assert app._requirement_extractor is None
+    project = app.list_projects().items[0]
+    campaign = app.create_campaign(project.id, name='Synthetic PRD')
+    with TestClient(web) as client:
+        path = f'/api/v1/projects/{project.id}/campaigns/{campaign.id}'
+        body = dict(name='Synthetic spec', source_type='TEXT', content='Synthetic users can sign in.')
+        assert client.post(path+'/sources', json=body).status_code == 401
+        source = client.post(path+'/sources', json=body, headers=header())
+        assert source.status_code == 201
+        result = client.post(path+'/sources/'+source.json()['id']+'/extract-requirements', headers=header())
+        assert result.status_code == 409 and result.json()['error']['code'] == 'EXTRACTION_NOT_CONFIGURED'
+        assert client.get(path+'/requirements', headers=header()).json()['items'] == []
+        assert app.get_campaign(project.id, campaign.id) == campaign

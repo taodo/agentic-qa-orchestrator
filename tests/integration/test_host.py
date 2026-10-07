@@ -144,7 +144,7 @@ def test_restart_migrates_to_head_preserves_operator_data_and_demo_identity(conf
         assert len(projects) == 2 and [p for p in projects if p["key"] == "demo-calculator"][0]["id"] == project["id"]
         assert client.get(f"/api/v1/tasks/{created['id']}").json()["title"] == "Keep task"
         with app.state.host_composition.engine.connect() as connection:
-            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0004"
+            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0005"
 
 
 @pytest.mark.parametrize("path", ["/", "/projects", "/projects/project-a", "/tasks/task-a?view=artifacts", "/index.html"])
@@ -198,6 +198,8 @@ def test_real_local_binding_and_services(config, tmp_path, monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "SYNTHETIC_LOCAL_KEY")
     composed = composition.compose(value)
     try:
+        from qa_sentinel.agents.requirement_extraction import RequirementExtractor
+        assert isinstance(composed.application._requirement_extractor, RequirementExtractor)
         bundle = composed.resolver.resolve(owner)
         root = value.projects[0].workspace_root
         assert bundle.binding.project_id == owner and bundle.binding.workspace_root == root

@@ -1,7 +1,7 @@
 """SQLAlchemy storage only; no domain or workflow behavior."""
 from datetime import datetime
 from typing import Any
-from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, text
+from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, ForeignKeyConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from .types import ISODateTime
 
@@ -56,12 +56,90 @@ class QACampaignRow(Base):
         CheckConstraint("length(trim(name)) BETWEEN 1 AND 200", name="ck_qa_campaigns_name"),
         CheckConstraint("objective IS NULL OR length(objective) <= 4000", name="ck_qa_campaigns_objective"),
         Index("ix_qa_campaigns_project_created", "project_id", "created_at", "id"),
+        Index("uq_qa_campaigns_id_project", "id", "project_id", unique=True),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", name="fk_qa_campaigns_project_id", deferrable=True, initially="DEFERRED"), nullable=False)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     objective: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
+class CampaignSourceRow(Base):
+    __tablename__ = "campaign_sources"
+    __table_args__ = (
+        ForeignKeyConstraint(["campaign_id", "project_id"], ["qa_campaigns.id", "qa_campaigns.project_id"], name="fk_campaign_sources_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("id", "campaign_id", "project_id", name="uq_campaign_sources_owner"),
+        UniqueConstraint("campaign_id", "source_type", "content_hash", "normalization_version", name="uq_campaign_sources_content"),
+        CheckConstraint("source_type IN ('TEXT','MARKDOWN','PDF')", name="ck_campaign_sources_type"),
+        CheckConstraint("(status='INGESTED' AND normalized_text IS NOT NULL AND error_code IS NULL AND line_count>=1) OR (status='REJECTED' AND normalized_text IS NULL AND error_code IS NOT NULL AND line_count=0 AND normalized_chars=0)", name="ck_campaign_sources_ingestion"),
+        CheckConstraint("original_bytes BETWEEN 0 AND 65536 AND normalized_chars BETWEEN 0 AND 65536 AND line_count BETWEEN 0 AND 4096", name="ck_campaign_sources_bounds"),
+        Index("ix_campaign_sources_campaign", "campaign_id", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", deferrable=True, initially="DEFERRED"), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    raw_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    normalization_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    original_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    normalized_chars: Mapped[int] = mapped_column(Integer, nullable=False)
+    line_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    normalized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
+class RequirementExtractionRow(Base):
+    __tablename__ = "campaign_requirement_extractions"
+    __table_args__ = (
+        ForeignKeyConstraint(["source_id", "campaign_id", "project_id"], ["campaign_sources.id", "campaign_sources.campaign_id", "campaign_sources.project_id"], name="fk_requirement_extractions_source_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("source_id", name="uq_requirement_extractions_source"),
+        UniqueConstraint("id", "campaign_id", "project_id", name="uq_requirement_extractions_owner"),
+        CheckConstraint("(status='STARTED' AND finished_at IS NULL AND error_code IS NULL AND metadata IS NULL) OR (status='SUCCEEDED' AND finished_at IS NOT NULL AND error_code IS NULL) OR (status='FAILED' AND finished_at IS NOT NULL AND error_code IS NOT NULL)", name="ck_requirement_extractions_lifecycle"),
+        Index("ix_requirement_extractions_campaign", "campaign_id", "started_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", deferrable=True, initially="DEFERRED"), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    contract_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    agent: Mapped[str] = mapped_column(String(16), nullable=False)
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    started_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    finished_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[Any] = mapped_column("metadata", JSON(none_as_null=True), nullable=True)
+
+
+class CampaignRequirementRow(Base):
+    __tablename__ = "campaign_requirements"
+    __table_args__ = (
+        ForeignKeyConstraint(["extraction_id", "campaign_id", "project_id"], ["campaign_requirement_extractions.id", "campaign_requirement_extractions.campaign_id", "campaign_requirement_extractions.project_id"], name="fk_campaign_requirements_extraction_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("campaign_id", "logical_key", name="uq_campaign_requirements_key"),
+        UniqueConstraint("extraction_id", "key", name="uq_campaign_requirements_local_key"),
+        CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW')", name="ck_campaign_requirements_review"),
+        Index("ix_campaign_requirements_campaign", "campaign_id", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", deferrable=True, initially="DEFERRED"), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    extraction_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    logical_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    acceptance_criteria: Mapped[Any] = mapped_column(JSON, nullable=False)
+    source_references: Mapped[Any] = mapped_column(JSON, nullable=False)
+    information_markers: Mapped[Any] = mapped_column(JSON, nullable=False)
+    review_status: Mapped[str] = mapped_column(String(32), nullable=False)
     created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
 
