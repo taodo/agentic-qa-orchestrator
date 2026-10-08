@@ -9,9 +9,11 @@ uses the existing separate host route rather than persistence/API v1 fields.
 
 The supported host is one same-origin ASGI app: host → API → application → core.
 Host code lives in `qa_sentinel.host`; no core/application/API module imports it.
-Imports create no app, engine, database, workspace or listening server. Explicit
-startup validates built assets/config, upgrades file-backed SQLite with Alembic,
+Imports create no app, engine, database, workspace or listening server. Lower-level
+`serve` validates built assets/config, upgrades file-backed SQLite with Alembic,
 composes Project runtime bundles, then starts minimal Uvicorn in one process.
+Task 3.8 `local start` builds and validates first, then uses that shared server
+lifetime with an existing-database-only path: it never invokes migrations.
 Accepted API contracts, gates, recovery budgets and workspace policies are unchanged.
 
 ## First-run offline demo
@@ -132,8 +134,8 @@ executable code; this host is not an OS sandbox.
 
 ## Database and migration lifetime
 
-Startup creates the configured DB parent after canonical path validation, uses
-the accepted engine/session factory, and upgrades to Alembic head (`0003`) on an
+Lower-level `serve` creates the configured DB parent after canonical path validation, uses
+the accepted engine/session factory, and upgrades to Alembic head (`0010`) on an
 explicit idle connection. It never calls metadata.create_all or edits migrations.
 The helper uses checkout migrations for editable installs; wheel distributions
 include the unchanged migration assets under `share/qa-sentinel/alembic`.
@@ -233,13 +235,106 @@ Canonical flow (replace each absolute path with an explicitly selected path):
    chat, JSON, frontend variables, source or command flags. Validate again:
    a nonblank key yields PRESENT/READY if other checks pass, exit code 0. This
    checks presence only, not validity, model availability, billing or connectivity.
-7. Start `qa-sentinel serve --config /absolute/private/qa-sentinel.local.json`.
+7. For daily use start `qa-sentinel local start --config /absolute/private/qa-sentinel.local.json`.
+   It rebuilds this checkout's frontend and validates before serving; see below.
+   Lower-level `serve --config` remains available with its existing bootstrap semantics.
    Default bind is **127.0.0.1:8000**; optional `::1` stays loopback-only.
 8. Open Project Detail and inspect **Runtime readiness**. Configured means the
    host composed the accepted binding; key presence is not provider verification.
 9. Create a Project-owned Task, open it and explicitly Run. Execution can call
    models, read bounded repository evidence, apply authorized CREATE/MODIFY and
    run configured pytest. The backend remains authoritative.
+
+### Local one-command start
+
+For an already configured trusted local workspace:
+
+```powershell
+$env:OPENAI_API_KEY = "sk-..."
+qa-sentinel local start --config .\qa-sentinel.local.json
+```
+
+`local start` loads the existing local-only JSON contract, builds the platform
+checkout's frontend, calls the same `validate_local` used by `local validate`,
+and delegates READY configuration to the same foreground server lifetime as
+`serve`. Actual configured loopback host/port is printed (IPv6 is bracketed).
+Ctrl+C stops that foreground server; no daemon is installed. Normal restart uses
+exactly the same command. Frontend edits need no separate rebuild step.
+
+This command requires a source/editable checkout with the existing frontend
+package and Vite config; `frontend_dist` must equal its `frontend/dist`. It does
+not search arbitrary repositories or execute a target's package scripts. Wheel-only
+installs and custom output directories remain supported by lower-level `serve`
+with explicitly prepared assets, rather than silently building some other tree.
+
+Every start runs the fixed `npm run build` once, even when assets already exist.
+There is no change detection/cache and no dependency installation. Install Node/npm
+and frontend dependencies explicitly during setup. On Windows the installed Node
+executes its bundled `node_modules/npm/bin/npm-cli.js run build` directly instead
+of invoking npm.cmd/PowerShell/cmd wrappers. POSIX uses the installed npm executable.
+Python uses `shell=False`; npm itself owns execution of the existing trusted build
+script. No user-supplied command/args, CommandPolicy change or target runner path
+is introduced. Existing process-tree cleanup handles build descendants and Ctrl+C;
+build timeout is 300 seconds.
+
+Build stdout/stderr go to DEVNULL (zero retained/output bytes) because arbitrary
+build diagnostics can expose source/secrets or terminal controls. Failures report a
+safe code and underlying numeric process exit status; positive statuses 1–255 are
+returned, other failures return 1. For detailed diagnostics run `npm run build`
+explicitly in the trusted frontend directory. Timeout/startup errors have fixed
+codes. A failed build never reaches validation or serve. The child inherits only
+standard OS/path/temp/home variables, not API/session credentials, NODE_OPTIONS or
+npm configuration overrides. No environment or credentials are printed/persisted.
+
+Validation keeps the existing Project/workspace/repository/mutation/pytest-target/
+frontend/database/key checks. It never calls a model, subprocess or test runner,
+and never writes source or schema. Missing key is an actionable NOT READY result.
+Invalid config/policy/Project/DB errors stop with fixed safe codes and remediation.
+Only READY proceeds to serve.
+
+**No automatic migrations, even on an already-current database.** Start opts into
+an existing-database-only opening path through the shared host composition. It
+reuses the normal engine/session factory with SQLite `mode=rw` (cannot create a
+missing file), rechecks the accepted schema before runtime construction, and never
+calls Alembic, creates tables or creates missing DB parents. The read-only validator
+uses the same schema check. For example, stale DB output includes:
+
+```text
+Overall: NOT READY (HOST_LOCAL_DATABASE_NOT_READY)
+Database schema is not ready.
+Current: 0009
+Required: 0010
+No migration was run automatically.
+```
+
+Unreadable/unversioned/multiple/invalid revision metadata is honestly unavailable;
+only bounded numeric revision IDs are rendered, never arbitrary DB contents.
+Keep the host stopped for manual migration. Select the exact database in a private
+copy of `alembic.ini`: set `sqlalchemy.url` to its SQLite URL and set
+`script_location` / `prepend_sys_path` to the checkout's absolute `alembic` / `src`
+paths (a copied `%(here)s` would otherwise point at the private directory). Then
+explicitly run:
+
+```text
+python -m alembic -c <private-migration.ini> current
+python -m alembic -c <private-migration.ini> upgrade head
+```
+
+Do not assume default `alembic.ini` selects your configured local DB. Inspect
+migration compatibility and backup requirements first; this command does not
+promise data safety or perform backups. Existing audit-preserving migration rules
+remain unchanged. No `--migrate` flag is supported.
+
+No pytest/frontend-test/Playwright/target-test/Campaign-test command is added to
+startup. Checking configured pytest metadata is inert. Normal serving retains the
+accepted durable worker lifecycle: previously explicitly requested QUEUED work may
+resume; unresolved RUNNING work is not silently rerun. This is not a new startup
+test hook. Local/real model and target actions retain their existing explicit
+application boundaries. Demo/preview/hosted commands and auth remain unchanged.
+
+For troubleshooting use `local validate --config ...` without building or serving,
+or lower-level `serve --config ...` with explicitly prepared assets and its existing
+migration/bootstrap semantics. `local init` remains the one-time inert config writer.
 
 ### Generation and validation semantics
 
@@ -268,11 +363,12 @@ Validation reuses HostConfig, frontend checks, RepositoryReadConfig/Service,
 MutationConfig/Service and CommandPolicy from real startup. It performs bounded
 metadata inspection of **explicitly selected** targets, not test discovery or
 source-content reading. It opens existing SQLite with `mode=ro`, requires accepted
-schema 0003, and resolves all configured keys through existing persistence reads.
+schema 0010, and resolves all configured keys through existing persistence reads.
 No migration, database creation, Project/Task creation, server start, model adapter
 construction, provider call, pytest/subprocess execution or source write occurs.
-Missing/old databases must first be initialized/upgraded through normal host
-startup. Startup still fails closed for unknown Project keys.
+Missing/old databases must first be initialized/upgraded explicitly; `local start`
+never migrates. Lower-level `serve` retains its existing bootstrap behavior.
+Startup still fails closed for unknown Project keys.
 
 Success reports Project identity FOUND, Workspace/Repository read boundary/Mutation
 boundary/Pytest targets VALID, Frontend build FOUND, Database READY, key presence
@@ -307,7 +403,7 @@ workspace/mutation/test/provider capability is introduced.
 Additional safe codes:
 
 - HOST_LOCAL_PATHS_MUST_BE_ABSOLUTE: supply explicit absolute DB/frontend paths.
-- HOST_LOCAL_DATABASE_NOT_READY: select the existing initialized 0003 database.
+- HOST_LOCAL_DATABASE_NOT_READY: select the existing initialized 0010 database.
 - HOST_RUNTIME_POLICY_REJECTED: workspace violates accepted service boundaries.
 - HOST_CONFIG_PARENT_MISSING: select an existing parent or explicitly use --create-parent.
 - HOST_CONFIG_OUTPUT_UNSAFE: select a separate ordinary .json output outside protected paths.

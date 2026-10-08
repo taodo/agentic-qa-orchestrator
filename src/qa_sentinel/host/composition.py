@@ -15,7 +15,7 @@ from qa_sentinel.execution.command_runner import CommandRunner
 from qa_sentinel.execution.pytest_runner import PytestRunner
 from qa_sentinel.execution.service import TestExecutionService, PytestTestResultProvider
 from .config import HostConfig, HostError
-from .database import bootstrap_database
+from .database import bootstrap_database, open_existing_database
 from .demo import demo_bundle
 from .preview import preview_credentials
 from .access import hosted_credentials
@@ -39,7 +39,7 @@ class HostComposition:
             self.engine.dispose()
 
 
-def compose(config: HostConfig) -> HostComposition:
+def compose(config: HostConfig, *, existing_database=False) -> HostComposition:
     engine = None
     try:
         if config.mode == "preview-demo":
@@ -52,7 +52,9 @@ def compose(config: HostConfig) -> HostComposition:
             if not os.environ.get("OPENAI_API_KEY", "").strip():
                 raise HostError("HOST_MODEL_KEY_REQUIRED")
             prepared = [(project, real_components(project)) for project in config.projects]
-        engine, factory = bootstrap_database(config.database)
+        if existing_database and config.mode != "local":
+            raise HostError("HOST_CONFIG_INVALID")
+        engine, factory = open_existing_database(config.database) if existing_database else bootstrap_database(config.database)
         if config.mode in {"demo", "preview-demo", "hosted-demo"}:
             bundles = [demo_bundle(factory, config.database,
                 identity_root=hosted_identity_root(config) if config.mode == "hosted-demo" else None)]

@@ -43,13 +43,13 @@ class FrontendFiles(StaticFiles):
         return await super().get_response(path, scope)
 
 
-def create_host_app(config: HostConfig):
+def create_host_app(config: HostConfig, *, existing_database=False):
     credentials = preview_credentials() if config.mode == "preview-demo" else None
     operator = hosted_credentials() if config.mode == "hosted-demo" else None
     if operator is not None:
         preflight_storage(config)
     root = validate_frontend(config)  # Full-stack readiness before migration/seed IO.
-    composed = compose(config)
+    composed = compose(config, existing_database=True) if existing_database else compose(config)
     try:
         app = create_api_app(composed.application)
         if credentials is not None:
