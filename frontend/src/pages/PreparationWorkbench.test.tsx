@@ -128,7 +128,7 @@ describe('Traceability Test Design Workbench',()=>{
     expect(completion).toHaveTextContent('Input10');expect(completion).toHaveTextContent('Output20');expect(completion).toHaveTextContent('Reasoning7');expect(completion).toHaveTextContent('Total30');
     expect(screen.getByRole('heading',{name:'Traceability',level:2})).toBeInTheDocument();
     if(choice==='stay'){fireEvent.click(within(completion).getByRole('button',{name:'Stay on Traceability'}));expect(screen.queryByRole('region',{name:'Generation completion'})).not.toBeInTheDocument();expect(screen.getByRole('heading',{name:'Traceability'})).toBeInTheDocument();}
-    else {fireEvent.click(within(completion).getByRole('link',{name:'Go to Test Cases'}));await screen.findByRole('heading',{name:'Test Specifications',level:2});}
+    else {fireEvent.click(within(completion).getByRole('link',{name:'Go to Test Cases'}));await screen.findByRole('heading',{name:'Test Cases',level:2});}
     expect(posts()).toHaveLength(1);
   });
   it('renders persisted FAILED with unknown usage and no success navigation, retry or refresh',async()=>{
@@ -147,7 +147,7 @@ describe('Traceability Test Design Workbench',()=>{
 
 it('keeps secondary generation selection approved-only with bounded select/deselect controls',async()=>{
   setup({truncated:true});open('test-specifications');
-  const form=await screen.findByRole('form',{name:'Generate Test Specifications'});
+  const form=await screen.findByRole('form',{name:'Generate Test Cases'});
   const boxes=within(form).getAllByRole('checkbox');expect(boxes).toHaveLength(3);
   expect(boxes[0]).toBeEnabled();expect(boxes[1]).toBeDisabled();expect(boxes[2]).toBeDisabled();
   expect(within(form).getAllByText(/Approve this Requirement before generating tests/)).toHaveLength(2);

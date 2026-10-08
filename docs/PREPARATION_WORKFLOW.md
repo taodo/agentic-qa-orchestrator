@@ -84,6 +84,24 @@ A live StayFinder generation was NOT RUN during implementation. After technical 
 the operator may choose one bounded live attempt to inspect the original failure using
 the improved safe provider status/usage; no success is claimed without that execution.
 
-Migration: NONE. Dependencies added: NONE. No Test Cases redesign/export or real Campaign
-executor is included. Public/demo authentication and synthetic-only runtime composition,
+Task 3.10 scope: migration NONE; dependencies NONE; no Test Cases redesign/export or real Campaign
+executor was included. Public/demo authentication and synthetic-only runtime composition,
 trusted target interpreter isolation and repository-read safety are unchanged.
+
+
+## Task 3.11 — Test Cases workspace
+
+The operator destination is now Test Cases; `CampaignTestSpecification` and existing
+URLs/API contracts remain unchanged. The bounded current-only table provides local
+keys/titles, returned-count filters, visible selection and eligible sequential bulk
+approval. Explicit historical/out-of-list Test Case detail stays separate read-only
+audit content. Both Requirement and Test Case rows support broad noninteractive
+click and keyboard disclosure without intercepting their controls.
+
+Import and approved-only generation remain secondary collapsible sections;
+Traceability remains the primary generation workbench. CSV exports use already-loaded
+full structured fields, only visible/selected current rows, UTF-8 and explicit
+spreadsheet protection. No new read endpoint or detail fan-out is required. See
+[Test Cases workspace](TEST_CASES_WORKSPACE.md) for exact schema, review rules,
+bounds, compatibility and manual checks. Backend/approval/readiness/Run/model/token
+semantics remain unchanged. Migration NONE; dependencies NONE.

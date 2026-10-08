@@ -113,9 +113,9 @@ it('uses generation action counts, explains inherited blockers and opens durable
     return response(String(input).includes('/test-generations?')?{...page([generation]),truncated:true}:page([requirement,blockedRequirement]));
   });
   const view=render(<PreparationGeneration projectId={p} campaignId={c} changed={changed()}/>);
-  fireEvent.click((await screen.findAllByRole('checkbox'))[0]);fireEvent.submit(screen.getByRole('form',{name:'Generate Test Specifications'}));
+  fireEvent.click((await screen.findAllByRole('checkbox'))[0]);fireEvent.submit(screen.getByRole('form',{name:'Generate Test Cases'}));
   const summary=await screen.findByRole('region',{name:'AI Test Generation result'});
-  expect(metric(summary,'Generated')).toHaveTextContent('4');expect(summary).toHaveTextContent('1 generated Test Specification(s) require clarification because unresolved information was inherited');
+  expect(metric(summary,'Generated')).toHaveTextContent('4');expect(summary).toHaveTextContent('1 generated Test Case(s) require clarification because unresolved information was inherited');
   expect(within(summary).getByRole('link',{name:'View generated tests'})).toHaveAttribute('href',base+'/test-specifications#test-specification-results');
   expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('/test-generations?'))).toBe(false);
   fireEvent.click(screen.getByRole('button',{name:'View generation history'}));
@@ -138,7 +138,7 @@ it('discards a late generation history response after navigation/unmount',async(
 it('does not attribute non-inherited generation clarification to selected Requirements',()=>{
   render(<AIActionSummary attempt={{...generation,output:{...output,inherited_clarification_count:0}}} kind="generation" base={base}/>);
   expect(screen.getByRole('region')).toHaveTextContent('Needs clarification at creation1');
-  expect(screen.queryByText(/generated Test Specification\(s\) require clarification because/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/generated Test Case\(s\) require clarification because/)).not.toBeInTheDocument();
 });
 
 it('shows persisted generation failure and usage without a success action',async()=>{

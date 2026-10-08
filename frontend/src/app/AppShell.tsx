@@ -24,7 +24,7 @@ export function AppShell() {
           <NavLink to={campaignPath} end>Overview</NavLink>
           <p className="nav-label">PREPARATION</p>
           <NavLink to={campaignPath+'/requirements'}>Requirements</NavLink>
-          <NavLink to={campaignPath+'/test-specifications'}>Test Specifications</NavLink>
+          <NavLink to={campaignPath+'/test-specifications'}>Test Cases</NavLink>
           <NavLink to={campaignPath+'/traceability'}>Traceability</NavLink>
           <NavLink to={campaignPath+'/readiness'}>Readiness</NavLink>
           <p className="nav-label">EXECUTION</p><NavLink to={campaignPath+'/runs'}>Runs</NavLink>

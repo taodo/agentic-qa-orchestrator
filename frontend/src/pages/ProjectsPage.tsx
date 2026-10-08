@@ -9,7 +9,7 @@ import { PageHeader } from '../components/WorkspaceUI';
 import { ProductHelp } from '../components/ProductHelp';
 export function ProjectsPage() {
   const projects = useResource(useCallback(listProjects, []));
-  return <><PageHeader title="Projects" eyebrow="Workspace / Projects" description="Prepare QA campaigns from requirements and test specifications. Open a Project to create a Campaign and inspect review, traceability and readiness." />
+  return <><PageHeader title="Projects" eyebrow="Workspace / Projects" description="Prepare QA campaigns from requirements and test cases. Open a Project to create a Campaign and inspect review, traceability and readiness." />
     <ProductHelp />
     <div className="content-grid"><section className="panel"><div className="panel-heading"><h2>Project registry</h2><button type="button" disabled={projects.loading} onClick={() => void projects.reload()}>Refresh</button></div>
       {projects.loading && <LoadingState>Loading Projects…</LoadingState>}

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Link, Outlet, useOutletContext, useSearchParams } from 'react-router-dom';
-import { campaignPath, getCampaign, getReadiness, getTraceability, listRequirements, listTestSpecifications, generateTests, getRequirement, getTestSpecification } from '../api/campaigns';
+import { campaignPath, getCampaign, getReadiness, getTraceability, listRequirements, generateTests, getRequirement } from '../api/campaigns';
 import type { CampaignView, InformationMarker, TestMarker, RequirementExtraction, TestGeneration, CampaignReadiness as Readiness } from '../api/campaignTypes';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { useResource } from '../app/useResource';
@@ -13,7 +13,8 @@ import { PreparationRecovery } from '../components/PreparationRecovery';
 import { PreparationSources } from '../components/PreparationSources';
 import { RequirementBulkApproval } from '../components/RequirementBulkApproval';
 import { PreparationReview } from '../components/PreparationReview';
-import { PreparationImport, PreparationGeneration } from '../components/PreparationTests';
+import { TestCasesWorkspace } from '../components/TestCasesWorkspace';
+import { PreparationRow } from '../components/PreparationRow';
 import { useWorkspaceContext } from '../app/WorkspaceContext';
 import { PageHeader, SectionHeader } from '../components/WorkspaceUI';
 import { CampaignTransition } from '../components/CampaignTransition';
@@ -43,7 +44,7 @@ export function CampaignOverviewPage() {
   const { campaign, base, readiness, transition } = useCampaign();
   return <><section className="panel overview-panel"><SectionHeader title="Overview" /><p className="eyebrow">CAMPAIGN OBJECTIVE</p><p className="prose">{campaign.objective || 'No objective provided.'}</p>
     <dl className="metadata"><div><dt>Created</dt><dd><DateTime value={campaign.created_at} /></dd></div><div><dt>Updated</dt><dd><DateTime value={campaign.updated_at} /></dd></div></dl>
-    <p className="hint">Inspect Requirements, Test Specifications and Traceability to understand saved preparation evidence.</p><CampaignTransition campaign={campaign} changed={transition} /></section>
+    <p className="hint">Inspect Requirements, Test Cases and Traceability to understand saved preparation evidence.</p><CampaignTransition campaign={campaign} changed={transition} /></section>
     <div className="campaign-section"><SectionHeader title="Campaign readiness"><button disabled={readiness.loading} onClick={() => void readiness.reload()}>Refresh readiness</button></SectionHeader></div>
     {readiness.loading ? <LoadingState>Loading readiness…</LoadingState> : readiness.error ? <ErrorState error={readiness.error} retry={() => void readiness.reload()} />
       : readiness.data && <CampaignReadiness value={readiness.data} base={base} />}
@@ -88,10 +89,10 @@ export function CampaignRequirementsPage() {
       {!visible.length ? <EmptyState>No Requirements in this view.</EmptyState> : <div className="campaign-table-scroll" role="region" aria-label="Requirements table" tabIndex={0}><table className="campaign-table requirements-table"><caption>Requirements — returned current versions; explicitly selected history is read-only</caption>
         <thead><tr><th scope="col">Select</th><th scope="col">Requirement</th><th scope="col">Status</th><th scope="col">Acceptance criteria</th><th scope="col">Coverage</th><th scope="col">Actions / details</th></tr></thead><tbody>{visible.map(req=>{
         const trace = !traceability.error && !traceability.loading ? traceability.data?.requirements.items.find(row=>row.requirement_id===req.id) : undefined;
-        return <tr key={req.id} tabIndex={-1} id={`requirement-${req.id}`}><td><input type="checkbox" aria-label={`Select ${req.key}`} disabled={!currentIds.has(req.id) || req.review_status==='APPROVED'} checked={chosen.includes(req.id)} onChange={event=>setSelected(event.target.checked?[...chosen,req.id]:chosen.filter(id=>id!==req.id))}/></td>
+        return <PreparationRow key={req.id} id={`requirement-${req.id}`} initialOpen={selectedId===req.id}>{({open,setOpen,detailId})=><><td><input type="checkbox" aria-label={`Select ${req.key}`} disabled={!currentIds.has(req.id) || req.review_status==='APPROVED'} checked={chosen.includes(req.id)} onChange={event=>setSelected(event.target.checked?[...chosen,req.id]:chosen.filter(id=>id!==req.id))}/></td>
           <th scope="row"><span className="record-key">{req.key}</span><h3>{req.title}</h3></th><td><CampaignStatusBadge status={req.review_status}/></td><td>{req.acceptance_criteria.length}</td>
           <td>{trace ? <CampaignStatusBadge status={trace.coverage}/> : <span className="muted">Not included in the current traceability response.</span>}</td>
-          <td><details open={selectedId===req.id}><summary>{req.review_status==='NEEDS_CLARIFICATION' ? 'Add info / Clarify' : 'Review / details'}</summary><p className="prose">{req.description}</p><p className="mono muted">{req.id} · {req.logical_key}</p>
+          <td><details id={detailId} open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>{req.review_status==='NEEDS_CLARIFICATION' ? 'Add info / Clarify' : 'Review / details'}</summary><p className="prose">{req.description}</p><p className="mono muted">{req.id} · {req.logical_key}</p>
           <p>{req.acceptance_criteria.length} acceptance criteria · {req.source_references.length} source references</p>
           {!currentIds.has(req.id) && <p className="notice">This detail is outside the current bounded list. Approval and selection are unavailable here.</p>}
           {req.acceptance_criteria.length > 0 && <details open className="primary-detail"><summary>Acceptance criteria</summary><ul>{req.acceptance_criteria.map(item => <li key={item.key}><strong>{item.key}</strong> <span className="prose">{item.text}</span></li>)}</ul></details>}
@@ -101,7 +102,7 @@ export function CampaignRequirementsPage() {
           <details><summary>Source evidence ({req.source_references.length})</summary><ul>{req.source_references.map((ref, index) => <li key={index}>
             <p>Source <code>{ref.source_id}</code> · lines {ref.start_line}–{ref.end_line}</p><blockquote className="prose">{ref.excerpt}</blockquote>
           </li>)}</ul></details>
-          </details></td></tr>;
+          </details></td></>}</PreparationRow>;
       })}</tbody></table></div>}
       <TruncationNotice truncated={requirements.data.truncated} />
       {traceability.error && <div className="campaign-section"><p>Coverage is unavailable; Requirement review and source evidence remain visible.</p><ErrorState error={traceability.error} retry={() => void traceability.reload()} /></div>}
@@ -112,42 +113,8 @@ export function CampaignRequirementsPage() {
 }
 
 export function CampaignTestsPage() {
-  const { projectId, campaignId, base, readiness } = useCampaign();
-  const [params] = useSearchParams();
-  const [feedback,setFeedback] = useState('');
-  const heading = useRef<HTMLHeadingElement>(null);
-  const selectedId = params.get('test_spec_id');
-  const tests = useResource(useCallback(async () => {
-    const list = await listTestSpecifications(projectId, campaignId);
-    if (!selectedId || list.items.some(item => item.id === selectedId)) return list;
-    const selected = await getTestSpecification(projectId, campaignId, selectedId);
-    return { ...list, items: [selected, ...list.items], selectedOutsideList: true };
-  }, [projectId, campaignId, selectedId]));
-  useEffect(() => { if (selectedId && tests.data) document.getElementById(`test-${selectedId}`)?.focus(); }, [selectedId, tests.data]);
-  async function changed() { await Promise.all([tests.reload(),readiness.reload()]); heading.current?.focus(); }
-  return <><p role="status">{feedback}</p><section id="test-specification-results" className="panel"><div className="panel-heading"><h2 ref={heading} tabIndex={-1}>Test Specifications</h2><button disabled={tests.loading} onClick={() => void tests.reload()}>Refresh Test Specifications</button></div>
-    <div className="actions"><a href="#test-import">Import Existing Tests</a><Link to={`${base}/traceability`}>Design tests in Traceability</Link><a href="#test-generation">Secondary generation selection</a></div>
-    <p className="hint">Executor-neutral designs. Imported and AI-generated specifications share the same review rules.</p>
-    {tests.loading ? <LoadingState>Loading Test Specifications…</LoadingState> : tests.error ? <ErrorState error={tests.error} retry={() => void tests.reload()} /> : tests.data && <>
-      {selectedId && <p>Selected Test Specification <Link to={`${base}/test-specifications`}>Clear selection</Link></p>}
-      {"selectedOutsideList" in tests.data && <p className="hint">The selected Test Specification is outside the bounded list and is included through a single detail read.</p>}
-      {!tests.data.items.length ? <EmptyState>No Test Specifications have been imported or generated yet.</EmptyState> : <ul className="preparation-records">{tests.data.items.map(test => <li className="evidence-record" key={test.id} tabIndex={-1} id={`test-${test.id}`}>
-        <p className="record-key">{test.key}</p><p className="mono muted technical-id">{test.logical_key}</p><div className="record-heading"><h3>{test.title}</h3><CampaignStatusBadge status={test.review_status} /></div>
-        <dl className="metadata"><div><dt>Origin</dt><dd>{test.provenance.origin === 'IMPORT' ? 'Imported' : 'AI-generated'}</dd></div><div><dt>Test type</dt><dd>{test.test_type}</dd></div><div><dt>Priority</dt><dd>{test.priority}</dd></div>
-          <div><dt>Linked Requirements</dt><dd>{test.requirement_ids.length}</dd></div><div><dt>Steps</dt><dd>{test.steps.length}</dd></div><div><dt>Expected result</dt><dd>{test.overall_expected_result === null ? 'Missing' : 'Provided'}</dd></div></dl>
-        <Markers markers={test.information_markers} />
-        <PreparationReview projectId={projectId} campaignId={campaignId} objectId={test.id} kind="Test Specification" status={test.review_status} blocked={test.information_markers.length > 0 || test.unresolved_requirement_refs.length > 0 || !test.requirement_ids.length || !test.required_evidence.length || test.overall_expected_result === null || test.steps.some(step => step.expected === null)} changed={async () => { setFeedback('Approval recorded.'); await changed(); }} />
-        {test.unresolved_requirement_refs.length > 0 && <p className="notice prose">Unresolved Requirement references: {test.unresolved_requirement_refs.join(', ')}</p>}
-        <details open className="primary-detail"><summary>Test design</summary>{test.preconditions.length > 0 && <><h4>Preconditions</h4><ul>{test.preconditions.map((item, index) => <li className="prose" key={index}>{item}</li>)}</ul></>}
-          <h4>Steps and expected behavior</h4><ol className="test-steps">{test.steps.map(step => <li key={step.index}><p className="prose">{step.action}</p><p className="prose muted">Expected: {step.expected ?? 'Not specified; clarification required.'}</p></li>)}</ol>
-          <h4>Overall expected result</h4><p className="prose">{test.overall_expected_result ?? 'Not specified; clarification required.'}</p>
-          <h4>Required evidence</h4>{test.required_evidence.length ? <ul>{test.required_evidence.map((item, index) => <li className="prose" key={index}>{item}</li>)}</ul> : <p>Not specified; clarification required.</p>}
-        </details><div className="requirement-links"><h4>Linked Requirements</h4>{test.requirement_ids.length ? <ul className="reference-chips">{test.requirement_ids.map(id => <li key={id}><Link to={`${base}/requirements?requirement_id=${encodeURIComponent(id)}`}>{id}</Link></li>)}</ul> : <p className="hint">No current Requirement links.</p>}</div>
-        <details className="secondary-detail"><summary>Provenance and audit identity</summary><dl className="metadata"><div><dt>Record</dt><dd><code>{test.provenance.record_id}</code></dd></div><div><dt>Source hash</dt><dd><code>{test.provenance.content_hash}</code></dd></div><div><dt>Contract</dt><dd>{test.provenance.contract_version}</dd></div><div><dt>Source lines</dt><dd>{test.provenance.start_line == null ? 'Not applicable' : `${test.provenance.start_line}–${test.provenance.end_line}`}</dd></div></dl></details>
-        <Link to={`${base}/traceability`}>Inspect Requirement links</Link>
-      </li>)}</ul>}<TruncationNotice truncated={tests.data.truncated} />
-    </>}
-  </section><PreparationImport projectId={projectId} campaignId={campaignId} changed={changed} /><PreparationGeneration projectId={projectId} campaignId={campaignId} changed={changed} /></>;
+  const {projectId,campaignId,base,campaign,readiness}=useCampaign();
+  return <TestCasesWorkspace projectId={projectId} campaignId={campaignId} base={base} campaignName={campaign.name} reloadReadiness={readiness.reload}/>;
 }
 
 export function CampaignTraceabilityPage() {
@@ -170,10 +137,10 @@ export function CampaignTraceabilityPage() {
   }
   return <section className="panel"><div className="panel-heading"><h2>Traceability</h2><button disabled={resource.loading || action.busy} onClick={() => { void resource.reload(); void names.reload(); }}>Refresh Traceability</button></div>
     <h3>Test Design Workbench</h3><p className="hint">Generate only from current APPROVED Requirements. One explicit attempt may call the model; generation does not approve or execute tests.</p>
-    <p className="hint">Only current preparation is represented; tests retired by Requirement revision do not count toward coverage. Coverage means linkage to approved test specifications. It does not represent execution results or code coverage.</p>
+    <p className="hint">Only current preparation is represented; tests retired by Requirement revision do not count toward coverage. Coverage means linkage to approved test cases. It does not represent execution results or code coverage.</p>
     {names.error && <p className="hint" role="status">Requirement names are unavailable. Requirement UUIDs identify the coverage rows.</p>}
     {action.error && <ErrorState error={action.error}/>}
-    {action.busy && <p role="status">Generating Test Specifications…</p>}
+    {action.busy && <p role="status">Generating Test Cases…</p>}
     {action.result && dismissed!==action.result.id && <section aria-label="Generation completion" className="campaign-section"><h3 ref={resultHeading} tabIndex={-1}>Test generation {action.result.status==='SUCCEEDED' ? 'completed' : action.result.status==='FAILED' ? 'FAILED' : 'started'}</h3>
       <AIActionSummary attempt={action.result} kind="generation" base={base} navigation={false}/>
       {action.result.status==='SUCCEEDED' && <div className="actions"><Link className="button button--primary" to={`${base}/test-specifications#test-specification-results`}>Go to Test Cases</Link><button onClick={()=>setDismissed(action.result!.id)}>Stay on Traceability</button></div>}
