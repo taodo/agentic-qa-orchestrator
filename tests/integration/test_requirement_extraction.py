@@ -17,8 +17,7 @@ from qa_sentinel.domain.campaign_content import RequirementExtraction
 
 def response(call, *, markers=False, empty=False, invalid=False):
     data = json.loads(call['input'][0]['content'])
-    refs = [dict(source_id=data['source_id'], source_hash=data['source_hash'], start_line=1, end_line=1,
-        excerpt='Invented' if invalid else data['normalized_text'].split('\n')[0][:512])]
+    refs = [dict(source_id=data['source_id'], source_hash='0'*64 if invalid else data['source_hash'], start_line=1, end_line=1)]
     requirement = dict(key='LOGIN', title='Login requirement', description='User must log in.', source_references=refs,
         acceptance_criteria=[] if markers else [dict(key='C1', text='User must log in.')],
         information_markers=[dict(kind='MISSING_INFORMATION', description='Expected errors unspecified')] if markers else [])
@@ -286,7 +285,7 @@ def test_all_requirements_validate_before_any_persist_and_output_is_bounded(harn
     def invalid_batch(call):
         value=response(call)
         second=json.loads(json.dumps(value['requirements'][0]));second['key']='SECOND'
-        second['source_references'][0]['excerpt']='Unsupported invention'
+        second['source_references'][0]['source_hash']='0'*64
         value['requirements'].append(second)
         return value
     mock.queue.clear();mock.queue.append(invalid_batch)

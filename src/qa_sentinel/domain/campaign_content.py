@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Annotated, Literal
 from uuid import UUID, uuid4
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, AwareDatetime, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, AwareDatetime, model_validator, field_validator
 from qa_sentinel.models.base import ModelMetadata
 
 Name = Annotated[str, StringConstraints(strict=True, strip_whitespace=True, min_length=1, max_length=200)]
@@ -85,7 +85,15 @@ class SourceCitation(Frozen):
     location_type: Literal["LINES"] = "LINES"
     start_line: Line
     end_line: Line
-    excerpt: ShortText
+    # Preserve source whitespace exactly; other ShortText fields still trim.
+    excerpt: Annotated[str, StringConstraints(strict=True, min_length=1, max_length=512)]
+
+    @field_validator("excerpt")
+    @classmethod
+    def nonblank_excerpt(cls, value):
+        if not value.strip():
+            raise ValueError("Blank source evidence")
+        return value
 
     @model_validator(mode="after")
     def ordered_range(self):
@@ -171,13 +179,17 @@ class RequirementExtraction(Frozen):
         return self
 
 
-def validate_citations(source, requirements):
+def validate_citations(source, requirements, *, canonical=False):
+    """Legacy substring citations remain valid; new writes require exact ranges."""
     lines = source.normalized_text.split("\n")
     for requirement in requirements:
         for ref in requirement.source_references:
-            if ref.source_id != source.id or ref.source_hash != source.content_hash or ref.end_line > source.line_count:
+            if (ref.source_id != source.id or ref.source_hash != source.content_hash
+                    or not 1 <= ref.start_line <= ref.end_line <= source.line_count):
                 raise ValueError("EXTRACTION_INVALID_CITATION")
-            if ref.excerpt not in "\n".join(lines[ref.start_line-1:ref.end_line]):
+            selected = "\n".join(lines[ref.start_line-1:ref.end_line])
+            valid = ref.excerpt == selected if canonical else ref.excerpt in selected
+            if not valid:
                 raise ValueError("EXTRACTION_INVALID_CITATION")
 
 

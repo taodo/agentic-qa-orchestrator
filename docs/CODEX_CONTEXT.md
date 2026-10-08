@@ -41,7 +41,7 @@ preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
 Campaign executor exists. Migration head is 0010; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.8
+## Current Phase 3 increment: Task 3.9
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -108,6 +108,12 @@ existing inert local validation, then shared foreground serve with an existing-D
 opening path that never invokes migrations. Lower-level serve/bootstrap behavior
 is unchanged. No automatic dependency installation/tests, provider calls during
 preflight, new dependencies or schema changes. See [local start](HOSTING.md#local-one-command-start).
+
+Task 3.9 gives extraction/retry/revision complete one-based line-numbered context.
+Model citations select source identity/ranges only; backend reconstructs exact LF
+excerpts and validates canonical citations before new persistence writes. Existing
+citations/history remain readable; no migration, extra model call, automatic retry
+or review/readiness/Run change. See [citation grounding](REQUIREMENTS.md).
 
 ## Product direction
 

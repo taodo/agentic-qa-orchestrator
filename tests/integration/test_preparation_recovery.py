@@ -29,7 +29,7 @@ def revised(call, *, markers=False, original_only=False, wrong_key=False):
     data=json.loads(call['input'][0]['content'])
     result=response(call,markers=markers)
     line=1 if original_only else data['clarification_first_fact_line']
-    result['requirements'][0]['source_references'][0].update(start_line=line,end_line=line,excerpt=data['normalized_text'].split('\n')[line-1][:512])
+    result['requirements'][0]['source_references'][0].update(start_line=line,end_line=line)
     if wrong_key: result['requirements'][0]['key']='INVENTED'
     return result
 
