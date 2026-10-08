@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid5, NAMESPACE_URL
 from pydantic import ValidationError
 from qa_sentinel.domain.campaign_review import ApprovalCommand, ReviewError, assess_readiness
+from qa_sentinel.execution.synthetic_run import SyntheticRunExecutor
+from qa_sentinel.domain.qa_run_lifecycle import RunLifecycleError
 from .campaign_review import CampaignTraceability, ReviewState, RequirementTrace, TraceLink, Readiness
 from qa_sentinel.domain.qa_run import (CreateQARun, QARun, QARunRequirement, QARunTest,
     prepare_run, SnapshotSizeError)
@@ -86,10 +88,11 @@ def persistence_boundary():
 
 
 class QASentinelApplication:
-    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None):
+    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None):
         self._factory = session_factory
         self._requirement_extractor = requirement_extractor
         self._test_generator = test_generator
+        self._synthetic_run_executor = synthetic_run_executor if synthetic_run_executor is not None else SyntheticRunExecutor()
         self._resolver = execution_resolver
         # Optional trusted host coordination, never supplied by HTTP/model inputs.
         self._execution_admission = execution_admission
@@ -378,6 +381,47 @@ class QASentinelApplication:
                 raise ApplicationError(Code.RUN_CAMPAIGN_MISMATCH)
             raise ApplicationError(Code.RUN_NOT_FOUND)
         return run
+
+    def start_qa_run(self, project_id, campaign_id, run_id) -> QARun:
+        project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
+            run = self._qa_run(uow, project_id, campaign_id, run_id)
+            if run.execution_status != "CREATED":
+                raise ApplicationError(Code.RUN_INVALID_STATE)
+            prepared = uow.qa_runs.preparation(run)
+            if any(t.execution_status != "NOT_STARTED" for t in prepared.tests):
+                raise ApplicationError(Code.RUN_INVALID_STATE)
+            uow.qa_runs.start(run)
+            uow.commit()  # Claim is durable before any synthetic evaluation.
+        try:
+            for snapshot in prepared.tests:
+                with persistence_boundary(), UnitOfWork(self._factory) as uow:
+                    uow.session.connection(execution_options={"qa_job_write": True})
+                    run = uow.qa_runs.get(project_id, campaign_id, run_id)
+                    running = uow.qa_runs.start_test(run, uow.qa_runs.test(run, snapshot.id))
+                    uow.commit()
+                result = self._synthetic_run_executor.evaluate(running)  # Pure; no open DB transaction.
+                with persistence_boundary(), UnitOfWork(self._factory) as uow:
+                    uow.session.connection(execution_options={"qa_job_write": True})
+                    run = uow.qa_runs.get(project_id, campaign_id, run_id)
+                    uow.qa_runs.complete_test(run, uow.qa_runs.test(run, snapshot.id), result)
+                    uow.commit()  # Durable result before processing the next test, including FAIL.
+            return self._finish_qa_run(project_id, campaign_id, run_id)
+        except Exception:
+            # No raw exception text/evidence; earlier committed test results survive.
+            return self._finish_qa_run(project_id, campaign_id, run_id, failed=True)
+
+    def _finish_qa_run(self, project_id, campaign_id, run_id, *, failed=False):
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
+            run = uow.qa_runs.get(project_id, campaign_id, run_id)
+            try:
+                result = uow.qa_runs.finish(run, failed=failed)
+            except RunLifecycleError:
+                raise ApplicationError(Code.RUN_INVALID_STATE) from None
+            uow.commit()
+            return result
 
     def get_qa_run(self, project_id, campaign_id, run_id) -> QARun:
         project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))

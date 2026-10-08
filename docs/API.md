@@ -15,7 +15,11 @@ Task 2.3 adds executor-neutral test import/design through 0006; see
 traceability, idempotency and generation usage. Task 2.4 adds [explicit approval,
 review evidence, traceability and derived readiness](CAMPAIGN_REVIEW.md) through
 0007. Task 3.3 adds [QA Run creation and immutable bounded snapshots](QA_RUNS.md)
-through 0008. Creation requires READY and performs no execution. Existing auth/CSRF
+through 0008. Task 3.4 adds POST /runs/{run_id}/start for synchronous pure synthetic
+execution and migration 0009 for a nullable safe error code. Creation requires READY
+and performs no execution. Start requires CREATED; normal assertion FAIL continues
+and returns COMPLETED + FAIL, whereas system failure returns FAILED with a safe code.
+See QA_RUNS.md for exact lifecycle and snapshot boundaries. Existing auth/CSRF
 and workflow APIs remain unchanged.
 
 ## Application factory and host composition

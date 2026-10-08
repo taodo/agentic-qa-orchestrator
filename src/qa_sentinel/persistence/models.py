@@ -463,6 +463,7 @@ class QARunRow(Base):
         CheckConstraint("run_number >= 1 AND requirement_count BETWEEN 1 AND 1000 AND test_count BETWEEN 1 AND 1000", name="ck_qa_runs_counts"),
         CheckConstraint("length(idempotency_key) BETWEEN 1 AND 128 AND length(snapshot_hash)=64 AND (note IS NULL OR length(note) BETWEEN 1 AND 1000)", name="ck_qa_runs_bounds"),
         CheckConstraint("snapshot_version='qa-run-snapshot-v1'", name="ck_qa_runs_version"),
+        CheckConstraint("execution_error_code IS NULL OR execution_error_code='RUN_EXECUTION_FAILED'", name="ck_qa_runs_error"),
         CheckConstraint("execution_status IN ('CREATED','QUEUED','RUNNING','COMPLETED','STOPPED','FAILED')", name="ck_qa_runs_execution"),
         CheckConstraint("qa_outcome IN ('NOT_EVALUATED','PASS','FAIL','PARTIAL')", name="ck_qa_runs_outcome"),
     )
@@ -483,6 +484,7 @@ class QARunRow(Base):
     created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
     started_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
+    execution_error_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
 
 class QARunRequirementRow(Base):

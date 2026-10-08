@@ -7,6 +7,8 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.RUN_INVALID_STATE: (409, "QA Run lifecycle does not permit this action"),
+    Code.RUN_EXECUTION_FAILED: (409, "Synthetic execution could not complete"),
     Code.CAMPAIGN_NOT_READY_FOR_RUN: (409, "Campaign preparation is not READY for a QA Run"),
     Code.RUN_NOT_FOUND: (404, "QA Run not found in the requested Campaign"),
     Code.RUN_CAMPAIGN_MISMATCH: (409, "QA Run does not belong to the requested Campaign"),

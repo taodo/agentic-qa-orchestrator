@@ -1,7 +1,8 @@
-"""Campaign-scoped immutable QA Run creation and bounded snapshot reads only."""
+"""Campaign-scoped immutable QA Run creation, snapshot reads and explicit synthetic Start."""
 from typing import Annotated
 from uuid import UUID
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Body
+from pydantic import BaseModel, ConfigDict
 from qa_sentinel.application.models import CollectionPage
 from qa_sentinel.application import CreateQARun, QARun, QARunRequirement, QARunTest
 from .dependencies import Application, CollectionLimit
@@ -36,3 +37,12 @@ def list_tests(project_id: UUID, campaign_id: UUID, run_id: UUID, application: A
 def list_requirements(project_id: UUID, campaign_id: UUID, run_id: UUID, application: Application,
                       limit: CollectionLimit = 50, after_position: SnapshotPosition = 0):
     return application.list_qa_run_requirements(project_id, campaign_id, run_id, limit=limit, after_position=after_position)
+
+
+class StartRunBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+@router.post("/{run_id}/start", response_model=QARun)
+def start_run(project_id: UUID, campaign_id: UUID, run_id: UUID, application: Application, body: StartRunBody | None = Body(default=None)):
+    return application.start_qa_run(project_id, campaign_id, run_id)

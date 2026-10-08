@@ -20,7 +20,7 @@ where = ["src"]
 
 [tool.setuptools.data-files]
 "share/qa-sentinel/alembic" = ["alembic/env.py", "alembic/script.py.mako"]
-"share/qa-sentinel/alembic/versions" = ["alembic/versions/0001_initial.py", "alembic/versions/0002_projects.py", "alembic/versions/0003_execution_jobs.py", "alembic/versions/0004_qa_campaigns.py", "alembic/versions/0005_campaign_requirements.py", "alembic/versions/0006_test_specifications.py", "alembic/versions/0007_campaign_review.py", "alembic/versions/0008_qa_runs.py"]
+"share/qa-sentinel/alembic/versions" = ["alembic/versions/0001_initial.py", "alembic/versions/0002_projects.py", "alembic/versions/0003_execution_jobs.py", "alembic/versions/0004_qa_campaigns.py", "alembic/versions/0005_campaign_requirements.py", "alembic/versions/0006_test_specifications.py", "alembic/versions/0007_campaign_review.py", "alembic/versions/0008_qa_runs.py", "alembic/versions/0009_qa_run_lifecycle.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

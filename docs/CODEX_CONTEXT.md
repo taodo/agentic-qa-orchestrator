@@ -37,10 +37,11 @@ Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources
 structured Requirements, imported/generated executor-neutral Test Specifications,
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
-preparation snapshots; no Campaign executor exists. Migration head is 0008; see
+preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
+Campaign executor exists. Migration head is 0009; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.3
+## Current Phase 3 increment: Task 3.4
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -65,7 +66,19 @@ hashes are versioned audit identities; caller keys handle retries, distinct keys
 allow intentional duplicate preparation. Accepted SQLite writer reservation protects
 atomic snapshots and unique Campaign run numbering. Bounded stored snapshot reads
 remain independent of later preparation changes. See [QA Runs](QA_RUNS.md).
-Task 3.4 owns Run lifecycle UX / synthetic execution shell; it is not implemented here.
+Task 3.4 adds Campaign Runs list/create/detail and explicit synchronous synthetic
+Start. Execution reads only persisted QARunTest.content; synthetic-position-v1
+returns odd-position PASS / even-position FAIL, with no title semantics or target
+execution. Short reserved transactions commit Run RUNNING, each test RUNNING and
+COMPLETED/result, then aggregate persisted tests. Assertion FAIL continues; normal
+Run COMPLETED may have QA FAIL. System failure gives FAILED + safe code, PARTIAL
+if earlier tests completed, otherwise NOT_EVALUATED; earlier results survive.
+Migration 0009 adds only the nullable safe Run execution_error_code. Immutable
+content/approval/links/positions never update. Only CREATED starts; concurrent and
+terminal starts reject. No models, network, browser, subprocess, target filesystem,
+legacy Task/job evidence, retry/resume, Stop or crash replay. Frontend uses explicit
+intent keys, bounded snapshot pages, shared CSRF and stale-completion guards, with
+clear synthetic warnings. Phase 4 evidence/reporting remains future work.
 
 ## Product direction
 
