@@ -100,8 +100,15 @@ click and keyboard disclosure without intercepting their controls.
 
 Import and approved-only generation remain secondary collapsible sections;
 Traceability remains the primary generation workbench. CSV exports use already-loaded
-full structured fields, only visible/selected current rows, UTF-8 and explicit
+a six-column human-readable presentation of loaded structured fields, only
+visible/selected current rows, UTF-8 and explicit
 spreadsheet protection. No new read endpoint or detail fan-out is required. See
 [Test Cases workspace](TEST_CASES_WORKSPACE.md) for exact schema, review rules,
 bounds, compatibility and manual checks. Backend/approval/readiness/Run/model/token
 semantics remain unchanged. Migration NONE; dependencies NONE.
+
+Manual acceptance follow-up: the Test Cases bulk approval panel is collapsed above
+the table, directly after selection/export, with a live eligible count. CSV is
+exactly title/test_type/priority/preconditions/steps/overall_expected_result;
+preconditions are readable lines, and steps preserve indexed Action/Expected
+pairings in multiline cells. Internal structured data remains unchanged.

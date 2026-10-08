@@ -10,8 +10,8 @@ export function RequirementBulkApproval({rows,...scope}:PreparationScope & {rows
   return <PreparationBulkApproval {...scope} kind="Requirement" rows={rows.map(row=>({id:row.id,key:row.key,eligible:row.review_status==='READY_FOR_REVIEW' && !row.information_markers.length}))}/>;
 }
 
-export function PreparationBulkApproval({ rows, selected, changed, projectId, campaignId, kind }: PreparationScope & {
-  rows:{id:string;key:string;eligible:boolean}[];selected:string[];kind:'Requirement'|'Test Case';
+export function PreparationBulkApproval({ rows, selected, changed, projectId, campaignId, kind, compact=false }: PreparationScope & {
+  rows:{id:string;key:string;eligible:boolean}[];selected:string[];kind:'Requirement'|'Test Case';compact?:boolean;
 }) {
   const plural=kind==='Requirement'?'Requirements':'Test Cases';
   const action = usePreparationAction<string[]>(), active = useRef(true);
@@ -40,11 +40,14 @@ export function PreparationBulkApproval({ rows, selected, changed, projectId, ca
     });
     if (active.current) await changed();
   }
-  return <form aria-label={`Bulk approve ${plural}`} onSubmit={submit}><fieldset disabled={action.busy}>
+  const form = <form aria-label={`Bulk approve ${plural}`} onSubmit={submit}><fieldset disabled={action.busy}>
     <legend>Bulk approval — {eligible.length} eligible selected {plural}</legend>
     <p className="hint">Only selected current Ready-for-review rows without clarification markers are submitted. Other selected rows are ignored. Reviewer labels are operator assertions; never enter secrets. Approval never runs tests.</p>
     <label>Bulk reviewer label<input name="reviewer_label" required maxLength={64}/></label>
     <label>Bulk review note (optional)<input name="note" maxLength={1000}/></label>
-    <button disabled={!eligible.length} type="submit">{action.busy ? 'Recording approvals…' : `Approve selected ${plural}`}</button>
+    <button disabled={!eligible.length} type="submit">{action.busy ? 'Recording approvals…' : compact ? 'Confirm approval' : `Approve selected ${plural}`}</button>
     </fieldset><p role="status">{validation || progress}</p>{action.result && <ul aria-label="Bulk approval results">{action.result.map((result,i)=><li key={i}>{result}</li>)}</ul>}{action.error && <ErrorState error={action.error}/>}</form>;
+  return compact ? <details className="preparation-action">
+    <summary>Approve selected {plural} ({eligible.length} eligible)</summary>{form}
+  </details> : form;
 }

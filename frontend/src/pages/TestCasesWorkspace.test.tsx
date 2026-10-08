@@ -27,7 +27,7 @@ function setup({cases=[specification,ready,blockedSpecification],truncated=false
 }
 function open(suffix='/test-specifications'){return render(<MemoryRouter initialEntries={[base+suffix]}><Link to="/missing">Leave</Link><App/></MemoryRouter>);}
 function caseRow(key:string){return screen.getByRole('heading',{name:key}).closest('tr')!;}
-function submitBulk(){fireEvent.change(screen.getByLabelText('Bulk reviewer label'),{target:{value:'qa-human'}});fireEvent.submit(screen.getByRole('form',{name:'Bulk approve Test Cases'}));}
+function submitBulk(){const panel=screen.getByText(/^Approve selected Test Cases \(/).closest('details')!;if(!panel.open)fireEvent.click(within(panel).getByText(/^Approve selected Test Cases \(/));fireEvent.change(screen.getByLabelText('Bulk reviewer label'),{target:{value:'qa-human'}});fireEvent.submit(screen.getByRole('form',{name:'Bulk approve Test Cases'}));}
 async function blobText(blob:Blob):Promise<string>{return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=reject;reader.readAsText(blob);});}
 function downloads(){const blobs:Blob[]=[];const NativeURL=URL;vi.stubGlobal('URL',class extends NativeURL{static createObjectURL=vi.fn((blob:Blob)=>{blobs.push(blob);return 'blob:offline';});static revokeObjectURL=vi.fn();});const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});return {blobs,click};}
 
@@ -89,6 +89,15 @@ describe('Test Cases current workspace',()=>{
     expect(within(row).getByText('Observed payment state')).toBeInTheDocument();expect(within(row).getByRole('link',{name:requirement.id})).toBeInTheDocument();
     const button=within(row).getByRole('button',{name:'View approval evidence'});expect(fetch).toHaveBeenCalledTimes(4);fireEvent.click(button);await within(row).findByText('Reviewer label (operator assertion)');expect(row.querySelector('details')!.open).toBe(true);expect(posts()).toHaveLength(0);
   });
+  it('offers one compact bulk approval panel above the table with live eligible counts',async()=>{
+    setup();open();const table=await screen.findByRole('table');
+    const summary=screen.getByText('Approve selected Test Cases (0 eligible)'),panel=summary.closest('details')!;
+    expect(panel).not.toHaveAttribute('open');expect(screen.getByRole('button',{name:'Export selected CSV'}).compareDocumentPosition(panel)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(panel.compareDocumentPosition(table)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));expect(summary).toHaveTextContent('Approve selected Test Cases (1 eligible)');
+    fireEvent.click(summary);expect(panel).toHaveAttribute('open');expect(within(panel).getByLabelText('Bulk reviewer label')).toBeVisible();expect(within(panel).getByRole('button',{name:'Confirm approval'})).toBeEnabled();
+    expect(screen.getAllByRole('form',{name:'Bulk approve Test Cases'})).toHaveLength(1);expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button',{name:'Approved (1)'}));expect(summary).toHaveTextContent('(0 eligible)');expect(within(panel).getByRole('button',{name:'Confirm approval'})).toBeDisabled();
+  });
   it('bulk approves eligible selected cases sequentially and discloses individual failures',async()=>{
     const second={...ready,id:'second',key:'SECOND',title:'Second case'},bad={...ready,id:'bad',key:'BAD',title:'Missing evidence',required_evidence:[]};const pending=deferred<Response>();
     setup({cases:[specification,ready,blockedSpecification,second,bad],write:url=>url.endsWith('/ready/review')?pending.promise:response({error:{code:'REVIEW_CONFLICT',message:'Conflict'}},409)});
@@ -108,15 +117,15 @@ describe('Test Cases current workspace',()=>{
     setup({cases:[ready],truncated:true});const {blobs,click}=downloads();open('/test-specifications?test_spec_id=historical');
     const audit=await screen.findByRole('region',{name:'Selected Test Case audit detail'});expect(audit).toHaveTextContent('read-only');expect(within(audit).queryByRole('form')).not.toBeInTheDocument();
     expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(1);fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));fireEvent.click(screen.getByRole('button',{name:'Export selected CSV'}));
-    const rows=readCsv(await blobText(blobs[0]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe('READY');expect(rows.flat()).not.toContain('OLD');
+    const rows=readCsv(await blobText(blobs[0]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe(ready.title);expect(rows.flat()).not.toContain(historical.title);
     expect(fetch).toHaveBeenCalledTimes(5);expect(posts()).toHaveLength(0);click.mockRestore();
   });
   it('exports exactly filtered visible/selected current cases, without extra reads or provider actions',async()=>{
     setup({truncated:true});const {blobs,click}=downloads();open();await screen.findByRole('table');const reads=vi.mocked(fetch).mock.calls.length;
     fireEvent.click(screen.getByRole('button',{name:'Needs clarification (1)'}));fireEvent.click(screen.getByRole('button',{name:'Export visible CSV'}));
-    expect(readCsv(await blobText(blobs[0]))[1][0]).toBe('CURRENCY');
+    expect(readCsv(await blobText(blobs[0]))[1][0]).toBe(blockedSpecification.title);
     fireEvent.click(screen.getByRole('button',{name:'All (3)'}));fireEvent.click(screen.getByRole('checkbox',{name:'Select PAY'}));fireEvent.click(screen.getByRole('button',{name:'Export selected CSV'}));
-    const rows=readCsv(await blobText(blobs[1]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe('PAY');expect(fetch).toHaveBeenCalledTimes(reads);expect(posts()).toHaveLength(0);click.mockRestore();
+    const rows=readCsv(await blobText(blobs[1]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe(specification.title);expect(fetch).toHaveBeenCalledTimes(reads);expect(posts()).toHaveLength(0);click.mockRestore();
   });
 });
 

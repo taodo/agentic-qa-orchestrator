@@ -1,23 +1,28 @@
 import type { CampaignTestSpecification } from '../api/campaignTypes';
 
-export const TEST_CASE_CSV_HEADERS=['key','title','review_status','test_type','priority','requirement_ids',
-  'preconditions','steps','overall_expected_result','required_evidence','information_markers','unresolved_requirement_refs','provenance','id'] as const;
-const structured=new Set<string>(['requirement_ids','preconditions','steps','required_evidence','information_markers','unresolved_requirement_refs','provenance']);
-function ordered(value:unknown):unknown {
-  if(Array.isArray(value))return value.map(ordered);
-  if(value!==null && typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([key,item])=>[key,ordered(item)]));
-  return value;
+export const TEST_CASE_CSV_HEADERS = [
+  'title', 'test_type', 'priority', 'preconditions', 'steps', 'overall_expected_result',
+] as const;
+
+function quote(value: string): string {
+  // Apply protection after presentation formatting, to every exported cell.
+  const unsafe = /^[\s\u0000-\u001f]*[=+\-@]/u.test(value) || /^[\u0000-\u001f]/u.test(value);
+  const safe = unsafe ? "'" + value : value;
+  return '"' + safe.replaceAll('"', '""') + '"';
 }
-function quote(value:string){return '"'+value.replaceAll('"','""')+'"';}
-export function testCasesCsv(cases:CampaignTestSpecification[]):string {
-  const rows=cases.map(test=>TEST_CASE_CSV_HEADERS.map(key=>{
-    if(structured.has(key))return quote(JSON.stringify(ordered(test[key])));
-    const value=test[key]==null?'':String(test[key]);
-    // Spreadsheet protection includes leading whitespace/control-character bypasses.
-    const unsafe=/^[\s\u0000-\u001f]*[=+\-@]/u.test(value) || /^[\u0000-\u001f]/u.test(value);
-    return quote(unsafe?"'"+value:value);
-  }).join(','));
-  return [TEST_CASE_CSV_HEADERS.map(quote).join(','),...rows].join('\r\n')+'\r\n';
+
+export function testCasesCsv(cases: CampaignTestSpecification[]): string {
+  const rows = cases.map(test => {
+    const preconditions = test.preconditions.length <= 1
+      ? test.preconditions[0] ?? ''
+      : test.preconditions.map((item, index) => `${index + 1}. ${item}`).join('\n');
+    const steps = [...test.steps].sort((a, b) => a.index - b.index)
+      .map(step => `${step.index}. Action: ${step.action}\n   Expected: ${step.expected ?? ''}`)
+      .join('\n\n');
+    return [test.title, test.test_type, test.priority, preconditions, steps,
+      test.overall_expected_result ?? ''].map(quote).join(',');
+  });
+  return [TEST_CASE_CSV_HEADERS.map(quote).join(','), ...rows].join('\r\n') + '\r\n';
 }
 export function testCasesFilename(campaignName:string,scope:'visible'|'selected'):string {
   const slug=campaignName.normalize('NFKD').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60).replace(/-+$/g,'') || 'campaign';

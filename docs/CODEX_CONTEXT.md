@@ -68,7 +68,8 @@ unchanged. See [preparation workflow](PREPARATION_WORKFLOW.md).
 Task 3.11 names the operator workspace Test Cases while preserving the
 CampaignTestSpecification domain and existing routes. A current-only bounded
 table adds filters, visible selection, sequential single-record bulk approval,
-structured row detail and browser-local CSV export without API/provider calls.
+structured row detail and browser-local six-column human-readable CSV export
+without API/provider calls. Compact Test Case bulk approval sits above the table.
 Requirements and Test Cases share noninteractive row/keyboard disclosure; explicit
 out-of-list Test Case details remain separate read-only audit content. Import and
 approved-only generation remain secondary; Traceability remains primary. Backend,

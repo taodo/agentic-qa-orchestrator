@@ -23,7 +23,10 @@ current records, never full Campaign totals. Filter changes clear selection.
 Select all visible and Deselect all operate only on returned filtered rows.
 Approved cases remain selectable for export, but cannot be approved again.
 
-Bulk approval reuses the accepted sequential single-record review API. It submits
+Bulk approval is a compact, initially collapsed panel directly below selection/export
+and above the table. Its summary shows `Approve selected Test Cases (N eligible)`;
+opening it reveals reviewer label, optional note and Confirm approval. It reuses
+the accepted sequential single-record review API. It submits
 only selected current READY_FOR_REVIEW cases without information markers,
 unresolved references, missing links/evidence/overall result or missing step
 expectations; the backend retains final authority. Reviewer labels remain operator
@@ -50,28 +53,49 @@ It is an operator download, not an exhaustive Campaign report or import template
 Stable header order:
 
 ```text
-key,title,review_status,test_type,priority,requirement_ids,preconditions,steps,overall_expected_result,required_evidence,information_markers,unresolved_requirement_refs,provenance,id
+title,test_type,priority,preconditions,steps,overall_expected_result
+```
+
+Human-readable cell formatting (manual-acceptance follow-up):
+
+- Title, test type and priority use their existing plain display values.
+- No preconditions gives an empty cell; one is rendered verbatim; multiple are
+  numbered `1. ...`, `2. ...` in authoritative array order, separated by LF.
+- Steps are rendered by ascending authoritative step index (without mutating the
+  stored array). Each action stays paired with its own expected result. Steps are
+  separated by a blank line within the single cell. A null step expectation is
+  left blank after `Expected:`; no result is invented.
+- Overall expected result is already `string | null` in the authoritative contract:
+  plain text is preserved, including its line breaks; null becomes an empty cell.
+- Arrays/objects are never JSON-serialized into this user-facing export. Internal
+  structured domain data is unchanged. Audit fields/IDs/review status/Requirement
+  links/evidence/markers/provenance are not exported. This is a readable execution
+  aid, not a lossless domain archive or an import template.
+
+Example of the single `steps` cell:
+
+```text
+1. Action: Attempt to submit the booking without providing a guest name.
+   Expected: The booking is rejected.
+
+2. Action: Inspect the post-submission persistence state and compare it with the recorded pre-submission state.
+   Expected: No partial booking record attributable to the rejected attempt is persisted.
 ```
 
 Encoding and safety:
 
-- UTF-8 with BOM for spreadsheet Unicode detection; records end in CRLF.
+- UTF-8 with BOM for spreadsheet Unicode detection; CSV records end in CRLF.
 - Every cell is double-quoted, with internal quotes doubled. Commas, quotes,
-  embedded CR/LF and Unicode are preserved.
-- `requirement_ids`, `preconditions`, `steps`, `required_evidence`,
-  `information_markers`, `unresolved_requirement_refs` and `provenance` are
-  lossless JSON cells: object keys recursively sorted, array order retained.
-  Their opening `[` / `{` prevents them from being formula cells; nested strings
-  remain unchanged.
-- Null plain values are empty cells. Empty structured collections are `[]`.
-- Plain cells beginning with `=`, `+`, `-` or `@`, including after whitespace or
-  control characters, receive a leading literal apostrophe. Plain cells starting
-  with a control character are also protected. This deliberately changes unsafe
-  spreadsheet-facing text rather than generating executable formulas. Consumers
-  should treat exported cells as data and retain this protection.
-- Only these existing authorized fields are exported; no hidden runtime/config,
-  credentials, provider objects or usage data is added. Operators must still avoid
-  entering secrets into preparation content.
+  embedded CR/LF and Unicode are preserved. Multiline steps/preconditions remain
+  exactly one cell each, not extra CSV records or columns.
+- All six cells receive spreadsheet protection **after** readable formatting.
+  Plain cells beginning with `=`, `+`, `-` or `@`, including after whitespace or
+  control characters, receive a leading literal apostrophe. Cells starting with
+  control characters are also protected. Numbered content starts with its index;
+  embedded formula-like action/expected text remains ordinary cell content.
+  Consumers should treat exported cells as data and retain this protection.
+- No hidden runtime/config, credentials, provider objects or usage data is added.
+  Operators must still avoid entering secrets into preparation content.
 - Filenames use a normalized ASCII Campaign slug (maximum 60 characters; fallback
   `campaign`) plus `-test-cases-visible.csv` or `-test-cases-selected.csv`. Campaign
   text never becomes a filesystem path. Temporary browser object URLs are released.
@@ -86,7 +110,7 @@ Use synthetic prepared data. These are operator checks, not a claimed live run.
 3. Toggle Test Case and Requirement rows by broad click, summary and keyboard;
    check that checkbox, link, nested disclosure and form controls remain independent.
 4. Inspect structured detail and explicitly load approval evidence.
-5. Bulk approve eligible cases, including a conflict; verify individual results
+5. Select eligible cases, open the top approval panel and confirm approval, including a conflict; verify individual results
    and excluded clarification/approved cases. Verify readiness through existing reads.
 6. Export visible CSV, open it in the operator's spreadsheet program and inspect
    Unicode, multiline cells and protected formula-like text. Export a selected
