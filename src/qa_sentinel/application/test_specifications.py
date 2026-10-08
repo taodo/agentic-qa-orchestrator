@@ -7,6 +7,7 @@ from qa_sentinel.domain.test_specification import (TestImport,ImportFormat,Impor
 from qa_sentinel.domain.campaign_content import ExtractionStatus
 from qa_sentinel.models.base import ContextSelection
 from .models import View
+from .ai_action_results import ActionOutput
 from .model_usage import UsageTotals,totals,safe_metadata
 
 class TestImportView(View):
@@ -48,11 +49,14 @@ class TestGenerationView(View):
     usage:UsageTotals
     context_selection:ContextSelection | None
 
+    provider: str | None = None
+    output: ActionOutput | None = None
 
-def generation_view(record):
+
+def generation_view(record, *, output=None):
     metadata=None if record.metadata is None else safe_metadata(record.metadata.model_dump(mode='json'))
     fields=record.model_dump(include=set(TestGenerationView.model_fields))
-    return TestGenerationView(**fields,configured_model=record.model,provider_model=None if metadata is None else metadata['model'],
+    return TestGenerationView(**fields,output=output,provider=None if metadata is None else metadata["provider"],configured_model=record.model,provider_model=None if metadata is None else metadata['model'],
         usage=totals([metadata]),context_selection=None if record.metadata is None else record.metadata.context_selection)
 
 

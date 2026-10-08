@@ -1,11 +1,11 @@
 import { useId, useState } from 'react';
 import { addClarification, getRequirementHistory } from '../api/campaigns';
-import type { CampaignRequirement } from '../api/campaignTypes';
+import type { CampaignRequirement, RequirementExtraction } from '../api/campaignTypes';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { SourceExtraction, textBytes, type PreparationScope } from './PreparationSources';
 import { ErrorState } from './Feedback';
 
-export function PreparationRecovery({requirement,projectId,campaignId,changed}:{requirement:CampaignRequirement}&PreparationScope) {
+export function PreparationRecovery({requirement,projectId,campaignId,changed,onRevision}:{requirement:CampaignRequirement;onRevision?:(result:RequirementExtraction)=>void}&PreparationScope) {
   const history=usePreparationAction<Awaited<ReturnType<typeof getRequirementHistory>>>();
   const action=usePreparationAction<Awaited<ReturnType<typeof addClarification>>>();
   const [open,setOpen]=useState(false),[content,setContent]=useState(''),[validation,setValidation]=useState('');
@@ -26,7 +26,7 @@ export function PreparationRecovery({requirement,projectId,campaignId,changed}:{
         {action.error && <><ErrorState error={action.error}/><p>Explicit retry retains the same key and facts. Nothing retries automatically.</p><button type="button" disabled={action.busy} onClick={()=>{setIntent(undefined);setContent('');}}>New clarification request</button></>}
         {validation && <p role="status">{validation}</p>}
       </form>}
-      {action.result && <><p role="status">Clarification saved. Source: {action.result.source_id}. Revision remains explicit and may consume tokens.</p><SourceExtraction source={{id:action.result.source_id,name:'Clarification addendum'}} projectId={projectId} campaignId={campaignId} changed={changed} initialLabel="Revise Requirement"/></>}
+      {action.result && <><p role="status">Clarification saved. Source: {action.result.source_id}. Revision remains explicit and may consume tokens.</p><SourceExtraction source={{id:action.result.source_id,name:'Clarification addendum'}} projectId={projectId} campaignId={campaignId} changed={changed} initialLabel="Revise Requirement" onResult={onRevision ? result=>{if(result.status==='SUCCEEDED')onRevision(result);} : undefined}/></>}
     </>}
     {current===false && <p className="notice">Historical content cannot be revised or approved. Use the current Requirement version.</p>}
   </div>;

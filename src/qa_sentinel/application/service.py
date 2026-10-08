@@ -1,4 +1,5 @@
 """Use-case boundary. Execution and transitions belong exclusively to core."""
+from qa_sentinel.persistence.ai_action_results import action_outputs
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timezone
 from uuid import UUID, uuid5, NAMESPACE_URL
@@ -258,9 +259,10 @@ class QASentinelApplication:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._campaign(uow, project_id, campaign_id)
             rows = uow.campaign_content.sources(campaign_id, limit)
-            latest = uow.campaign_content.latest_attempts([r["id"] for r in rows])
-            targets = uow.campaign_content.clarification_targets([r["id"] for r in rows])
-            return self._operational_page([{**r, "clarification_requirement_id":targets.get(r["id"]), "latest_extraction":None if r["id"] not in latest else extraction_view(latest[r["id"]])} for r in rows], limit, CampaignSourceView)
+            latest = uow.campaign_content.latest_attempts([r["id"] for r in rows[:limit]])
+            targets = uow.campaign_content.clarification_targets([r["id"] for r in rows[:limit]])
+            outputs = action_outputs(uow.session, latest.values())
+            return self._operational_page([{**r, "clarification_requirement_id":targets.get(r["id"]), "latest_extraction":None if r["id"] not in latest else extraction_view(latest[r["id"]], output=outputs[latest[r["id"]].id])} for r in rows], limit, CampaignSourceView)
 
     def get_campaign_requirement(self, project_id, campaign_id, requirement_id) -> CampaignRequirementView:
         project_id, campaign_id, requirement_id = map(identifier, (project_id, campaign_id, requirement_id))
@@ -534,7 +536,8 @@ class QASentinelApplication:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._source(uow, project_id, campaign_id, source_id)
             records = uow.campaign_content.attempt_history(source_id, limit)
-            items = tuple(extraction_view(r, is_latest=i == 0) for i,r in enumerate(records[:limit]))
+            outputs = action_outputs(uow.session, records[:limit])
+            items = tuple(extraction_view(r, is_latest=i == 0, output=outputs[r.id]) for i,r in enumerate(records[:limit]))
             return CollectionPage[ExtractionView](items=items,total_returned=len(items),truncated=len(records)>limit)
 
     def _extract_attempt(self, project_id, campaign_id, source_id, *, parent_attempt_id=None):
@@ -553,7 +556,7 @@ class QASentinelApplication:
                 if existing.status == "STARTED":
                     raise ApplicationError(Code.EXTRACTION_RECONCILIATION_REQUIRED if parent_attempt_id is None else Code.EXTRACTION_RETRY_CONFLICT)
                 latest = repo.extraction_for_source(source_id, latest=True)
-                return extraction_view(existing,is_latest=latest.id == existing.id)
+                return extraction_view(existing,is_latest=latest.id == existing.id, output=action_outputs(repo.session, [existing])[existing.id])
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             source = self._source(uow, project_id, campaign_id, source_id)
             existing = replay(uow.campaign_content)
@@ -611,7 +614,7 @@ class QASentinelApplication:
             uow.session.connection(execution_options={"qa_job_write": True})
             uow.campaign_content.finish(completed, () if error else requirements)
             uow.commit()
-        return extraction_view(completed)
+            return extraction_view(completed, output=action_outputs(uow.session, [completed])[completed.id])
 
     def import_campaign_tests(self, project_id, campaign_id, *, name, format, content) -> TestImportView:
         project_id,campaign_id=identifier(project_id),identifier(campaign_id)
@@ -675,14 +678,16 @@ class QASentinelApplication:
     def get_campaign_test_generation(self,project_id,campaign_id,generation_id) -> TestGenerationView:
         project_id,campaign_id,generation_id=map(identifier,(project_id,campaign_id,generation_id))
         with persistence_boundary(),UnitOfWork(self._factory) as uow:
-            return generation_view(self._test_child(uow,project_id,campaign_id,generation_id,'generation'))
+            record = self._test_child(uow,project_id,campaign_id,generation_id,'generation')
+            return generation_view(record, output=action_outputs(uow.session, [record], generation=True)[record.id])
 
     def list_campaign_test_generations(self,project_id,campaign_id,*,limit=50) -> CollectionPage[TestGenerationView]:
         project_id,campaign_id,limit=identifier(project_id),identifier(campaign_id),list_limit(limit)
         with persistence_boundary(),UnitOfWork(self._factory) as uow:
             self._campaign(uow,project_id,campaign_id)
             records=uow.test_specifications.generations(campaign_id,limit)
-            items=tuple(generation_view(r) for r in records[:limit])
+            outputs = action_outputs(uow.session, records[:limit], generation=True)
+            items=tuple(generation_view(r, output=outputs[r.id]) for r in records[:limit])
             return CollectionPage[TestGenerationView](items=items,total_returned=len(items),truncated=len(records)>limit)
 
     def generate_campaign_tests(self,project_id,campaign_id,*,requirement_ids) -> TestGenerationView:
@@ -704,7 +709,7 @@ class QASentinelApplication:
             existing=uow.test_specifications.generation_identity(campaign_id,request_hash)
             if existing is not None:
                 if existing.status=='STARTED':raise ApplicationError(Code.GENERATION_RECONCILIATION_REQUIRED)
-                return generation_view(existing)
+                return generation_view(existing, output=action_outputs(uow.session, [existing], generation=True)[existing.id])
         if self._test_generator is None:raise ApplicationError(Code.GENERATION_NOT_CONFIGURED)
         try:request=self._test_generator.prepare(requirements)
         except ModelError:raise ApplicationError(Code.GENERATION_CONTEXT_LIMIT) from None
@@ -715,7 +720,7 @@ class QASentinelApplication:
             existing=uow.test_specifications.generation_identity(campaign_id,request_hash)
             if existing is not None:
                 if existing.status=='STARTED':raise ApplicationError(Code.GENERATION_RECONCILIATION_REQUIRED)
-                return generation_view(existing)
+                return generation_view(existing, output=action_outputs(uow.session, [existing], generation=True)[existing.id])
             uow.test_specifications.reserve(attempt);uow.commit()
         # Durable STARTED precedes external work; no transaction spans the one provider call.
         metadata,error,specs=None,None,()
@@ -740,7 +745,7 @@ class QASentinelApplication:
             'finished_at':datetime.now(timezone.utc),'error_code':error,'metadata':metadata})
         with persistence_boundary(),UnitOfWork(self._factory) as uow:
             uow.test_specifications.finish(completed,() if error else specs);uow.commit()
-        return generation_view(completed)
+            return generation_view(completed, output=action_outputs(uow.session, [completed], generation=True)[completed.id])
 
     def get_operational_summary(self) -> OperationalSummaryView:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:

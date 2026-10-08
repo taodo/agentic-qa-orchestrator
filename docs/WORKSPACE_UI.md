@@ -27,8 +27,9 @@ our stack; no component package, runtime font fetch or animation framework is us
   selection, never automatic reads for every linked record.
 - Source ingestion, extraction retry, clarification saving, AI revision and human
   review remain separate explicit actions. Saving clarification never approves or
-  starts revision. Existing usage/history display is retained; Task 3.7 summaries
-  are outside this increment.
+  starts revision. Task 3.7 adds compact action-local
+  summaries; see [AI action results](AI_ACTION_RESULTS.md) for authoritative field
+  sources and unknown-usage semantics.
 - Runs retain synthetic warnings, immutable snapshot evidence and distinct
   execution/QA outcome badges. No external target is tested by synthetic execution.
 - Tables may scroll inside their own container; ordinary pages should not scroll

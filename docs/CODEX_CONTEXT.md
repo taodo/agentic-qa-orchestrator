@@ -41,7 +41,7 @@ preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
 Campaign executor exists. Migration head is 0010; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.6
+## Current Phase 3 increment: Task 3.7
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -95,6 +95,13 @@ history, read-only next-step guidance from existing readiness codes, and explici
 synthetic Run presentation. Shell context reuses loaded data; no new API reads,
 actions, lifecycle rules, provider/token behavior, dependencies or migrations.
 See [workspace UI conventions and review checklist](WORKSPACE_UI.md).
+
+Task 3.7 adds action-local AI summaries for extraction, revision and generation,
+with independent provider token categories and configured/reported model labels.
+A bounded read-only projection exposes existing immutable output counts, revised
+identity and inherited clarification; no migration/accounting change. Distributions
+are explicitly at creation, independent of later approval. Generation history uses
+the existing lazy bounded read route. See [AI action results](AI_ACTION_RESULTS.md).
 
 ## Product direction
 

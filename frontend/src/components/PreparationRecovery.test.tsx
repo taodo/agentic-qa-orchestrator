@@ -41,7 +41,7 @@ describe('explicit extraction recovery',()=>{
   it('shows honest unknown usage and nonretryable corrective guidance',()=>{
     render(<SourceExtraction source={{id:'s1',name:'PRD',latest_extraction:{...first,retryable:false,error_code:'MODEL_AUTHENTICATION',usage:undefined}}} projectId={p} campaignId={c} changed={changed()}/>);
     expect(screen.getByText(/Not eligible. Correct the source or provider configuration/)).toBeInTheDocument();
-    expect(screen.getByText('Provider total tokens: Unknown')).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Retry Extraction'})).not.toBeInTheDocument();expect(fetch).not.toHaveBeenCalled();
+    expect(screen.getByText(/Usage unavailable/)).toBeInTheDocument();expect(screen.getByText('Total').closest('div')).toHaveTextContent('Unavailable');expect(screen.queryByRole('button',{name:'Retry Extraction'})).not.toBeInTheDocument();expect(fetch).not.toHaveBeenCalled();
   });
   it('never retries pending/uncertain extraction and GET history never writes',async()=>{
     vi.mocked(fetch).mockResolvedValue(response(page([{...first,status:'STARTED',error_code:null}])));
@@ -81,7 +81,7 @@ describe('grounded clarification and version history',()=>{
     expect(JSON.parse(String(posts()[0][1]?.body))).toMatchObject({content:'<script>inert</script> Missing facts'});
     await act(async()=>pending.resolve(response(evidence,201)));
     expect(await screen.findByText(/Clarification saved/)).toBeInTheDocument();expect(document.querySelector('script')).toBeNull();expect(posts()).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button',{name:'Revise Requirement'}));await screen.findByText(/Requirement extraction complete/);expect(posts()).toHaveLength(2);expect(refresh).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button',{name:'Revise Requirement'}));await screen.findByText(/Requirement revision complete/);expect(posts()).toHaveLength(2);expect(refresh).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button',{name:'View Requirement version history'}));
     expect(await screen.findByText('Version 2 — Current Requirement')).toBeInTheDocument();expect(screen.getByText('Version 1 — Superseded Requirement')).toBeInTheDocument();
     expect(screen.getByText(/Historical content cannot be revised or approved/)).toBeInTheDocument();

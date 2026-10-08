@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import { Link, Outlet, useOutletContext, useSearchParams } from 'react-router-dom';
 import { campaignPath, getCampaign, getReadiness, getTraceability, listRequirements, listTestSpecifications, getRequirement, getTestSpecification } from '../api/campaigns';
-import type { CampaignView, InformationMarker, TestMarker, CampaignReadiness as Readiness } from '../api/campaignTypes';
+import type { CampaignView, InformationMarker, TestMarker, RequirementExtraction, CampaignReadiness as Readiness } from '../api/campaignTypes';
 import { useResource } from '../app/useResource';
 import { DateTime } from '../components/DateTime';
 import { LoadingState, EmptyState, ErrorState, TruncationNotice } from '../components/Feedback';
 import { CampaignStatusBadge } from '../components/CampaignStatusBadge';
 import { CampaignReadiness } from '../components/CampaignReadiness';
+import { AIActionSummary } from '../components/AIActionSummary';
 import { PreparationRecovery } from '../components/PreparationRecovery';
 import { PreparationSources } from '../components/PreparationSources';
 import { PreparationReview } from '../components/PreparationReview';
@@ -53,6 +54,7 @@ function Markers({ markers }: { markers: (InformationMarker | TestMarker)[] }) {
 }
 
 export function CampaignRequirementsPage() {
+  const [aiResult,setAIResult] = useState<{attempt:RequirementExtraction;kind:'extraction'|'revision'}>();
   const { projectId, campaignId, base, readiness } = useCampaign();
   const [params] = useSearchParams();
   const [feedback,setFeedback] = useState('');
@@ -67,7 +69,8 @@ export function CampaignRequirementsPage() {
   useEffect(() => { if (selectedId && requirements.data) document.getElementById(`requirement-${selectedId}`)?.focus(); }, [selectedId, requirements.data]);
   const traceability = useResource(useCallback(() => getTraceability(projectId, campaignId), [projectId, campaignId]));
   async function changed() { setFeedback('Requirement extraction completed; refreshing saved preparation data. Review remains explicit.'); await Promise.all([requirements.reload(), traceability.reload(), readiness.reload()]); heading.current?.focus(); }
-  return <><p role="status">{feedback}</p><section className="panel campaign-section"><div className="panel-heading"><h2 ref={heading} tabIndex={-1}>Requirements</h2><button disabled={requirements.loading} onClick={() => { void requirements.reload(); void traceability.reload(); }}>Refresh Requirements</button><a className="button button--primary" href="#specification-sources">Add PRD / Spec</a></div>
+  return <><p role="status">{feedback}</p><section id="requirement-results" className="panel campaign-section"><div className="panel-heading"><h2 ref={heading} tabIndex={-1}>Requirements</h2><button disabled={requirements.loading} onClick={() => { void requirements.reload(); void traceability.reload(); }}>Refresh Requirements</button><a className="button button--primary" href="#specification-sources">Add PRD / Spec</a></div>
+    {aiResult && <AIActionSummary attempt={aiResult.attempt} kind={aiResult.kind} base={base} />}
     <p className="hint">Review status reflects saved human approval. Source citations support traceability; they do not imply approval.</p>
     {requirements.loading ? <LoadingState>Loading Requirements…</LoadingState> : requirements.error ? <ErrorState error={requirements.error} retry={() => void requirements.reload()} /> : requirements.data && <>
       {selectedId && <p>Selected Requirement <Link to={`${base}/requirements`}>Clear selection</Link></p>}
@@ -80,7 +83,7 @@ export function CampaignRequirementsPage() {
           <p className="coverage-inline">Coverage: {trace ? <CampaignStatusBadge status={trace.coverage} /> : <span className="muted">Not included in the current traceability response.</span>} <Link to={`${base}/traceability`}>Inspect Traceability</Link></p>
           {req.acceptance_criteria.length > 0 && <details open className="primary-detail"><summary>Acceptance criteria</summary><ul>{req.acceptance_criteria.map(item => <li key={item.key}><strong>{item.key}</strong> <span className="prose">{item.text}</span></li>)}</ul></details>}
           <Markers markers={req.information_markers} />
-          <PreparationRecovery requirement={req} projectId={projectId} campaignId={campaignId} changed={changed} />
+          <PreparationRecovery requirement={req} projectId={projectId} campaignId={campaignId} changed={changed} onRevision={attempt=>setAIResult({attempt,kind:'revision'})} />
           <PreparationReview projectId={projectId} campaignId={campaignId} objectId={req.id} kind="Requirement" status={req.review_status} blocked={req.information_markers.length > 0} changed={async () => { setFeedback('Approval recorded.'); await Promise.all([requirements.reload(),traceability.reload(),readiness.reload()]); heading.current?.focus(); }} />
           <details><summary>Source evidence ({req.source_references.length})</summary><ul>{req.source_references.map((ref, index) => <li key={index}>
             <p>Source <code>{ref.source_id}</code> · lines {ref.start_line}–{ref.end_line}</p><blockquote className="prose">{ref.excerpt}</blockquote>
@@ -91,7 +94,7 @@ export function CampaignRequirementsPage() {
       {traceability.error && <div className="campaign-section"><p>Coverage is unavailable; Requirement review and source evidence remain visible.</p><ErrorState error={traceability.error} retry={() => void traceability.reload()} /></div>}
       {traceability.data?.requirements.truncated && <p className="hint">Coverage comes from a bounded traceability list; missing rows are unknown, not coverage gaps.</p>}
     </>}
-  </section><PreparationSources projectId={projectId} campaignId={campaignId} changed={changed} /></>;
+  </section><PreparationSources projectId={projectId} campaignId={campaignId} changed={changed} onResult={(attempt,kind)=>{if(attempt.status==='SUCCEEDED')setAIResult({attempt,kind});}} /></>;
 }
 
 export function CampaignTestsPage() {
@@ -108,7 +111,7 @@ export function CampaignTestsPage() {
   }, [projectId, campaignId, selectedId]));
   useEffect(() => { if (selectedId && tests.data) document.getElementById(`test-${selectedId}`)?.focus(); }, [selectedId, tests.data]);
   async function changed() { await Promise.all([tests.reload(),readiness.reload()]); heading.current?.focus(); }
-  return <><p role="status">{feedback}</p><section className="panel"><div className="panel-heading"><h2 ref={heading} tabIndex={-1}>Test Specifications</h2><button disabled={tests.loading} onClick={() => void tests.reload()}>Refresh Test Specifications</button></div>
+  return <><p role="status">{feedback}</p><section id="test-specification-results" className="panel"><div className="panel-heading"><h2 ref={heading} tabIndex={-1}>Test Specifications</h2><button disabled={tests.loading} onClick={() => void tests.reload()}>Refresh Test Specifications</button></div>
     <div className="actions"><a href="#test-import">Import Existing Tests</a><a href="#test-generation">Generate from Requirements</a></div>
     <p className="hint">Executor-neutral designs. Imported and AI-generated specifications share the same review rules.</p>
     {tests.loading ? <LoadingState>Loading Test Specifications…</LoadingState> : tests.error ? <ErrorState error={tests.error} retry={() => void tests.reload()} /> : tests.data && <>

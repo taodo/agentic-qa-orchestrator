@@ -1,6 +1,8 @@
 import { useCallback, useId, useState, type FormEvent } from 'react';
 import { extractRequirements, ingestSource, listSources, retryExtraction, listExtractionHistory } from '../api/campaigns';
 import type { CampaignSource, RequirementExtraction } from '../api/campaignTypes';
+import { AIActionSummary, type AIActionKind } from './AIActionSummary';
+import { campaignPath } from '../api/campaigns';
 import { useResource } from '../app/useResource';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { DateTime } from './DateTime';
@@ -10,15 +12,17 @@ export const textBytes = (value: string) => new TextEncoder().encode(value).leng
 export const validDocument = (name: string, content: string) => !!name.trim() && Array.from(name.trim()).length <= 200 && !!content.trim() && textBytes(content) <= 65536;
 export type PreparationScope = { projectId: string; campaignId: string; changed: () => Promise<void> };
 
-function AttemptSummary({attempt,latest=false}:{attempt:RequirementExtraction;latest?:boolean}) {
-  return <article className="evidence-record"><p>Attempt {attempt.attempt_number ?? 1} · {attempt.status} · {latest ? 'Latest/current attempt' : 'Historical attempt'}{attempt.error_code && <> · {attempt.error_code}</>}</p>
-    <p>Contract: {attempt.contract_version ?? 'Unavailable'} · Configured model: {attempt.configured_model ?? 'Unavailable'} · Provider model: {attempt.provider_model ?? 'Unavailable'}</p>
+function AttemptSummary({attempt,latest=false,kind,base,historical=false}:{attempt:RequirementExtraction;latest?:boolean;kind:AIActionKind;base:string;historical?:boolean}) {
+  return <article className="evidence-record"><p>Attempt {attempt.attempt_number ?? 1} · {attempt.status} · {latest ? 'Latest/current attempt' : 'Historical attempt'}</p>
+    <p>Contract: {attempt.contract_version ?? 'Unavailable'}</p>
     <p>Started: <DateTime value={attempt.started_at} /> · Finished: <DateTime value={attempt.finished_at} /></p>
-    <p>Provider total tokens: {attempt.usage?.total_tokens.total ?? 'Unknown'}{attempt.usage?.total_tokens.total == null && attempt.usage?.total_tokens.known_sum != null && <> (known partial: {attempt.usage.total_tokens.known_sum})</>}</p>
+    <AIActionSummary attempt={attempt} kind={kind} base={base} historical={historical} />
   </article>;
 }
 
-export function SourceExtraction({ source, projectId, campaignId, changed, initialLabel='Extract Requirements' }: PreparationScope & { source: Pick<CampaignSource,'id'|'name'|'latest_extraction'>;initialLabel?:string }) {
+export function SourceExtraction({ source, projectId, campaignId, changed, initialLabel='Extract Requirements', onResult }: PreparationScope & { source: Pick<CampaignSource,'id'|'name'|'latest_extraction'>;initialLabel?:string;onResult?:(result:RequirementExtraction)=>void }) {
+  const kind = initialLabel === 'Revise Requirement' ? 'revision' : 'extraction';
+  const base = campaignPath(projectId,campaignId);
   const action = usePreparationAction<RequirementExtraction>();
   const history = usePreparationAction<Awaited<ReturnType<typeof listExtractionHistory>>>();
   const candidates = [action.result,history.result?.items[0],source.latest_extraction].filter((a):a is RequirementExtraction => !!a);
@@ -27,6 +31,7 @@ export function SourceExtraction({ source, projectId, campaignId, changed, initi
   const label = action.busy ? 'Extracting…' : latest?.status === 'FAILED' ? 'Retry Extraction' : initialLabel;
   return <div className="preparation-action"><p className="hint">Extract from {source.name}. This explicit action may call the configured model; it is not a test run.</p>
     {(!latest || latest.status === 'FAILED' && latest.retryable) && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(() => latest ? retryExtraction(projectId,campaignId,latest.id) : extractRequirements(projectId,campaignId,source.id),async result => {
+      onResult?.(result);
       if(result.status === 'SUCCEEDED') await changed();
       if(history.result) await refreshHistory();
     })}>{label}</button>}
@@ -34,15 +39,15 @@ export function SourceExtraction({ source, projectId, campaignId, changed, initi
     {latest?.status === 'STARTED' && <p className="notice">An attempt is STARTED. Inspect saved history; do not replay uncertain provider work.</p>}
     {action.busy && <p role="status">Extracting Requirements from {source.name}…</p>}
     {action.error && <ErrorState error={action.error} />}
-    {action.result?.status === 'SUCCEEDED' && <p role="status">Requirement extraction complete. Review remains explicit.</p>}
-    {latest && <AttemptSummary attempt={latest} latest />}
+    {action.result?.status === 'SUCCEEDED' && <p role="status">{kind === 'revision' ? 'Requirement revision complete.' : 'Requirement extraction complete.'} Review remains explicit.</p>}
+    {latest && !(onResult && action.result?.status === 'SUCCEEDED') && <AttemptSummary attempt={latest} latest kind={kind} base={base} />}
     <button disabled={history.busy || action.busy} onClick={() => void refreshHistory()}>{history.busy ? 'Loading extraction history…' : history.result ? 'Refresh extraction history' : 'View extraction history'}</button>
     {history.error && <ErrorState error={history.error} />}
-    {history.result && <><h4>Extraction attempt history</h4>{history.result.items.map(a => <AttemptSummary key={a.id} attempt={a} latest={a.is_latest ?? a.id === latest?.id} />)}<TruncationNotice truncated={history.result.truncated} /></>}
+    {history.result && <><h4>Extraction attempt history</h4>{history.result.items.map(a => <AttemptSummary key={a.id} attempt={a} latest={a.is_latest ?? a.id === latest?.id} kind={kind} base={base} historical />)}<TruncationNotice truncated={history.result.truncated} /></>}
   </div>;
 }
 
-export function PreparationSources({ projectId, campaignId, changed }: PreparationScope) {
+export function PreparationSources({ projectId, campaignId, changed, onResult }: PreparationScope & {onResult?:(attempt:RequirementExtraction,kind:'extraction'|'revision')=>void}) {
   const sources = useResource(useCallback(() => listSources(projectId, campaignId), [projectId, campaignId]));
   const action = usePreparationAction<CampaignSource>();
   const [validation, setValidation] = useState('');
@@ -72,7 +77,7 @@ export function PreparationSources({ projectId, campaignId, changed }: Preparati
       <p>{source.source_type} · <strong>{source.status}</strong>{source.error_code && <> · {source.error_code}</>}</p>
       <p className="hint">{source.original_bytes} original bytes · {source.normalized_chars} normalized characters · {source.line_count} lines · <DateTime value={source.created_at} /></p>
       {source.clarification_requirement_id && <p className="hint">Clarification addendum for Requirement {source.clarification_requirement_id}. Revision remains a separate explicit model action.</p>}
-      {source.status === 'INGESTED' && source.source_type !== 'PDF' ? <SourceExtraction source={source} projectId={projectId} campaignId={campaignId} changed={changed} initialLabel={source.clarification_requirement_id ? 'Revise Requirement' : 'Extract Requirements'} /> : <p className="notice">Extraction is unavailable for rejected or unsupported sources.</p>}
+      {source.status === 'INGESTED' && source.source_type !== 'PDF' ? <SourceExtraction source={source} projectId={projectId} campaignId={campaignId} changed={changed} initialLabel={source.clarification_requirement_id ? 'Revise Requirement' : 'Extract Requirements'} onResult={onResult ? attempt=>onResult(attempt,source.clarification_requirement_id ? 'revision' : 'extraction') : undefined} /> : <p className="notice">Extraction is unavailable for rejected or unsupported sources.</p>}
     </li>)}</ul>{sources.data && <TruncationNotice truncated={sources.data.truncated} />}
   </section>;
 }
