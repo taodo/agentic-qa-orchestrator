@@ -9,6 +9,8 @@ import { TaskForm } from '../components/Forms';
 import { CampaignForm } from '../components/CampaignForm';
 import { CampaignStatusBadge } from '../components/CampaignStatusBadge';
 import { StatusBadge } from '../components/StatusBadge';
+import { PageHeader } from '../components/WorkspaceUI';
+import { useWorkspaceContext } from '../app/WorkspaceContext';
 import { RuntimeReadiness } from '../components/RuntimeReadiness';
 
 function ProjectCampaigns({ projectId }: { projectId: string }) {
@@ -39,8 +41,9 @@ function LegacyTasks({ projectId }: { projectId: string }) {
 
 export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const project = useResource(useCallback(() => getProject(projectId), [projectId]));
+  useWorkspaceContext(projectId);
   const [legacyOpen, setLegacyOpen] = useState(false);
-  return <><header className="page-header"><Link to="/projects" className="muted">← Projects</Link><h1>{project.data?.name || 'Project'}</h1></header>
+  return <><PageHeader title={project.data?.name || 'Project'} eyebrow="Project / QA Campaigns" breadcrumb={<Link to="/projects" className="muted">← Projects</Link>} />
     {project.loading ? <LoadingState>Loading Project…</LoadingState> : project.error ? <ErrorState error={project.error} retry={() => void project.reload()} /> : project.data && <>
       <section className="panel project-summary"><p className="mono">{project.data.key}</p><p className="prose">{project.data.description || 'No description provided.'}</p>
         <dl className="metadata"><div><dt>Created</dt><dd><DateTime value={project.data.created_at} /></dd></div><div><dt>Updated</dt><dd><DateTime value={project.data.updated_at} /></dd></div></dl></section>

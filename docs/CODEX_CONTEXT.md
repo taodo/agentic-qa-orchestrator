@@ -41,7 +41,7 @@ preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
 Campaign executor exists. Migration head is 0010; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.5
+## Current Phase 3 increment: Task 3.6
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -88,6 +88,13 @@ Tests from coverage/readiness/new Run selection until replacements are explicitl
 reviewed. Initial Extract stays idempotent; reads never invoke providers. Migration
 0010 preserves old attempts and refuses audit-destructive downgrade. No synthetic
 executor change. See [preparation recovery](PREPARATION_RECOVERY.md).
+
+Task 3.6 adds a restrained dark product UI foundation: contextual desktop sidebar,
+shared headings/status badges, current preparation content before secondary audit
+history, read-only next-step guidance from existing readiness codes, and explicit
+synthetic Run presentation. Shell context reuses loaded data; no new API reads,
+actions, lifecycle rules, provider/token behavior, dependencies or migrations.
+See [workspace UI conventions and review checklist](WORKSPACE_UI.md).
 
 ## Product direction
 

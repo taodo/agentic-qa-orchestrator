@@ -26,7 +26,7 @@ export function SourceExtraction({ source, projectId, campaignId, changed, initi
   async function refreshHistory() { await history.run(() => listExtractionHistory(projectId,campaignId,source.id)); }
   const label = action.busy ? 'Extracting…' : latest?.status === 'FAILED' ? 'Retry Extraction' : initialLabel;
   return <div className="preparation-action"><p className="hint">Extract from {source.name}. This explicit action may call the configured model; it is not a test run.</p>
-    {(!latest || latest.status === 'FAILED' && latest.retryable) && <button disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(() => latest ? retryExtraction(projectId,campaignId,latest.id) : extractRequirements(projectId,campaignId,source.id),async result => {
+    {(!latest || latest.status === 'FAILED' && latest.retryable) && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(() => latest ? retryExtraction(projectId,campaignId,latest.id) : extractRequirements(projectId,campaignId,source.id),async result => {
       if(result.status === 'SUCCEEDED') await changed();
       if(history.result) await refreshHistory();
     })}>{label}</button>}
@@ -56,7 +56,7 @@ export function PreparationSources({ projectId, campaignId, changed }: Preparati
   }
   const rows = sources.data?.items ?? [];
   const available = action.result && !rows.some(row => row.id === action.result!.id) ? [action.result, ...rows] : rows;
-  return <section className="panel campaign-section" aria-labelledby={id+'heading'}><h2 id={id+'heading'}>Add PRD / Spec</h2>
+  return <section id="specification-sources" className="panel campaign-section" aria-labelledby={id+'heading'}><h2 id={id+'heading'}>Add PRD / Spec</h2>
     <p>Plain text (.txt) and Markdown (.md) are supported. PDF is not supported yet.</p>
     <p className="hint">Paste or type document text. Up to 65,536 UTF-8 bytes / 4,096 lines; backend validation is authoritative. Content is inert text. Adding a source never starts extraction.</p>
     <form onSubmit={submit} aria-label="Add specification"><fieldset disabled={action.busy}><legend>Specification source</legend>

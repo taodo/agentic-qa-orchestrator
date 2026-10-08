@@ -7,21 +7,23 @@ import { createRun, getRun, listRuns, listRunRequirements, listRunTests, runsPat
 import type { QARun } from '../api/runTypes';
 import { DateTime } from '../components/DateTime';
 import { ErrorState, EmptyState, LoadingState, TruncationNotice } from '../components/Feedback';
+import { StateBadge } from '../components/StatusBadge';
+import { SectionHeader } from '../components/WorkspaceUI';
 import { CampaignReadiness } from '../components/CampaignReadiness';
 
-function SyntheticNotice() { return <aside className="notice"><strong>Synthetic execution</strong><p>No external target is tested in this mode.</p><p>Deterministic demo fixture: odd snapshot positions PASS, even positions FAIL. Results demonstrate lifecycle behavior, not target application correctness.</p></aside>; }
-function RunSummary({ run }: { run: QARun }) { return <dl className="metadata"><div><dt>Execution status</dt><dd>{run.execution_status}</dd></div><div><dt>QA outcome</dt><dd>{run.qa_outcome}</dd></div>
-  <div><dt>Requirement count</dt><dd>{run.requirement_count}</dd></div><div><dt>Test count</dt><dd>{run.test_count}</dd></div><div><dt>Created</dt><dd><DateTime value={run.created_at} /></dd></div><div><dt>Note</dt><dd>{run.note ?? 'No note'}</dd></div></dl>; }
+function SyntheticNotice() { return <aside className="notice synthetic-notice"><strong>Synthetic execution</strong><p>No external target is tested in this mode.</p><p>Deterministic demo fixture: odd snapshot positions PASS, even positions FAIL. Results demonstrate lifecycle behavior, not target application correctness.</p></aside>; }
+function RunSummary({ run }: { run: QARun }) { return <dl className="metadata"><div><dt>Execution status</dt><dd><StateBadge status={run.execution_status} /></dd></div><div><dt>QA outcome</dt><dd><StateBadge status={run.qa_outcome} /></dd></div>
+  <div><dt>Requirement count</dt><dd>{run.requirement_count}</dd></div><div><dt>Test count</dt><dd>{run.test_count}</dd></div><div><dt>Created</dt><dd><DateTime value={run.created_at} /></dd></div><div><dt>Started</dt><dd><DateTime value={run.started_at} /></dd></div><div><dt>Completed</dt><dd><DateTime value={run.completed_at} /></dd></div><div><dt>Note</dt><dd>{run.note ?? 'No note'}</dd></div></dl>; }
 
 export function CampaignRunsPage() {
   const { projectId:p, campaignId:c, base, readiness } = useCampaign();
   const runs = useResource(useCallback(() => listRuns(p,c),[p,c]));
-  return <><h2>Runs</h2><SyntheticNotice /><div className="panel-heading"><h3>Create QA Run</h3><button disabled={readiness.loading} onClick={() => void readiness.reload()}>Refresh readiness</button></div>
+  return <><SectionHeader title="Runs" /><SyntheticNotice /><div className="panel-heading"><h3>Create QA Run</h3><button disabled={readiness.loading} onClick={() => void readiness.reload()}>Refresh readiness</button></div>
     {readiness.loading ? <LoadingState>Loading readiness…</LoadingState> : readiness.error ? <ErrorState error={readiness.error} retry={() => void readiness.reload()} /> : readiness.data &&
       (readiness.data.status === 'READY' ? <CreateRunForm p={p} c={c} /> : <><p>Campaign is NOT_READY. Resolve preparation blockers before creating a Run.</p><Link to={`${base}/readiness`}>Inspect Readiness</Link><CampaignReadiness value={readiness.data} base={base} /></>)}
     <section className="panel"><div className="panel-heading"><h3>Saved Runs</h3><button disabled={runs.loading} onClick={() => void runs.reload()}>Refresh Runs</button></div>
       {runs.loading ? <LoadingState>Loading Runs…</LoadingState> : runs.error ? <ErrorState error={runs.error} retry={() => void runs.reload()} /> : runs.data && <>
-        {!runs.data.items.length ? <EmptyState>No QA Runs yet.</EmptyState> : <ul className="preparation-records">{runs.data.items.map(run => <li key={run.id} className="evidence-record"><Link to={runsPath(p,c,run.id)}>RUN-{String(run.run_number).padStart(3,'0')}</Link><p className="mono">{run.id}</p><RunSummary run={run} /><p>Snapshot hash: <code title={run.snapshot_hash}>{run.snapshot_hash.slice(0,16)}…</code></p></li>)}</ul>}
+        {!runs.data.items.length ? <EmptyState>No QA Runs yet.</EmptyState> : <ul className="preparation-records">{runs.data.items.map(run => <li key={run.id} className="evidence-record run-record"><Link className="record-title" to={runsPath(p,c,run.id)}>RUN-{String(run.run_number).padStart(3,'0')}</Link><p className="mono muted technical-id">{run.id}</p><RunSummary run={run} /><p>Snapshot hash: <code title={run.snapshot_hash}>{run.snapshot_hash.slice(0,16)}…</code></p></li>)}</ul>}
         <TruncationNotice truncated={runs.data.truncated} /></>}
     </section></>;
 }
@@ -32,7 +34,7 @@ function CreateRunForm({ p,c }: { p:string;c:string }) {
   const [intent,setIntent] = useState<{ idempotency_key: string; note?: string }>();
   const [note,setNote] = useState('');
   const authFailed = action.error?.code === 'HOST_AUTH_REQUIRED';
-  return <form onSubmit={event => { event.preventDefault(); if (authFailed) return; void action.run(() => {
+  return <form className="panel create-run-form" onSubmit={event => { event.preventDefault(); if (authFailed) return; void action.run(() => {
     const body = intent ?? {idempotency_key:crypto.randomUUID(), ...(note ? {note} : {})};
     setIntent(body);
     return createRun(p,c,body);
@@ -56,30 +58,30 @@ function RunDetail({runId}:{runId:string}) {
   const tests = useResource(useCallback(() => listRunTests(p,c,runId,testPosition),[p,c,runId,testPosition]));
   const action = usePreparationAction<QARun>();
   async function refresh() { await Promise.all([run.reload(),tests.reload()]); }
-  return <><Link to={`${base}/runs`}>← Runs</Link><h2>QA Run detail</h2><SyntheticNotice />
+  return <><Link to={`${base}/runs`}>← Runs</Link><SectionHeader title="QA Run detail" /><SyntheticNotice />
     <p>This Run uses the immutable preparation snapshot captured when the Run was created. Later Campaign changes do not alter this Run.</p>
     <button disabled={run.loading || action.busy} onClick={() => void refresh()}>Refresh Run and results</button>
     {action.error && <ErrorState error={action.error} />}
-    {run.loading ? <LoadingState>Loading Run…</LoadingState> : run.error ? <ErrorState error={run.error} retry={() => void refresh()} /> : run.data && <section className="panel"><h3>RUN-{String(run.data.run_number).padStart(3,'0')}</h3><p className="mono">{run.data.id}</p><RunSummary run={run.data} />
+    {run.loading ? <LoadingState>Loading Run…</LoadingState> : run.error ? <ErrorState error={run.error} retry={() => void refresh()} /> : run.data && <section className="panel run-summary"><h3>RUN-{String(run.data.run_number).padStart(3,'0')}</h3><p className="mono muted technical-id">{run.data.id}</p><RunSummary run={run.data} />
       <p>Snapshot hash: <code>{run.data.snapshot_hash}</code></p><p>Readiness at creation: {run.data.readiness_at_creation.status}</p><p>Captured Campaign: {run.data.campaign_snapshot.name}</p>
       {run.data.execution_error_code && <p role="alert">{run.data.execution_error_code}: Synthetic execution could not complete. Earlier results remain saved.</p>}
-      {run.data.execution_status === 'CREATED' && <button disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(async () => {
+      {run.data.execution_status === 'CREATED' && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(async () => {
         try { return await startRun(p,c,runId); } catch (error) { await refresh(); throw error; }
       }, async () => { await refresh(); })}>{action.busy ? 'Running synthetic execution…' : 'Start Synthetic Run'}</button>}
       {action.busy && <p role="status">Results refresh when synchronous execution completes.</p>}
       {run.data.execution_status === 'RUNNING' && <p>Execution is RUNNING. Refresh to inspect saved progress. Restart/resume is unavailable.</p>}
     </section>}
-    <section className="panel"><h3>Requirement snapshot</h3>{reqs.loading ? <LoadingState>Loading Requirement snapshot…</LoadingState> : reqs.error ? <ErrorState error={reqs.error} retry={() => void reqs.reload()} /> : reqs.data && <>
+    <section className="panel campaign-section"><h3>Requirement snapshot</h3>{reqs.loading ? <LoadingState>Loading Requirement snapshot…</LoadingState> : reqs.error ? <ErrorState error={reqs.error} retry={() => void reqs.reload()} /> : reqs.data && <>
       {!reqs.data.items.length && <EmptyState>No Requirement snapshots on this page.</EmptyState>}
       {reqs.data.items.map(item => <article key={item.id} className="evidence-record"><h4>{item.content.title}</h4><p>{item.content.logical_key}</p><p className="prose">{item.content.description}</p><ul>{item.content.acceptance_criteria.map(ac => <li key={ac.key}>{ac.key}: {ac.text}</li>)}</ul>
         <details><summary>Frozen source and approval evidence</summary><p>Original Requirement: {item.original_requirement_id}</p><p>Snapshot identity: {item.id}</p><p>Approval hash: {item.approval.content_hash}</p>{item.content.source_references.map((ref,i) => <blockquote key={i}>Source {ref.source_id}, lines {ref.start_line}–{ref.end_line}: {ref.excerpt}</blockquote>)}</details></article>)}
       <TruncationNotice truncated={reqs.data.truncated} />{reqs.data.truncated && <button onClick={() => setReqPosition(reqs.data!.items.at(-1)!.position)}>Next Requirement snapshot page</button>}{reqPosition > 0 && <button onClick={() => setReqPosition(0)}>First Requirement snapshot page</button>}
     </>}</section>
-    <section className="panel"><h3>Test snapshot and synthetic results</h3>{tests.loading ? <LoadingState>Loading Test snapshot…</LoadingState> : tests.error ? <ErrorState error={tests.error} retry={() => void tests.reload()} /> : tests.data && <>
+    <section className="panel campaign-section"><h3>Test snapshot and synthetic results</h3>{tests.loading ? <LoadingState>Loading Test snapshot…</LoadingState> : tests.error ? <ErrorState error={tests.error} retry={() => void tests.reload()} /> : tests.data && <>
       {!tests.data.items.length && <EmptyState>No Test snapshots on this page.</EmptyState>}
-      {tests.data.items.map(item => <article key={item.id} className="evidence-record"><h4>{item.position}. {item.content.title}</h4><p>{item.content.logical_key}</p><p>Synthetic result — generated by the demo execution adapter. No external application was tested.</p>
-        <dl className="metadata"><div><dt>Test execution status</dt><dd>{item.execution_status}</dd></div><div><dt>QA result</dt><dd>{item.qa_result}</dd></div></dl>
-        <p>Overall expected behavior: {item.content.overall_expected_result}</p><h5>Steps and expected behavior snapshot</h5><ol>{item.content.steps.map(step => <li key={step.index}>{step.action} — Expected: {step.expected}</li>)}</ol><h5>Required evidence description</h5><ul>{item.content.required_evidence.map((e,i) => <li key={i}>{e}</li>)}</ul>
+      {tests.data.items.map(item => <article key={item.id} className="evidence-record run-test-result" data-outcome={item.qa_result}><h4>{item.position}. {item.content.title}</h4><p>{item.content.logical_key}</p><p>Synthetic result — generated by the demo execution adapter. No external application was tested.</p>
+        <dl className="metadata"><div><dt>Test execution status</dt><dd><StateBadge status={item.execution_status} /></dd></div><div><dt>QA result</dt><dd><StateBadge status={item.qa_result} /></dd></div></dl>
+        <p>Overall expected behavior: {item.content.overall_expected_result}</p><h5>Steps and expected behavior snapshot</h5><ol className="test-steps">{item.content.steps.map(step => <li key={step.index}>{step.action} — Expected: {step.expected}</li>)}</ol><h5>Required evidence description</h5><ul>{item.content.required_evidence.map((e,i) => <li key={i}>{e}</li>)}</ul>
         <details><summary>Frozen test identity and provenance</summary><p>Original test: {item.original_test_specification_id}</p><p>Snapshot: {item.id}</p><p>Approval hash: {item.approval.content_hash}</p><p>Origin: {item.content.provenance.origin}</p><p>Linked Requirement snapshots: {item.linked_requirement_snapshot_ids.join(', ')}</p></details></article>)}
       <TruncationNotice truncated={tests.data.truncated} />{tests.data.truncated && <button onClick={() => setTestPosition(tests.data!.items.at(-1)!.position)}>Next Test snapshot page</button>}{testPosition > 0 && <button onClick={() => setTestPosition(0)}>First Test snapshot page</button>}
     </>}</section></>;

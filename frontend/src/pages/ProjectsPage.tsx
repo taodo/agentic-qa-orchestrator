@@ -5,10 +5,11 @@ import { useResource } from '../app/useResource';
 import { LoadingState, EmptyState, ErrorState, TruncationNotice } from '../components/Feedback';
 import { DateTime } from '../components/DateTime';
 import { ProjectForm } from '../components/Forms';
+import { PageHeader } from '../components/WorkspaceUI';
 import { ProductHelp } from '../components/ProductHelp';
 export function ProjectsPage() {
   const projects = useResource(useCallback(listProjects, []));
-  return <><header className="page-header"><p className="eyebrow">Workspace / Projects</p><h1>Projects</h1><p className="muted">Prepare QA campaigns from requirements and test specifications. Open a Project to create a Campaign and inspect review, traceability and readiness.</p></header>
+  return <><PageHeader title="Projects" eyebrow="Workspace / Projects" description="Prepare QA campaigns from requirements and test specifications. Open a Project to create a Campaign and inspect review, traceability and readiness." />
     <ProductHelp />
     <div className="content-grid"><section className="panel"><div className="panel-heading"><h2>Project registry</h2><button type="button" disabled={projects.loading} onClick={() => void projects.reload()}>Refresh</button></div>
       {projects.loading && <LoadingState>Loading Projects…</LoadingState>}
