@@ -19,6 +19,7 @@ def test_0007_upgrade_check_downgrade_preserves_all_0006_data(review):
     original = snapshot()
     command.upgrade(config, '0007')
     assert snapshot() == original and set(inspect(engine).get_table_names()) == names | NEW | {'alembic_version'}
+    command.upgrade(config, "head")
     command.check(config)
     engine.dispose()
     assert app.get_campaign_requirement(p.id, c.id, req.id).model_dump() == req.model_dump()
@@ -40,7 +41,7 @@ def test_downgrade_cannot_silently_delete_approval_evidence(review):
     assert app.get_campaign_requirement_review(p.id, c.id, req.id) == receipt
     assert app.get_campaign_readiness(p.id, c.id).status == 'READY'
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0007'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0008'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 

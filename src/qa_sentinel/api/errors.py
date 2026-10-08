@@ -7,6 +7,13 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.CAMPAIGN_NOT_READY_FOR_RUN: (409, "Campaign preparation is not READY for a QA Run"),
+    Code.RUN_NOT_FOUND: (404, "QA Run not found in the requested Campaign"),
+    Code.RUN_CAMPAIGN_MISMATCH: (409, "QA Run does not belong to the requested Campaign"),
+    Code.INVALID_IDEMPOTENCY_KEY: (422, "Invalid Run idempotency key"),
+    Code.RUN_IDEMPOTENCY_CONFLICT: (409, "Run idempotency key conflicts with the original request intent"),
+    Code.RUN_SNAPSHOT_SIZE_LIMIT: (413, "Complete Run snapshot exceeds supported bounds"),
+    Code.RUN_REQUEST_SIZE_LIMIT: (413, "Run request exceeds supported size"),
     Code.REVIEW_SIZE_LIMIT: (413, "Review request exceeds supported size"),
     Code.REVIEW_NOT_REVIEWABLE: (409, "Object is not ready for explicit approval"),
     Code.REVIEW_CONFLICT: (409, "Approval intent conflicts with the immutable review evidence"),
@@ -63,6 +70,10 @@ async def application_error_handler(request, exc: ApplicationError):
 
 
 async def validation_error_handler(request, exc: RequestValidationError):
+    from .source_body_limit import RUN_PATH
+    if request.method == "POST" and RUN_PATH.fullmatch(request.url.path) and any(
+            e["loc"] == ("body", "idempotency_key") for e in exc.errors()):
+        return error_response(422, "INVALID_IDEMPOTENCY_KEY", "Invalid Run idempotency key")
     return error_response(422, "REQUEST_VALIDATION_ERROR", "Request validation failed")
 
 

@@ -5,6 +5,8 @@ from uuid import UUID, uuid5, NAMESPACE_URL
 from pydantic import ValidationError
 from qa_sentinel.domain.campaign_review import ApprovalCommand, ReviewError, assess_readiness
 from .campaign_review import CampaignTraceability, ReviewState, RequirementTrace, TraceLink, Readiness
+from qa_sentinel.domain.qa_run import (CreateQARun, QARun, QARunRequirement, QARunTest,
+    prepare_run, SnapshotSizeError)
 from qa_sentinel.domain.project import Project
 from qa_sentinel.domain.campaign import QACampaign, InvalidCampaignTransition
 from qa_sentinel.domain.campaign_content import (RequirementExtraction, CampaignRequirement,
@@ -331,6 +333,79 @@ class QASentinelApplication:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             campaign = self._campaign(uow, project_id, campaign_id)
             return assess_readiness(campaign, uow.campaign_reviews.readiness_counts(project_id, campaign_id))
+
+    def create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None) -> QARun:
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        try:
+            command = CreateQARun(idempotency_key=idempotency_key, note=note)
+        except ValidationError as error:
+            code = Code.INVALID_IDEMPOTENCY_KEY if any(e["loc"][0] == "idempotency_key" for e in error.errors()) else Code.INVALID_INPUT
+            raise ApplicationError(code) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            # Reserve before any preparation read: one consistent, atomic SQLite
+            # snapshot and protected numbering. No external execution in this UoW.
+            uow.session.connection(execution_options={"qa_job_write": True})
+            campaign = self._campaign(uow, project_id, campaign_id)
+            existing = uow.qa_runs.by_key(project_id, campaign_id, command.idempotency_key)
+            if existing is not None:
+                if existing.note != command.note:
+                    raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
+                return existing  # Replay original intent, even if preparation changed.
+            readiness = assess_readiness(campaign, uow.campaign_reviews.readiness_counts(project_id, campaign_id))
+            if readiness.status != "READY":
+                raise ApplicationError(Code.CAMPAIGN_NOT_READY_FOR_RUN)
+            try:
+                requirements, tests = uow.qa_runs.approved_content(project_id, campaign_id)
+                # Validate full approval versions, not only SQL readiness counts.
+                reqs = [(r, uow.campaign_reviews.evidence(r, "REQUIREMENT")) for r in requirements]
+                specs = [(t, uow.campaign_reviews.evidence(t, "TEST_SPECIFICATION")) for t in tests]
+                prepared = prepare_run(campaign, readiness, command, uow.qa_runs.next_number(campaign_id), reqs, specs)
+                uow.qa_runs.add(prepared)
+            except SnapshotSizeError:
+                raise ApplicationError(Code.RUN_SNAPSHOT_SIZE_LIMIT) from None
+            except ReviewError:
+                raise ApplicationError(Code.REVIEW_EVIDENCE_INVALID) from None
+            uow.commit()
+            return prepared.run
+
+    def _qa_run(self, uow, project_id, campaign_id, run_id):
+        self._campaign(uow, project_id, campaign_id)
+        run = uow.qa_runs.get(project_id, campaign_id, run_id)
+        if run is None:
+            # Distinguish a Campaign mismatch only inside the already validated
+            # Project scope; foreign Project identities remain indistinguishable.
+            if uow.qa_runs.exists_in_project(project_id, run_id):
+                raise ApplicationError(Code.RUN_CAMPAIGN_MISMATCH)
+            raise ApplicationError(Code.RUN_NOT_FOUND)
+        return run
+
+    def get_qa_run(self, project_id, campaign_id, run_id) -> QARun:
+        project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            return self._qa_run(uow, project_id, campaign_id, run_id)
+
+    def list_qa_runs(self, project_id, campaign_id, *, limit=50) -> CollectionPage[QARun]:
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        limit = list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            return page(uow.qa_runs.list(project_id, campaign_id, limit), limit, QARun)
+
+    def _qa_run_entries(self, project_id, campaign_id, run_id, kind, limit, after_position):
+        project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
+        limit = list_limit(limit)
+        if type(after_position) is not int or not 0 <= after_position <= 1000:
+            raise ApplicationError(Code.INVALID_INPUT)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            run = self._qa_run(uow, project_id, campaign_id, run_id)
+            contract = QARunTest if kind == "tests" else QARunRequirement
+            return page(uow.qa_runs.entries(run, kind, limit, after_position), limit, contract)
+
+    def list_qa_run_tests(self, project_id, campaign_id, run_id, *, limit=50, after_position=0) -> CollectionPage[QARunTest]:
+        return self._qa_run_entries(project_id, campaign_id, run_id, "tests", limit, after_position)
+
+    def list_qa_run_requirements(self, project_id, campaign_id, run_id, *, limit=50, after_position=0) -> CollectionPage[QARunRequirement]:
+        return self._qa_run_entries(project_id, campaign_id, run_id, "requirements", limit, after_position)
 
     def get_campaign_model_usage(self, project_id, campaign_id, *, limit=200) -> CampaignModelUsage:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)

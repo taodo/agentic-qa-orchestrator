@@ -14,9 +14,12 @@ from .models import (
     ArtifactView, TestRunView, ErrorView, DecisionView, GateEvaluationView,
 )
 
+from qa_sentinel.domain.qa_run import CreateQARun, QARun, QARunRequirement, QARunTest
+
 from .campaign_review import ApprovalCommand, ReviewState, CampaignTraceability, Readiness
 
 __all__ = [
+    "CreateQARun", "QARun", "QARunRequirement", "QARunTest",
     "ApprovalCommand", "ReviewState", "CampaignTraceability", "Readiness",
     "TestImportView", "TestImportDetail", "TestSpecificationView", "TestGenerationView", "ImportFormat",
     "QASentinelApplication", "ApplicationError", "ApplicationErrorCode", "ProjectExecutionBundle",

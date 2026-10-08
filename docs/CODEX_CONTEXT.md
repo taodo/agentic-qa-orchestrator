@@ -36,10 +36,11 @@ Do not assume every historical capability is part of the future product directio
 Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources,
 structured Requirements, imported/generated executor-neutral Test Specifications,
 explicit human approval receipts and scoped derived traceability/readiness.
-Campaign APPROVED remains independent of readiness READY. No QA Run or campaign
-executor exists. Migration head is 0007; see [review contracts](CAMPAIGN_REVIEW.md).
+Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
+preparation snapshots; no Campaign executor exists. Migration head is 0008; see
+[review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.2
+## Current Phase 3 increment: Task 3.3
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -53,9 +54,18 @@ completion. Contextual Campaign transitions preserve DRAFT → READY_FOR_REVIEW 
 APPROVED independently of derived READY/NOT_READY. Scoped reads refresh after writes;
 traceability and name decoration remain independent, bounded resources.
 
-No Campaign Run, execution, PASS/FAIL, source mutation or auth redesign is added.
+Task 3.2 adds no Campaign Run, execution, PASS/FAIL, source mutation or auth redesign.
 Legacy Tasks/Operations and trusted local interpreter boundaries remain unchanged.
-Task 3.3 owns its own future QA Run domain/snapshot contract, not execution here.
+Task 3.3 adds first-class Project/Campaign-owned QARun metadata and immutable
+Requirement/Test snapshots through migration 0008. Create requires accepted READY
+readiness and full approval-hash validation; it performs no model/tool/executor or
+legacy Task/job action. New Run CREATED/NOT_EVALUATED and test
+NOT_STARTED/NOT_EVALUATED are independent progress/outcome contracts. Snapshot
+hashes are versioned audit identities; caller keys handle retries, distinct keys
+allow intentional duplicate preparation. Accepted SQLite writer reservation protects
+atomic snapshots and unique Campaign run numbering. Bounded stored snapshot reads
+remain independent of later preparation changes. See [QA Runs](QA_RUNS.md).
+Task 3.4 owns Run lifecycle UX / synthetic execution shell; it is not implemented here.
 
 ## Product direction
 
