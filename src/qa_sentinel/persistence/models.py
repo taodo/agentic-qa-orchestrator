@@ -451,3 +451,76 @@ class TestSpecificationReviewRow(Base):
     note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     approved_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
+class QARunRow(Base):
+    __tablename__ = "qa_runs"
+    __table_args__ = (
+        ForeignKeyConstraint(["campaign_id", "project_id"], ["qa_campaigns.id", "qa_campaigns.project_id"], name="fk_qa_runs_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("id", "campaign_id", "project_id", name="uq_qa_runs_owner"),
+        UniqueConstraint("campaign_id", "run_number", name="uq_qa_runs_number"),
+        UniqueConstraint("campaign_id", "idempotency_key", name="uq_qa_runs_idempotency"),
+        CheckConstraint("run_number >= 1 AND requirement_count BETWEEN 1 AND 1000 AND test_count BETWEEN 1 AND 1000", name="ck_qa_runs_counts"),
+        CheckConstraint("length(idempotency_key) BETWEEN 1 AND 128 AND length(snapshot_hash)=64 AND (note IS NULL OR length(note) BETWEEN 1 AND 1000)", name="ck_qa_runs_bounds"),
+        CheckConstraint("snapshot_version='qa-run-snapshot-v1'", name="ck_qa_runs_version"),
+        CheckConstraint("execution_status IN ('CREATED','QUEUED','RUNNING','COMPLETED','STOPPED','FAILED')", name="ck_qa_runs_execution"),
+        CheckConstraint("qa_outcome IN ('NOT_EVALUATED','PASS','FAIL','PARTIAL')", name="ck_qa_runs_outcome"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    snapshot_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    campaign_snapshot: Mapped[Any] = mapped_column(JSON, nullable=False)
+    readiness_at_creation: Mapped[Any] = mapped_column(JSON, nullable=False)
+    requirement_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    test_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    execution_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    qa_outcome: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
+
+
+class QARunRequirementRow(Base):
+    __tablename__ = "qa_run_requirements"
+    __table_args__ = (
+        ForeignKeyConstraint(["run_id", "campaign_id", "project_id"], ["qa_runs.id", "qa_runs.campaign_id", "qa_runs.project_id"], name="fk_qa_run_requirements_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("run_id", "original_requirement_id", name="uq_qa_run_requirements_original"),
+        UniqueConstraint("run_id", "position", name="uq_qa_run_requirements_order"),
+        CheckConstraint("position BETWEEN 1 AND 1000", name="ck_qa_run_requirements_position"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    original_requirement_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[Any] = mapped_column(JSON, nullable=False)
+    approval: Mapped[Any] = mapped_column(JSON, nullable=False)
+
+
+class QARunTestRow(Base):
+    __tablename__ = "qa_run_tests"
+    __table_args__ = (
+        ForeignKeyConstraint(["run_id", "campaign_id", "project_id"], ["qa_runs.id", "qa_runs.campaign_id", "qa_runs.project_id"], name="fk_qa_run_tests_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("run_id", "original_test_specification_id", name="uq_qa_run_tests_original"),
+        UniqueConstraint("run_id", "position", name="uq_qa_run_tests_order"),
+        CheckConstraint("position BETWEEN 1 AND 1000", name="ck_qa_run_tests_position"),
+        CheckConstraint("execution_status IN ('NOT_STARTED','RUNNING','COMPLETED','BLOCKED')", name="ck_qa_run_tests_execution"),
+        CheckConstraint("qa_result IN ('NOT_EVALUATED','PASS','FAIL','SKIP')", name="ck_qa_run_tests_result"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    original_test_specification_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    content: Mapped[Any] = mapped_column(JSON, nullable=False)
+    approval: Mapped[Any] = mapped_column(JSON, nullable=False)
+    linked_requirement_snapshot_ids: Mapped[Any] = mapped_column(JSON, nullable=False)
+    execution_status: Mapped[str] = mapped_column(String(16), nullable=False)
+    qa_result: Mapped[str] = mapped_column(String(16), nullable=False)

@@ -14,7 +14,9 @@ Task 2.3 adds executor-neutral test import/design through 0006; see
 [Test specifications](TEST_SPECIFICATIONS.md) for exact import grammars, bounds,
 traceability, idempotency and generation usage. Task 2.4 adds [explicit approval,
 review evidence, traceability and derived readiness](CAMPAIGN_REVIEW.md) through
-0007. Existing auth/CSRF and workflow APIs remain unchanged.
+0007. Task 3.3 adds [QA Run creation and immutable bounded snapshots](QA_RUNS.md)
+through 0008. Creation requires READY and performs no execution. Existing auth/CSRF
+and workflow APIs remain unchanged.
 
 ## Application factory and host composition
 
