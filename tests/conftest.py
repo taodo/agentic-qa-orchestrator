@@ -36,7 +36,7 @@ def mock_openai():
     import httpx
     from openai import OpenAI
     clients = []
-    def make(outputs, *, usage_override=..., response_status="completed"):
+    def make(outputs, *, usage_override=..., response_status="completed", output_text_override=None):
         queue = deque(outputs)
         calls = []
         def respond(request):
@@ -54,7 +54,7 @@ def mock_openai():
                     "type": "synthetic", "code": "synthetic"}})
             refusal = item == "refusal"
             content = ({"type": "refusal", "refusal": "synthetic-sensitive-refusal"} if refusal else
-                {"type": "output_text", "text": json.dumps(item.model_dump(mode="json")
+                {"type": "output_text", "text": output_text_override if output_text_override is not None else json.dumps(item.model_dump(mode="json")
                     if hasattr(item, "model_dump") else item), "annotations": []})
             return httpx.Response(200, json={"id": "resp_mock_1", "object": "response", "created_at": 1,
                 "status": response_status, "model": json.loads(request.content)["model"],

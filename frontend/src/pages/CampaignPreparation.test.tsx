@@ -75,7 +75,7 @@ describe('Campaign routes and readiness', () => {
 describe('Requirements and executor-neutral Test Specifications', () => {
   it('renders requirement markers, criteria, citations and coverage', async () => {
     routes(); open('/requirements'); await screen.findByText(requirement.title);
-    expect(screen.getByText('REQ-PAY')).toBeInTheDocument(); expect(screen.getByText('Clarify the supported currency.')).toBeInTheDocument();
+    expect(screen.getByText('PAY')).toBeInTheDocument(); expect(screen.getByText('Clarify the supported currency.')).toBeInTheDocument();
     expect(screen.getByText('Needs clarification', { selector: '.badge' })).toBeInTheDocument();
     expect(screen.getAllByText('1 acceptance criteria · 1 source references')).toHaveLength(2);
     fireEvent.click(screen.getAllByText('Source evidence (1)')[0]);
@@ -137,7 +137,7 @@ describe('Traceability and selected detail reads', () => {
     expect(fallback).toBeInTheDocument(); expect(screen.getByText('Covered', { selector: '.badge' })).toBeInTheDocument();
     expect(screen.queryByText('Loading Traceability…')).not.toBeInTheDocument();
     await act(async () => pending.resolve(response(page([requirement], true))));
-    expect(await screen.findByRole('link', { name: requirement.logical_key })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: requirement.key })).toBeInTheDocument();
     expect(screen.getByText(requirement.title)).toBeInTheDocument(); expect(screen.getByText(/Requirement names come from a bounded list/)).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledTimes(4);
   });
@@ -166,7 +166,7 @@ describe('Traceability and selected detail reads', () => {
 });
 
 describe('loading, empty and safe error states', () => {
-  it.each([['requirements', 'No Requirements have been extracted yet.'], ['test-specifications', 'No Test Specifications have been imported or generated yet.'], ['traceability', 'No Requirements to assess for traceability.']])('handles empty %s without fake records', async (section, message) => {
+  it.each([['requirements', 'No Requirements in this view.'], ['test-specifications', 'No Test Specifications have been imported or generated yet.'], ['traceability', 'No Requirements to assess for traceability.']])('handles empty %s without fake records', async (section, message) => {
     routes({ [api+'/'+section+'?limit=50']: response(section === 'traceability' ? { ...traceability, requirements: page([]), links: page([]) } : page([])) }); open('/'+section);
     expect(await screen.findByText(message)).toBeInTheDocument();
   });

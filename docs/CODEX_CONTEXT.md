@@ -41,7 +41,7 @@ preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
 Campaign executor exists. Migration head is 0010; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.9
+## Current Phase 3 increment: Task 3.10
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -54,6 +54,16 @@ session/CSRF/error transport remains unchanged; route changes discard late actio
 completion. Contextual Campaign transitions preserve DRAFT → READY_FOR_REVIEW →
 APPROVED independently of derived READY/NOT_READY. Scoped reads refresh after writes;
 traceability and name decoration remain independent, bounded resources.
+
+Task 3.10 makes generation eligible only for current APPROVED Requirements (1–20),
+with an application gate and reservation-time snapshot/status recheck. Requirements
+use a bounded filterable work table and explicit sequential human bulk approval.
+Traceability is the primary Test Design Workbench with independent optional names,
+approved-only selection and explicit generation completion/navigation choices.
+The Responses adapter retains provider status/usage before strict structured JSON
+validation; incomplete output cannot be mislabeled by an earlier JSON parse failure.
+Models, budgets, retry policy, historical evidence and preparation/Run semantics stay
+unchanged. See [preparation workflow](PREPARATION_WORKFLOW.md).
 
 Task 3.2 adds no Campaign Run, execution, PASS/FAIL, source mutation or auth redesign.
 Legacy Tasks/Operations and trusted local interpreter boundaries remain unchanged.

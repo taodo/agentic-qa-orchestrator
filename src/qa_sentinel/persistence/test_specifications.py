@@ -79,6 +79,7 @@ class TestSpecificationRepository:
         for version in record.requirement_versions:
             row=self.session.get(CampaignRequirementRow,str(version.id))
             if row is None or self.session.scalar(select(CampaignRequirementRow.id).where(CampaignRequirementRow.id==row.id,current_requirement())) is None or (row.project_id,row.campaign_id)!=(str(record.project_id),str(record.campaign_id)):raise ValueError('Selected requirement ownership mismatch')
+            if row.review_status != 'APPROVED':raise ValueError('Selected requirement must be approved')
             requirements.append(requirement_from(row))
         versions,identity=generation_identity(requirements)
         if versions!=record.requirement_versions or identity!=record.request_hash:raise ValueError('Requirement snapshot mismatch')

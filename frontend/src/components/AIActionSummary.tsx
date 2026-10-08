@@ -7,8 +7,8 @@ const categories = [['input_tokens', 'Input'], ['output_tokens', 'Output'], ['re
 const integer = (value: number | null | undefined) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString() : 'Unavailable';
 
 // Pure presentation: no reads, provider actions, totals reconstruction or pricing.
-export function AIActionSummary({ attempt, kind, base, historical = false }: {
-  attempt: PreparationAttempt & AIActionMetadata; kind: AIActionKind; base: string; historical?: boolean;
+export function AIActionSummary({ attempt, kind, base, historical = false, navigation = true }: {
+  attempt: PreparationAttempt & AIActionMetadata; kind: AIActionKind; base: string; historical?: boolean; navigation?: boolean;
 }) {
   const label = labels[kind], output = attempt.output, revised = output?.revised_requirement;
   const known = categories.some(([key]) => integer(attempt.usage?.[key]?.total) !== 'Unavailable');
@@ -30,6 +30,6 @@ export function AIActionSummary({ attempt, kind, base, historical = false }: {
     <h5>Provider token usage</h5>{!known && <p className="hint">Usage unavailable. Missing provider usage is unknown, never zero.</p>}
     <dl className="ai-token-metrics">{categories.map(([key, title]) => <div key={key}><dt>{title}</dt><dd>{integer(attempt.usage?.[key]?.total)}</dd></div>)}</dl>
     <p className="hint">Provider-reported categories are independent. Reasoning is not added to output or total; unavailable categories are not calculated.</p>
-    {attempt.status === 'SUCCEEDED' && <a className="button" href={target}>{kind === 'generation' ? 'View generated tests' : kind === 'revision' ? 'Review revised Requirement' : 'Review requirements'}</a>}
+    {navigation && attempt.status === 'SUCCEEDED' && <a className="button" href={target}>{kind === 'generation' ? 'View generated tests' : kind === 'revision' ? 'Review revised Requirement' : 'Review requirements'}</a>}
   </section>;
 }

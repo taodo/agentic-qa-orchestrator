@@ -704,6 +704,8 @@ class QASentinelApplication:
                 if requirement is None:raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_NOT_FOUND)
                 if (requirement.project_id,requirement.campaign_id)!=(project_id,campaign_id):raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
                 if not uow.campaign_content.is_current(requirement.id): raise ApplicationError(Code.REQUIREMENT_REVISION_CONFLICT)
+                if requirement.review_status != 'APPROVED':
+                    raise ApplicationError(Code.GENERATION_REQUIREMENT_NOT_APPROVED)
                 requirements.append(requirement)
             versions,request_hash=generation_identity(requirements)
             existing=uow.test_specifications.generation_identity(campaign_id,request_hash)
