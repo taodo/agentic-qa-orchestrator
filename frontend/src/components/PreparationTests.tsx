@@ -47,19 +47,21 @@ export function PreparationGeneration({ projectId, campaignId, changed }: Prepar
   const requirements = useResource(useCallback(() => listRequirements(projectId,campaignId),[projectId,campaignId]));
   const action = usePreparationAction<TestGeneration>(), [selected,setSelected] = useState<string[]>([]), [validation,setValidation] = useState('');
   const history = usePreparationAction<Awaited<ReturnType<typeof listGenerations>>>();
-  const eligible = new Set(requirements.data?.items.map(row => row.id));
+  const eligible = new Set(requirements.data?.items.filter(row => row.review_status === 'APPROVED').map(row => row.id));
   const chosen = [...new Set(selected)].filter(id => eligible.has(id));
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (requirements.loading || requirements.error || !chosen.length || chosen.length > 20) { setValidation('Select 1–20 listed Requirements explicitly.'); return; }
     setValidation(''); await action.run(() => generateTests(projectId,campaignId,chosen), async result => { if (result.status === 'SUCCEEDED') await changed(); });
   }
-  return <section id="test-generation" className="panel campaign-section"><h2>Generate from Requirements</h2><p className="hint">This explicit action may call the configured model. Select 1–20 Requirements. Nothing is selected automatically. Clarification markers carry forward into generated specifications; generation does not approve or execute tests.</p>
+  return <section id="test-generation" className="panel campaign-section"><h2>Generate from Requirements</h2><p className="hint">This explicit action may call the configured model. Select 1–20 APPROVED current Requirements. Traceability is the primary Test Design Workbench. Nothing is selected automatically. Clarification markers carry forward into generated specifications; generation does not approve or execute tests.</p>
     {requirements.loading ? <LoadingState>Loading generation Requirements…</LoadingState> : requirements.error ? <ErrorState error={requirements.error} retry={() => void requirements.reload()} /> : requirements.data && <>
       {!requirements.data.items.length && <EmptyState>No Requirements to select. Add a specification and extract Requirements first.</EmptyState>}
       <form aria-label="Generate Test Specifications" onSubmit={submit}><fieldset disabled={action.busy}><legend>Explicit Requirement selection</legend>
-        <div className="generation-selection">{requirements.data.items.map(row => <label key={row.id}><input type="checkbox" checked={chosen.includes(row.id)} disabled={!chosen.includes(row.id) && chosen.length >= 20}
-          onChange={event => setSelected(current => event.target.checked ? [...new Set([...current,row.id])] : current.filter(id => id !== row.id))} />{row.logical_key} — {row.title} ({row.review_status})</label>)}</div>
+        <button type="button" onClick={() => setSelected([...eligible].slice(0,20))}>Select all approved visible</button><button type="button" onClick={() => setSelected([])}>Deselect all</button>
+        {eligible.size > 20 && <p className="notice">More than 20 approved rows are visible. Select all takes only the first 20 in displayed order.</p>}
+        <div className="generation-selection">{requirements.data.items.map(row => <label key={row.id}><input type="checkbox" checked={chosen.includes(row.id)} disabled={!eligible.has(row.id) || (!chosen.includes(row.id) && chosen.length >= 20)}
+          onChange={event => setSelected(current => event.target.checked ? [...new Set([...current,row.id])] : current.filter(id => id !== row.id))} />{row.key} — {row.title} ({row.review_status}){!eligible.has(row.id) && <span className="hint"> — Approve this Requirement before generating tests.</span>}</label>)}</div>
         <p role="status">Selected: {chosen.length} of at most 20. The bounded list may omit other Requirements.</p>
         <button type="submit" disabled={!chosen.length}>{action.busy ? 'Generating…' : 'Generate Test Specifications'}</button>
       </fieldset><p role="status">{validation}{action.busy && 'Generating Test Specifications…'}{action.result && <>{action.result.status === 'SUCCEEDED' ? 'Test Specifications generated. Review is required.' : 'Test generation did not complete successfully.'} Status: {action.result.status}.{action.result.error_code && <> Code: {action.result.error_code}.</>} Equivalent selections may return an existing terminal attempt; unresolved attempts require operator attention.</>}</p>

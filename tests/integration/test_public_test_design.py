@@ -20,6 +20,7 @@ def test_public_design_is_deterministic_authenticated_and_never_real(config,monk
     project=app.list_projects().items[0];campaign=app.create_campaign(project.id,name='Synthetic design')
     req=seed_requirement(app._factory,project,campaign)
     path=f'/api/v1/projects/{project.id}/campaigns/{campaign.id}'
+    app.review_campaign_requirement(project.id,campaign.id,req.id,reviewer_label='qa')
     body=dict(name='Synthetic existing tests',format='MARKDOWN',content=markdown_text([case(refs=[str(req.id)])]))
     with TestClient(web,base_url='https://testserver') as client:
         assert client.post(path+'/test-imports',json=body).status_code==401

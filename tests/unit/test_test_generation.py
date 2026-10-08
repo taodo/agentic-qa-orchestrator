@@ -85,3 +85,41 @@ def test_review_origin_and_link_guarantees(change):
     req=requirement();versions,identity=generation_identity([req]);attempt=GenerationRecord(project_id=req.project_id,campaign_id=req.campaign_id,request_hash=identity,requirement_versions=versions,model='test')
     spec=canonical_spec(attempt,Output(selected_requirement_ids=[req.id],tests=[case([req.id])]).tests[0],[req.id])
     with pytest.raises(ValidationError):CampaignTestSpecification.model_validate(spec.model_dump()|change)
+
+
+@pytest.mark.parametrize('status,category', [('completed', 'MODEL_MALFORMED_RESPONSE'), ('incomplete', 'MODEL_INCOMPLETE_RESPONSE')])
+def test_structured_parse_failure_keeps_provider_status_and_usage(mock_openai, status, category):
+    from qa_sentinel.models.openai_adapter import OpenAIModelAdapter
+    records = [requirement(f'R{i}') for i in range(8)]
+    mock = mock_openai([{'invalid': 'synthetic-private-provider-text'}], response_status=status)
+    generator = Generator(OpenAIModelAdapter(client=mock.client), ModelSettings(model='test'))
+    with pytest.raises(ModelError) as caught:
+        generator.generate(generator.prepare(records))
+    assert caught.value.code == category
+    assert caught.value.metadata is not None
+    assert caught.value.metadata.model == 'test'
+    assert caught.value.metadata.status == status
+    assert caught.value.metadata.total_tokens == 30
+    assert len(mock.calls) == 1
+    assert 'synthetic-private' not in str(caught.value)
+
+
+@pytest.mark.parametrize('status,category', [('completed','MODEL_MALFORMED_RESPONSE'), ('incomplete','MODEL_INCOMPLETE_RESPONSE')])
+@pytest.mark.parametrize('usage', [None, dict(input_tokens=0,output_tokens=0,total_tokens=0)])
+def test_truncated_json_classification_and_unknown_vs_zero(mock_openai,status,category,usage):
+    from qa_sentinel.models.openai_adapter import OpenAIModelAdapter
+    mock=mock_openai([{}],response_status=status,usage_override=usage,output_text_override='{"selected_requirement_ids":[')
+    generator=Generator(OpenAIModelAdapter(client=mock.client),ModelSettings(model='test'))
+    with pytest.raises(ModelError) as caught:generator.generate(generator.prepare([requirement()]))
+    assert caught.value.code==category and caught.value.metadata.model=='test'
+    assert caught.value.metadata.total_tokens==(None if usage is None else 0)
+    assert len(mock.calls)==1
+
+
+def test_legacy_inherited_clarification_remains_in_canonical_output():
+    from qa_sentinel.domain.test_specification import TestMarker as Marker
+    req=requirement();versions,identity=generation_identity([req])
+    attempt=GenerationRecord(project_id=req.project_id,campaign_id=req.campaign_id,requirement_versions=versions,request_hash=identity,model='fixture')
+    output=Output(selected_requirement_ids=[req.id],tests=[case([req.id])])
+    spec=canonical_spec(attempt,output.tests[0],[req.id],markers=[Marker(kind='AMBIGUITY',description='Legacy unresolved requirement')])
+    assert spec.review_status=='NEEDS_CLARIFICATION' and spec.information_markers[0].description=='Legacy unresolved requirement'

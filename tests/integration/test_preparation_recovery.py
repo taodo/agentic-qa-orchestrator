@@ -248,6 +248,10 @@ def test_multi_requirement_test_retires_from_all_current_traceability_after_revi
     evidence=app.add_requirement_clarification(p.id,c.id,old.id,request_key='facts',content='Supplied facts')
     mock.queue.append(revised)
     assert app.extract_campaign_requirements(p.id,c.id,evidence.source_id).status=='SUCCEEDED'
+    before=len(mock.calls)
+    with pytest.raises(ApplicationError,match='REQUIREMENT_REVISION_CONFLICT'):
+        app.generate_campaign_tests(p.id,c.id,requirement_ids=[old.id])
+    assert len(mock.calls)==before
     trace=app.get_campaign_traceability(p.id,c.id)
     row=next(r for r in trace.requirements.items if r.requirement_id==unchanged.id)
     assert row.linked_test_count==row.approved_test_count==0 and row.coverage=='NOT_COVERED'

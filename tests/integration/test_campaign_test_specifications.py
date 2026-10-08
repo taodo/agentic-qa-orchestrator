@@ -61,6 +61,7 @@ def harness(migrated_factory,mock_openai):
     app=QASentinelApplication(factory,ProjectExecutionResolver(ProjectRuntimeRegistry([]),[]),test_generator=generator)
     project=app.create_project(key='design',name='Design');campaign=app.create_campaign(project.id,name='Black box QA')
     requirements=[seed_requirement(factory,project,campaign),seed_requirement(factory,project,campaign,'LOGOUT')]
+    for req in requirements:app.review_campaign_requirement(project.id,campaign.id,req.id,reviewer_label='qa')
     return app,factory,engine,project,campaign,requirements,mock
 
 
@@ -155,15 +156,18 @@ def test_generation_selected_only_canonical_identity_no_transaction_and_usage(ha
     assert result.id in usage.top_invocations
 
 
-def test_requirement_ambiguity_is_inherited_even_if_model_omits_markers(harness):
-    app,factory,_,project,campaign,_,_=harness
-    req=seed_requirement(factory,project,campaign,'UNKNOWN',markers=[dict(kind='MISSING_INFORMATION',description='Error behavior not specified')])
-    result=app.generate_campaign_tests(project.id,campaign.id,requirement_ids=[req.id])
-    assert result.status=='SUCCEEDED'
-    spec=app.list_campaign_test_specifications(project.id,campaign.id).items[0]
-    assert spec.review_status=='NEEDS_CLARIFICATION'
-    assert [m.description for m in spec.information_markers]==['Error behavior not specified']
+@pytest.mark.parametrize('blocked', [False, True])
+def test_unapproved_and_mixed_selection_reject_before_provider(harness, blocked):
+    app,factory,_,project,campaign,requirements,mock=harness
+    req=seed_requirement(factory,project,campaign,'UNAPPROVED',markers=[dict(kind='AMBIGUITY',description='Unknown')] if blocked else [])
+    for ids in ([req.id], [requirements[0].id,req.id]):
+        with pytest.raises(ApplicationError,match='GENERATION_REQUIREMENT_NOT_APPROVED'):
+            app.generate_campaign_tests(project.id,campaign.id,requirement_ids=ids)
+    assert not mock.calls and not app.list_campaign_test_generations(project.id,campaign.id).items
     assert app.get_campaign(project.id,campaign.id)==campaign
+    with TestClient(create_api_app(app)) as client:
+        result=client.post(f'/api/v1/projects/{project.id}/campaigns/{campaign.id}/generate-tests',json={'requirement_ids':[str(req.id)]})
+        assert result.status_code==409 and result.json()['error']['code']=='GENERATION_REQUIREMENT_NOT_APPROVED'
 
 @pytest.mark.parametrize('variant',['invented','missing','duplicate','empty','executor','duplicate-behavior'])
 def test_generated_output_validation_is_atomic(harness,variant):
@@ -230,6 +234,7 @@ def test_scope_input_bounds_and_full_context_fail_before_provider(harness):
     for selection in ([],[requirements[0].id]*2,[uuid4()]*21):
         with pytest.raises(ApplicationError,match='INVALID_INPUT'):app.generate_campaign_tests(project.id,campaign.id,requirement_ids=selection)
     large=seed_requirement(factory,project,campaign,'LARGE',criteria=[dict(key=f'C{i}',text='x'*4000) for i in range(20)])
+    app.review_campaign_requirement(project.id,campaign.id,large.id,reviewer_label='qa')
     with pytest.raises(ApplicationError,match='GENERATION_CONTEXT_LIMIT'):app.generate_campaign_tests(project.id,campaign.id,requirement_ids=[large.id])
     assert not mock.calls and not app.list_campaign_test_generations(project.id,campaign.id).items
 
@@ -303,16 +308,6 @@ def test_provider_reasoning_usage_and_context_diagnostics_are_authoritative(harn
     assert result.context_selection.selected_bytes==len(context.encode('utf-8'))
 
 
-def test_required_ambiguity_overflow_fails_atomically_without_truncation(harness):
-    app,factory,_,project,campaign,_,mock=harness
-    first=seed_requirement(factory,project,campaign,'FIRST',markers=[dict(kind='AMBIGUITY',description=f'Unknown first {i}') for i in range(15)])
-    second=seed_requirement(factory,project,campaign,'SECOND',markers=[dict(kind='AMBIGUITY',description=f'Unknown second {i}') for i in range(15)])
-    result=app.generate_campaign_tests(project.id,campaign.id,requirement_ids=[first.id,second.id])
-    assert result.status=='FAILED' and result.error_code=='GENERATION_INVALID_OUTPUT'
-    assert result.usage.total_tokens.total==30 and len(mock.calls)==1
-    assert not app.list_campaign_test_specifications(project.id,campaign.id).items
-
-
 def test_rejected_import_read_results_are_durable_and_idempotent(harness):
     app,_,_,project,campaign,_,mock=harness
     for format,content in [('XLSX',b'PK\x00unparsed'),('CSV','bad header'),('MARKDOWN','not the template')]:
@@ -321,3 +316,37 @@ def test_rejected_import_read_results_are_durable_and_idempotent(harness):
         assert app.import_campaign_tests(project.id,campaign.id,name='Repeated',format=format,content=content)==first
         assert app.get_campaign_test_import(project.id,campaign.id,first.id).normalized_text is None
     assert not app.list_campaign_test_specifications(project.id,campaign.id).items and not mock.calls
+
+
+def test_live_shape_eight_approved_snapshots_in_mixed_campaign(harness):
+    app,factory,_,p,c,requirements,mock=harness
+    for i in range(6):
+        req=seed_requirement(factory,p,c,f'R{i}')
+        app.review_campaign_requirement(p.id,c.id,req.id,reviewer_label='qa')
+        requirements.append(req)
+    seed_requirement(factory,p,c,'PENDING')
+    seed_requirement(factory,p,c,'BLOCKED',markers=[dict(kind='AMBIGUITY',description='Missing boundary')])
+    def eight(call):
+        context=json.loads(call['input'][0]['content'])
+        assert len(context['requirements'])==8
+        assert all(r['review_status']=='APPROVED' for r in context['requirements'])
+        tests=[]
+        for i,id in enumerate(context['selected_requirement_ids']):
+            item=case(f'T{i}');item.pop('requirement_refs');item['requirement_ids']=[id]
+            tests.append(item)
+        return dict(selected_requirement_ids=context['selected_requirement_ids'],tests=tests)
+    mock.queue.clear();mock.queue.append(eight)
+    result=app.generate_campaign_tests(p.id,c.id,requirement_ids=[r.id for r in requirements])
+    assert result.status=='SUCCEEDED' and result.output.generated_count==8
+    assert result.output.ready_for_review_count==8 and len(mock.calls)==1
+    assert app.generate_campaign_tests(p.id,c.id,requirement_ids=[r.id for r in reversed(requirements)])==result
+    assert len(mock.calls)==1 and app.get_campaign(p.id,c.id).status=='DRAFT'
+
+
+def test_max_twenty_approved(harness):
+    app,factory,_,p,c,requirements,mock=harness
+    for i in range(18):
+        req=seed_requirement(factory,p,c,f'BOUND{i}')
+        app.review_campaign_requirement(p.id,c.id,req.id,reviewer_label='qa');requirements.append(req)
+    assert app.generate_campaign_tests(p.id,c.id,requirement_ids=[r.id for r in requirements]).status=='SUCCEEDED'
+    assert len(mock.calls)==1

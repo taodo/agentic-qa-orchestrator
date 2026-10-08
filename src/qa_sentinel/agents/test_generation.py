@@ -44,6 +44,12 @@ Consider positive, negative, boundary, state or concurrency cases only when supp
 selected requirement; do not mechanically add categories or duplicate semantic cases.
 Preserve ambiguity/missing information as markers, with null unknown expected behavior;
 never guess requirements or outcomes. At least one supplied requirement ID per test is mandatory.
+Return only the exact structured schema. Test keys must be unique; requirement_ids must be
+supplied UUIDs, never local keys. Step indices must be consecutive integers starting at 1.
+Use schema enum values exactly. Unknown expected behavior must be null with a
+MISSING_INFORMATION marker; empty required_evidence also requires that marker.
+Keep designs concise and avoid duplicate behavior under different keys. Do not expand every
+possible category merely to fill the response budget. Return a complete JSON object.
 Echo the complete selected_requirement_ids set; do not claim omitted requirements considered.
 An empty test list is allowed if no supported test design is possible; it never proves coverage.
 """

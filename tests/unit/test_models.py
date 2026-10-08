@@ -76,7 +76,7 @@ def test_client_configuration_is_lazy_explicit_and_finite(monkeypatch, workflow_
     seen = {}
     def construct(**kwargs):
         seen.update(kwargs)
-        return SimpleNamespace(responses=SimpleNamespace(parse=lambda **kw: (_ for _ in ()).throw(RuntimeError("secret"))),
+        return SimpleNamespace(responses=SimpleNamespace(create=lambda **kw: (_ for _ in ()).throw(RuntimeError("secret"))),
                                close=lambda: None)
     monkeypatch.setenv("OPENAI_API_KEY", "synthetic-secret-key")
     monkeypatch.setenv("OPENAI_BASE_URL", "https://untrusted.invalid")
@@ -116,11 +116,11 @@ def test_timeout_must_be_finite_and_bounded(value):
         ModelSettings(model="test", timeout_seconds=value)
 
 
-def test_contract_revalidated_even_when_provider_supplies_typed_object(workflow_outputs):
+def test_completed_json_is_strictly_validated_and_incomplete_classified_first(workflow_outputs):
     invalid = workflow_outputs["research"].model_copy(update={"summary": ""})
-    response = SimpleNamespace(status="completed", output=[], output_parsed=invalid, usage=None,
+    response = SimpleNamespace(status="completed", output=[], output_text=invalid.model_dump_json(), usage=None,
                                id="resp_mock", model="test-model")
-    adapter = OpenAIModelAdapter(client=SimpleNamespace(responses=SimpleNamespace(parse=lambda **kw: response)))
+    adapter = OpenAIModelAdapter(client=SimpleNamespace(responses=SimpleNamespace(create=lambda **kw: response)))
     request = build_request(A.RESEARCHER, context(A.RESEARCHER, workflow_outputs), ModelSettings(model="test-model"))
     with pytest.raises(ModelError, match="MALFORMED_RESPONSE"):
         adapter.generate(request, ResearchOutput)
@@ -155,13 +155,13 @@ def test_optional_reasoning_omitted_and_configurable_model(mock_openai, workflow
 def test_missing_usage_stays_unknown_and_no_mutable_context_changes(workflow_outputs):
     ctx = context(A.RESEARCHER, workflow_outputs)
     before = ctx.model_dump()
-    response = SimpleNamespace(status="completed", output=[], output_parsed=workflow_outputs["research"],
+    response = SimpleNamespace(status="completed", output=[], output_text=workflow_outputs["research"].model_dump_json(),
         usage=None, id="resp_mock", model="test-model")
     calls = []
-    def parse(**kwargs):
+    def create(**kwargs):
         calls.append(kwargs)
         return response
-    runtime = RealAgentRuntime(OpenAIModelAdapter(client=SimpleNamespace(responses=SimpleNamespace(parse=parse))))
+    runtime = RealAgentRuntime(OpenAIModelAdapter(client=SimpleNamespace(responses=SimpleNamespace(create=create))))
     result = runtime.run(A.RESEARCHER, ctx)
     assert ctx.model_dump() == before
     assert result.metadata.total_tokens is None and result.metadata.input_tokens is None

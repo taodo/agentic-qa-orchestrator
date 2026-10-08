@@ -28,6 +28,7 @@ ERROR_MAPPING = {
     Code.CAMPAIGN_TEST_CHILD_NOT_FOUND: (404, "Campaign test record not found"),
     Code.CAMPAIGN_TEST_CHILD_MISMATCH: (409, "Test record does not belong to the requested Campaign"),
     Code.GENERATION_NOT_CONFIGURED: (409, "Test generation is not configured"),
+    Code.GENERATION_REQUIREMENT_NOT_APPROVED: (409, "Approve all selected current Requirements before generating tests"),
     Code.GENERATION_CONTEXT_LIMIT: (422, "Selected Requirements exceed the generation context limit"),
     Code.GENERATION_RECONCILIATION_REQUIRED: (409, "Unresolved generation requires explicit reconciliation"),
     Code.CAMPAIGN_SOURCE_NOT_FOUND: (404, "Campaign source not found"),

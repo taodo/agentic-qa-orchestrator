@@ -43,8 +43,10 @@ synthetic Run with mixed results. Do not invoke a real provider for visual revie
 - Projects/Project: registry, create form, context, Campaign list, secondary legacy.
 - Overview: objective, preparation/readiness distinction, backend totals, blocker
   list and relevant next-step link. Check READY and NOT_READY and read failure.
-- Requirements: key/title/status, open acceptance criteria, source citations and
-  lazy approval/version history. Confirm source intake remains reachable below.
+- Requirements: compact key/title/status table, returned-count filters, visible-only
+  selection and sequential bulk approval. Criteria, source citations, row clarification
+  and lazy approval/version history live in row details. Confirm source intake remains
+  reachable below; saving facts never invokes revision automatically.
 - Failed extraction: eligible Retry is explicit; history and token warning remain.
 - NEEDS_CLARIFICATION: grounded-facts form is reachable; saving, revising and human
   approval remain separate. Blocked content must not offer an approval bypass.
@@ -52,6 +54,10 @@ synthetic Run with mixed results. Do not invoke a real provider for visual revie
   Requirements, secondary provenance, import and generation controls.
 - Traceability: coverage text, linked/approved counts, optional-name UUID fallback,
   truncation notices and contained table scrolling. No automatic detail fan-out.
+  Test Design Workbench enables per-row/batch Generate only for current APPROVED
+  rows, at most 20. Success offers Go to Test Cases / Stay on Traceability; failure
+  retains the safe code/known usage and never redirects or retries. Verify optional
+  name failure does not disable valid coverage or approved UUID-only selection.
 - Readiness: satisfied checks, blockers, next link and full server aggregates.
 - Runs/detail: run number, execution versus QA outcome, timestamps, snapshot
   identity, pagination, explicit Start Synthetic Run and synthetic per-test labels.

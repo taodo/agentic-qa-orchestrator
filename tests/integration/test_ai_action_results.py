@@ -1,11 +1,12 @@
 """Offline read projections: exact action attribution, durable counts, no effects."""
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from qa_sentinel.api import create_api_app
-from qa_sentinel.application import QASentinelApplication, ProjectExecutionResolver
+from qa_sentinel.application import ApplicationError, QASentinelApplication, ProjectExecutionResolver
 from qa_sentinel.projects import ProjectRuntimeRegistry
 from qa_sentinel.models.base import ModelMetadata, ModelResponse, ModelError, ProviderErrorCategory
 from qa_sentinel.persistence.ai_action_results import action_outputs
@@ -114,7 +115,25 @@ def test_revision_identity_and_status_are_reconstructed_without_provider(harness
 def test_generation_history_reuses_existing_durable_attempts_and_inherited_facts(generation_harness,monkeypatch):
     app,factory,engine,p,c,requirements,mock=generation_harness
     blocked=seed_requirement(factory,p,c,"BLOCKED",markers=[dict(kind="AMBIGUITY",description="Missing expected result")])
-    result=app.generate_campaign_tests(p.id,c.id,requirement_ids=[blocked.id])
+    # Seed an immutable pre-3.10 generation: new unapproved requests are now rejected.
+    from qa_sentinel.agents.test_generation import generation_identity,GeneratedTestsOutput
+    from qa_sentinel.domain.test_specification import TestGeneration,TestMarker
+    from qa_sentinel.application.test_specifications import canonical_spec
+    from qa_sentinel.persistence.models import TestGenerationRow
+    from qa_sentinel.persistence.unit_of_work import UnitOfWork
+    from test_campaign_test_specifications import case
+    versions,identity=generation_identity([blocked])
+    attempt=TestGeneration(project_id=p.id,campaign_id=c.id,requirement_versions=versions,request_hash=identity,model='fixture')
+    item=case();item.pop('requirement_refs');item['requirement_ids']=[blocked.id]
+    parsed=GeneratedTestsOutput(selected_requirement_ids=[blocked.id],tests=[item])
+    spec=canonical_spec(attempt,parsed.tests[0],[blocked.id],markers=[TestMarker(kind='AMBIGUITY',description='Missing expected result')])
+    with UnitOfWork(factory) as uow:
+        from qa_sentinel.persistence.test_specifications import row_values
+        values=row_values(attempt);values['metadata_json']=values.pop('metadata')
+        uow.session.add(TestGenerationRow(**values));uow.session.flush()
+        completed=TestGeneration.model_validate(attempt.model_dump()|dict(status='SUCCEEDED',finished_at=datetime.now(timezone.utc)))
+        uow.test_specifications.finish(completed,[spec]);uow.commit()
+    result=app.get_campaign_test_generation(p.id,c.id,attempt.id)
     assert result.output.generated_count==result.output.needs_clarification_count==result.output.inherited_clarification_count==1
     assert result.output.ready_for_review_count==0 and result.output.revised_requirement is None
     monkeypatch.setattr(app._test_generator,"generate",forbidden)
@@ -126,12 +145,13 @@ def test_generation_history_reuses_existing_durable_attempts_and_inherited_facts
     assert client.get(base+"/test-generations?limit=1").json()["items"][0]["output"]["inherited_clarification_count"]==1
     assert client.get(base+f"/test-generations/{result.id}").json()["output"]["generated_count"]==1
     assert restarted.get_campaign_test_generation(p.id,c.id,result.id)==result
-    assert app.generate_campaign_tests(p.id,c.id,requirement_ids=[blocked.id])==result
+    with pytest.raises(ApplicationError,match='GENERATION_REQUIREMENT_NOT_APPROVED'):
+        app.generate_campaign_tests(p.id,c.id,requirement_ids=[blocked.id])
     foreign=app.create_project(key="foreign-generation",name="Foreign")
     assert client.get(f"/api/v1/projects/{foreign.id}/campaigns/{c.id}/test-generations").status_code==409
     with engine.connect() as connection:
         assert all(connection.scalar(text(f"SELECT count(*) FROM {name}"))==0 for name in ("tasks","execution_jobs","invocations","test_runs"))
-    assert len(mock.calls)==1
+    assert len(mock.calls)==0
 
 
 def test_output_projection_rejects_unbounded_or_mixed_owners():
