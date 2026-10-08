@@ -52,13 +52,20 @@ export interface CampaignReadiness {
 export interface CampaignSource {
   id: UUID; project_id: UUID; campaign_id: UUID; source_type: 'TEXT' | 'MARKDOWN' | 'PDF'; name: string;
   content_hash: string; raw_hash: string; normalization_version: string; original_bytes: number;
-  normalized_chars: number; line_count: number; status: 'INGESTED' | 'REJECTED'; error_code: string | null; created_at: Timestamp;
+  normalized_chars: number; line_count: number; status: 'INGESTED' | 'REJECTED'; error_code: string | null; created_at: Timestamp; latest_extraction?: RequirementExtraction | null; clarification_requirement_id?: string | null;
 }
 export interface PreparationAttempt {
   id: UUID; project_id: UUID; campaign_id: UUID; status: 'STARTED' | 'SUCCEEDED' | 'FAILED';
   started_at: Timestamp; finished_at: Timestamp | null; error_code: string | null;
 }
-export interface RequirementExtraction extends PreparationAttempt { source_id: UUID; source_hash: string; contract_version: string }
+export interface RequirementExtraction extends PreparationAttempt {
+  source_id: UUID; source_hash: string; contract_version: string;
+  attempt_number?: number; parent_attempt_id?: UUID | null; retryable?: boolean; is_latest?: boolean;
+  configured_model?: string; provider_model?: string | null;
+  usage?: { total_tokens: { total: number | null; known_sum: number | null } };
+}
+export interface Clarification { id: UUID; source_id: UUID; requirement_id: UUID; request_key: string; first_fact_line: number }
+export interface RequirementHistoryEntry { requirement: CampaignRequirement; version: number; is_current: boolean; supersedes_id: UUID | null }
 export interface TestGeneration extends PreparationAttempt { requirement_versions: { id: UUID; snapshot_hash: string }[]; contract_version: string }
 export interface TestImport {
   id: UUID; project_id: UUID; campaign_id: UUID; name: string; format: 'CSV' | 'MARKDOWN' | 'XLSX';

@@ -1,7 +1,8 @@
 """0006 upgrade/downgrade durability and DB-enforced traceability ownership."""
 from uuid import uuid4
+from datetime import datetime, timezone
 import pytest
-from sqlalchemy import inspect,text
+from sqlalchemy import inspect,text,Table,MetaData
 from sqlalchemy.exc import IntegrityError
 from alembic import command
 from qa_sentinel.application import QASentinelApplication,ProjectExecutionResolver
@@ -19,12 +20,30 @@ def test_0006_upgrade_reopen_and_downgrade_preserves_all_0005_records(migrated_f
     with UnitOfWork(factory) as uow:store_bundle(uow,bundle);uow.campaigns.add(campaign);uow.commit()
     from qa_sentinel.domain.project import Project
     project=Project(id=campaign.project_id,key='fixture',name='Fixture')
-    requirement=seed_requirement(factory,project,campaign)
+    # Seed immutable 0005 records without using the newer recovery-aware repository.
+    from qa_sentinel.agents.requirement_extraction import ingest
+    from qa_sentinel.domain.campaign_content import RequirementExtraction, CampaignRequirement
+    source = ingest(project.id, campaign.id, name='PRD', source_type='TEXT', content='Login required.')
+    attempt = RequirementExtraction(project_id=project.id, campaign_id=campaign.id, source_id=source.id,
+        source_hash=source.content_hash, model='fixture', status='SUCCEEDED', finished_at=datetime.now(timezone.utc))
+    requirement = CampaignRequirement(project_id=project.id, campaign_id=campaign.id, extraction_id=attempt.id,
+        key='LOGIN', logical_key=f'REQ-{source.id.hex}-LOGIN', title='Login', description='Login required.',
+        acceptance_criteria=[dict(key='C1', text='Login required.')], source_references=[dict(source_id=source.id,
+        source_hash=source.content_hash, start_line=1, end_line=1, excerpt='Login required.')], information_markers=[], review_status='READY_FOR_REVIEW')
+    with engine.begin() as connection:
+        for name, record in [('campaign_sources', source), ('campaign_requirement_extractions', attempt), ('campaign_requirements', requirement)]:
+            table = Table(name, MetaData(), autoload_with=connection)
+            values = record.model_dump(mode='json')
+            connection.execute(table.insert().values(**{k:v for k,v in values.items() if k in table.c and v is not None}))
     names=set(inspect(engine).get_table_names())-{'alembic_version'}
+    # Compare all columns present at this historical checkpoint after upgrades.
+    columns = {name: ','.join('"' + c['name'] + '"' for c in inspect(engine).get_columns(name)) for name in names}
     def snapshot():
-        with engine.connect() as connection:return {name:connection.execute(text(f'SELECT * FROM "{name}"')).all() for name in names}
+        with engine.connect() as connection:return {name:connection.execute(text(f'SELECT {columns[name]} FROM "{name}"')).all() for name in names}
     existing=snapshot();command.upgrade(config,'0006')
     assert set(inspect(engine).get_table_names())==names|NEW|{'alembic_version'} and snapshot()==existing
+    # Current application code runs against the current schema, not an old checkpoint.
+    command.upgrade(config, 'head')
     app=QASentinelApplication(factory,ProjectExecutionResolver(ProjectRuntimeRegistry([]),[]))
     record=app.import_campaign_tests(project.id,campaign.id,name='Existing',format='CSV',content=csv_text([case(refs=[str(requirement.id)])]))
     specs=app.list_campaign_test_specifications(project.id,campaign.id).items

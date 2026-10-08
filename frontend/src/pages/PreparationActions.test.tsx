@@ -120,7 +120,7 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
   });
   it('blocks Draft/clarification and unresolved/missing links without fake resolution',async()=>{
     mock(undefined,{requirements:[blockedRequirement,{...readyReq,id:'draft',review_status:'DRAFT'}],tests:[blockedSpecification,{...readyTest,id:'unlinked',requirement_ids:[]}]});open();
-    await screen.findByText(blockedRequirement.title);expect(screen.queryByRole('button',{name:'Approve Requirement'})).not.toBeInTheDocument();expect(screen.getAllByText(/Clarification\/revision is not yet supported/)).toHaveLength(2);
+    await screen.findByText(blockedRequirement.title);expect(screen.queryByRole('button',{name:'Approve Requirement'})).not.toBeInTheDocument();expect(screen.getAllByText(/No Resolve-to-Approved action is available/)).toHaveLength(2);
     fireEvent.click(screen.getByRole('link',{name:'Test Specifications'}));await screen.findByText(blockedSpecification.title);expect(screen.queryByRole('button',{name:'Approve Test Specification'})).not.toBeInTheDocument();expect(screen.getByText(/UNKNOWN-CURRENCY/)).toBeInTheDocument();expect(posts()).toHaveLength(0);
   });
   it('requires a valid reviewer label and retains note after a safe approval conflict',async()=>{

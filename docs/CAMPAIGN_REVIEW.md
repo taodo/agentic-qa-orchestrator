@@ -178,3 +178,12 @@ real local execution and target-interpreter boundaries are unchanged.
 Phase 2 preparation domain/API work is complete through Task 2.4. The next
 handoff is Phase 3 QA-oriented UX / Run Lifecycle; review UI, clarification
 revision and any executor/run contracts require their own explicit task.
+
+## Task 3.5 current preparation
+
+[Preparation recovery](PREPARATION_RECOVERY.md) supersedes the original single-attempt
+and unsupported-clarification limitations: explicit bounded retry history, inert
+addendum evidence and separate revision into new Requirement identities. Current
+readiness/coverage/new Run selection exclude superseded Requirements and their
+dependent Tests. Historical content/approvals remain audit evidence. No automatic
+retry, approval transfer, executor or auth change.

@@ -255,3 +255,12 @@ Global execution overlap retains safe RUNTIME_STOPPED. /run never enqueues; Resu
 remains synchronous and separate. Host lifespan owns the worker; a standalone API
 only persists requests unless its embedding explicitly supplies a worker. Preview
 job routes stay Basic-protected. [Ordering/restart limits](EXECUTION_JOBS.md).
+
+## Task 3.5 recovery endpoints
+
+[Preparation recovery](PREPARATION_RECOVERY.md) supersedes the original single-attempt
+and unsupported-clarification limitations: explicit bounded retry history, inert
+addendum evidence and separate revision into new Requirement identities. Current
+readiness/coverage/new Run selection exclude superseded Requirements and their
+dependent Tests. Historical content/approvals remain audit evidence. No automatic
+retry, approval transfer, executor or auth change.

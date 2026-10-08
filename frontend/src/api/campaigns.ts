@@ -36,3 +36,8 @@ export const getRequirementReview = (p: string, c: string, id: string) => reques
 export const getTestReview = (p: string, c: string, id: string) => request<ReviewState>(`${campaignPath(p, c)}/test-specifications/${encodeURIComponent(id)}/review`);
 export const transitionCampaign = (p: string, c: string, status: Exclude<PreparationStatus, 'DRAFT'>) =>
   request<CampaignView>(`${campaignPath(p, c)}/transitions`, { method: 'POST', body: JSON.stringify({ status }) });
+
+export const retryExtraction = (p:string,c:string,id:string) => request<RequirementExtraction>(`${campaignPath(p,c)}/extractions/${encodeURIComponent(id)}/retry`,{method:'POST',body:'{}'});
+export const listExtractionHistory = (p:string,c:string,id:string) => request<CollectionPage<RequirementExtraction>>(`${campaignPath(p,c)}/sources/${encodeURIComponent(id)}/extractions?limit=50`);
+export const addClarification = (p:string,c:string,id:string,body:{request_key:string;content:string}) => request<import('./campaignTypes').Clarification>(`${campaignPath(p,c)}/requirements/${encodeURIComponent(id)}/clarifications`,{method:'POST',body:JSON.stringify(body)});
+export const getRequirementHistory = (p:string,c:string,id:string) => request<CollectionPage<import('./campaignTypes').RequirementHistoryEntry>>(`${campaignPath(p,c)}/requirements/${encodeURIComponent(id)}/history`);

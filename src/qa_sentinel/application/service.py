@@ -12,7 +12,7 @@ from qa_sentinel.domain.qa_run import (CreateQARun, QARun, QARunRequirement, QAR
 from qa_sentinel.domain.project import Project
 from qa_sentinel.domain.campaign import QACampaign, InvalidCampaignTransition
 from qa_sentinel.domain.campaign_content import (RequirementExtraction, CampaignRequirement,
-    RequirementReviewStatus, ExtractionStatus)
+    RequirementReviewStatus, ExtractionStatus, Clarification, extraction_retryable)
 from qa_sentinel.agents.requirement_extraction import ingest, validate_output, SourceTooLarge
 from qa_sentinel.models.base import ModelError, ModelMetadata
 from qa_sentinel.agents.test_import import parse_import
@@ -20,7 +20,7 @@ from qa_sentinel.agents.test_generation import generation_identity, validate_gen
 from qa_sentinel.domain.test_specification import TestGeneration, TestMarker
 from .test_specifications import (TestImportView, TestImportDetail, TestSpecificationView, TestGenerationView, generation_view, canonical_spec)
 from .campaign_content import (CampaignSourceView, CampaignSourceDetail, CampaignRequirementView,
-    ExtractionView, CampaignModelUsage, extraction_view, campaign_usage)
+    ExtractionView, CampaignModelUsage, extraction_view, campaign_usage, ClarificationView, RequirementHistoryEntry)
 from qa_sentinel.domain.task import Task
 from qa_sentinel.domain.enums import TaskState
 from qa_sentinel.domain.execution_job import ExecutionJob, ExecutionJobStatus as JobStatus, ExecutionJobError
@@ -257,7 +257,10 @@ class QASentinelApplication:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._campaign(uow, project_id, campaign_id)
-            return self._operational_page(uow.campaign_content.sources(campaign_id, limit), limit, CampaignSourceView)
+            rows = uow.campaign_content.sources(campaign_id, limit)
+            latest = uow.campaign_content.latest_attempts([r["id"] for r in rows])
+            targets = uow.campaign_content.clarification_targets([r["id"] for r in rows])
+            return self._operational_page([{**r, "clarification_requirement_id":targets.get(r["id"]), "latest_extraction":None if r["id"] not in latest else extraction_view(latest[r["id"]])} for r in rows], limit, CampaignSourceView)
 
     def get_campaign_requirement(self, project_id, campaign_id, requirement_id) -> CampaignRequirementView:
         project_id, campaign_id, requirement_id = map(identifier, (project_id, campaign_id, requirement_id))
@@ -295,6 +298,10 @@ class QASentinelApplication:
             try:
                 if command is None:
                     return uow.campaign_reviews.state(record, kind)
+                if kind == "REQUIREMENT" and not uow.campaign_content.is_current(record.id):
+                    raise ReviewError("REVIEW_NOT_REVIEWABLE")
+                if kind == "TEST_SPECIFICATION" and any(not uow.campaign_content.is_current(id) for id in record.requirement_ids):
+                    raise ReviewError("REVIEW_NOT_REVIEWABLE")
                 result = uow.campaign_reviews.approve(record, kind, command)
             except ReviewError as error:
                 raise ApplicationError(Code(str(error))) from None
@@ -456,35 +463,120 @@ class QASentinelApplication:
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._campaign(uow, project_id, campaign_id)
             records=uow.campaign_content.extractions(campaign_id,limit)+uow.test_specifications.generations(campaign_id,limit)
-            return campaign_usage(project_id,campaign_id,sorted(records,key=lambda r:(r.started_at,str(r.id))),limit)
+            latest = uow.campaign_content.latest_attempts([r.source_id for r in records if isinstance(r, RequirementExtraction)])
+            return campaign_usage(project_id,campaign_id,sorted(records,key=lambda r:(r.started_at,str(r.id))),limit,
+                latest_attempt_ids={r.id for r in latest.values()})
+
+    def add_requirement_clarification(self, project_id, campaign_id, requirement_id, *, request_key, content):
+        project_id, campaign_id, requirement_id = map(identifier, (project_id,campaign_id,requirement_id))
+        try:
+            if type(content) is not str or len(content.encode("utf-8")) > 4000: raise ValueError()
+            facts = ingest(project_id,campaign_id,name="Clarification facts",source_type="TEXT",content=content)
+            if facts.status != "INGESTED": raise ValueError()
+            # Validate key independently, before DB work.
+            Clarification(project_id=project_id,campaign_id=campaign_id,requirement_id=requirement_id,
+                source_id=requirement_id,request_key=request_key,facts_hash=facts.content_hash,first_fact_line=1)
+        except (ValueError,TypeError):
+            raise ApplicationError(Code.CLARIFICATION_INVALID) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write":True})
+            requirement = self._review_object(uow,project_id,campaign_id,requirement_id,"REQUIREMENT")
+            existing = uow.campaign_content.clarification_by_key(campaign_id,request_key)
+            if existing is not None:
+                if existing.requirement_id != requirement_id or existing.facts_hash != facts.content_hash:
+                    raise ApplicationError(Code.REQUIREMENT_REVISION_CONFLICT)
+                return ClarificationView.model_validate(existing.model_dump())
+            if requirement.review_status != "NEEDS_CLARIFICATION" or not uow.campaign_content.is_current(requirement_id) or uow.campaign_content.version(requirement_id) >= 10:
+                raise ApplicationError(Code.REQUIREMENT_REVISION_CONFLICT)
+            prior = uow.campaign_content.attempt(requirement.extraction_id)
+            original = self._source(uow,project_id,campaign_id,prior.source_id)
+            prefix = original.normalized_text + "\n\nClarification for Requirement " + str(requirement_id) + ":\n"
+            try:
+                combined = ingest(project_id,campaign_id,name="Clarification: " + requirement.key,source_type="TEXT",content=prefix+facts.normalized_text)
+            except (ValueError,SourceTooLarge):
+                raise ApplicationError(Code.CLARIFICATION_INVALID) from None
+            if combined.status != "INGESTED": raise ApplicationError(Code.CLARIFICATION_INVALID)
+            source = uow.campaign_content.source_by_content(combined)
+            if source is None:
+                source = combined
+                uow.campaign_content.add_source(source)
+            # Same evidence under a distinct key cannot create duplicate sources/revision work.
+            old = uow.campaign_content.clarification_for_source(source.id)
+            if old is not None: raise ApplicationError(Code.REQUIREMENT_REVISION_CONFLICT)
+            record = Clarification(project_id=project_id,campaign_id=campaign_id,requirement_id=requirement_id,
+                source_id=source.id,request_key=request_key,facts_hash=facts.content_hash,first_fact_line=len(prefix.split("\n")))
+            uow.campaign_content.add_clarification(record)
+            uow.commit()
+            return ClarificationView.model_validate(record.model_dump())
+
+    def get_requirement_history(self,project_id,campaign_id,requirement_id):
+        project_id,campaign_id,requirement_id=map(identifier,(project_id,campaign_id,requirement_id))
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._review_object(uow,project_id,campaign_id,requirement_id,"REQUIREMENT")
+            items=tuple(RequirementHistoryEntry.model_validate(r) for r in uow.campaign_content.revision_history(requirement_id))
+            return CollectionPage[RequirementHistoryEntry](items=items,total_returned=len(items),truncated=False)
 
     def extract_campaign_requirements(self, project_id, campaign_id, source_id) -> ExtractionView:
+        return self._extract_attempt(project_id, campaign_id, source_id)
+
+    def retry_campaign_extraction(self, project_id, campaign_id, attempt_id) -> ExtractionView:
+        project_id, campaign_id, attempt_id = map(identifier, (project_id, campaign_id, attempt_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            parent = uow.campaign_content.attempt(attempt_id)
+            if parent is None or (parent.project_id, parent.campaign_id) != (project_id, campaign_id):
+                raise ApplicationError(Code.EXTRACTION_ATTEMPT_NOT_FOUND)
+        return self._extract_attempt(project_id, campaign_id, parent.source_id, parent_attempt_id=attempt_id)
+
+    def list_campaign_extraction_attempts(self, project_id, campaign_id, source_id, *, limit=50):
         project_id, campaign_id, source_id = map(identifier, (project_id, campaign_id, source_id))
+        limit = list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._source(uow, project_id, campaign_id, source_id)
+            records = uow.campaign_content.attempt_history(source_id, limit)
+            items = tuple(extraction_view(r, is_latest=i == 0) for i,r in enumerate(records[:limit]))
+            return CollectionPage[ExtractionView](items=items,total_returned=len(items),truncated=len(records)>limit)
+
+    def _extract_attempt(self, project_id, campaign_id, source_id, *, parent_attempt_id=None):
+        project_id, campaign_id, source_id = map(identifier, (project_id, campaign_id, source_id))
+        def replay(repo):
+            if parent_attempt_id is None:
+                existing = repo.extraction_for_source(source_id)
+            else:
+                parent = repo.attempt(parent_attempt_id)
+                if parent is None or parent.source_id != source_id or (parent.project_id,parent.campaign_id) != (project_id,campaign_id):
+                    raise ApplicationError(Code.EXTRACTION_ATTEMPT_NOT_FOUND)
+                existing = repo.retry_child(parent_attempt_id)
+                if existing is None and not extraction_retryable(parent):
+                    raise ApplicationError(Code.EXTRACTION_RETRY_NOT_ALLOWED)
+            if existing is not None:
+                if existing.status == "STARTED":
+                    raise ApplicationError(Code.EXTRACTION_RECONCILIATION_REQUIRED if parent_attempt_id is None else Code.EXTRACTION_RETRY_CONFLICT)
+                latest = repo.extraction_for_source(source_id, latest=True)
+                return extraction_view(existing,is_latest=latest.id == existing.id)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             source = self._source(uow, project_id, campaign_id, source_id)
-            existing = uow.campaign_content.extraction_for_source(source_id)
-            if existing is not None:
-                if existing.status == ExtractionStatus.STARTED:
-                    raise ApplicationError(Code.EXTRACTION_RECONCILIATION_REQUIRED)
-                return extraction_view(existing)
-        if source.status != "INGESTED":
-            raise ApplicationError(Code.SOURCE_NOT_INGESTED)
-        if self._requirement_extractor is None:
-            raise ApplicationError(Code.EXTRACTION_NOT_CONFIGURED)
+            existing = replay(uow.campaign_content)
+            if existing is not None: return existing
+            clarification = uow.campaign_content.clarification_for_source(source_id)
+            target = None if clarification is None else uow.campaign_content.requirement(clarification.requirement_id)
+            parent = None if parent_attempt_id is None else uow.campaign_content.attempt(parent_attempt_id)
+        if source.status != "INGESTED": raise ApplicationError(Code.SOURCE_NOT_INGESTED)
+        if self._requirement_extractor is None: raise ApplicationError(Code.EXTRACTION_NOT_CONFIGURED)
         try:
-            request = self._requirement_extractor.prepare(source)
+            request = self._requirement_extractor.prepare(source) if target is None else self._requirement_extractor.prepare_revision(source, target, clarification.first_fact_line)
         except ModelError:
             raise ApplicationError(Code.EXTRACTION_CONTEXT_LIMIT) from None
         extraction = RequirementExtraction(project_id=project_id, campaign_id=campaign_id, source_id=source.id,
-            source_hash=source.content_hash, model=request.model)
+            source_hash=source.content_hash, model=request.model, parent_attempt_id=parent_attempt_id,
+            attempt_number=1 if parent is None else parent.attempt_number+1)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             uow.session.connection(execution_options={"qa_job_write": True})
             self._source(uow, project_id, campaign_id, source_id)
-            existing = uow.campaign_content.extraction_for_source(source_id)
-            if existing is not None:
-                if existing.status == ExtractionStatus.STARTED:
-                    raise ApplicationError(Code.EXTRACTION_RECONCILIATION_REQUIRED)
-                return extraction_view(existing)
+            existing = replay(uow.campaign_content)
+            if existing is not None: return existing
+            if clarification is not None and (not uow.campaign_content.is_current(target.id) or uow.campaign_content.version(target.id) >= 10 or uow.campaign_content.active_revision(target.id)):
+                raise ApplicationError(Code.REQUIREMENT_REVISION_CONFLICT)
             uow.campaign_content.reserve(extraction)
             uow.commit()
         # No DB transaction is open during provider work. One explicit attempt, no retry loop.
@@ -493,6 +585,11 @@ class QASentinelApplication:
             response = self._requirement_extractor.extract(request)
             metadata = ModelMetadata.model_validate(response.metadata.model_dump())
             output = validate_output(source, response.parsed_output)
+            if clarification is not None:
+                if len(output.requirements) != 1 or output.requirements[0].key != target.key:
+                    raise ValueError("EXTRACTION_INVALID_OUTPUT")
+                if not any(ref.start_line >= clarification.first_fact_line for ref in output.requirements[0].source_references):
+                    raise ValueError("EXTRACTION_INVALID_CITATION")
             requirements = tuple(CampaignRequirement(**r.model_dump(), project_id=project_id, campaign_id=campaign_id,
                 extraction_id=extraction.id, logical_key=f"REQ-{source.id.hex}-{r.key}",
                 id=uuid5(NAMESPACE_URL, f"{source.id}:requirements-v1:{r.key}"),
@@ -511,6 +608,7 @@ class QASentinelApplication:
             "status": ExtractionStatus.FAILED if error else ExtractionStatus.SUCCEEDED,
             "finished_at": datetime.now(timezone.utc), "error_code": error, "metadata": metadata})
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
             uow.campaign_content.finish(completed, () if error else requirements)
             uow.commit()
         return extraction_view(completed)
@@ -600,6 +698,7 @@ class QASentinelApplication:
                 requirement=uow.campaign_content.requirement(id)
                 if requirement is None:raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_NOT_FOUND)
                 if (requirement.project_id,requirement.campaign_id)!=(project_id,campaign_id):raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
+                if not uow.campaign_content.is_current(requirement.id): raise ApplicationError(Code.REQUIREMENT_REVISION_CONFLICT)
                 requirements.append(requirement)
             versions,request_hash=generation_identity(requirements)
             existing=uow.test_specifications.generation_identity(campaign_id,request_hash)

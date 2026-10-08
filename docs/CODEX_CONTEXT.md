@@ -38,17 +38,17 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
-Campaign executor exists. Migration head is 0009; see
+Campaign executor exists. Migration head is 0010; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.4
+## Current Phase 3 increment: Task 3.5
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
 strict CSV/Markdown test import, generation from 1–20 explicitly selected
 Requirements, and Requirement/Test approval with operator-asserted reviewer labels.
-Review evidence loads only on request. PDF/XLSX and clarification/revision editing
-remain unsupported. Ingestion never invokes extraction automatically; no write or
+Review evidence loads only on request. PDF/XLSX remain unsupported. Task 3.5 adds bounded clarification recovery
+without a generic Requirement editor. Ingestion never invokes extraction automatically; no write or
 model action runs on mount, polls, or automatically retries. Shared same-origin
 session/CSRF/error transport remains unchanged; route changes discard late action
 completion. Contextual Campaign transitions preserve DRAFT → READY_FOR_REVIEW →
@@ -79,6 +79,15 @@ terminal starts reject. No models, network, browser, subprocess, target filesyst
 legacy Task/job evidence, retry/resume, Stop or crash replay. Frontend uses explicit
 intent keys, bounded snapshot pages, shared CSRF and stale-completion guards, with
 clear synthetic warnings. Phase 4 evidence/reporting remains future work.
+
+Task 3.5 adds explicit extraction retry (three attempts/source), independent usage
+and durable history, plus inert operator clarification sources and separate AI
+revision into new Requirement identities (ten versions/chain). Superseded content
+and approvals remain audit evidence; current-only filtering retires dependent
+Tests from coverage/readiness/new Run selection until replacements are explicitly
+reviewed. Initial Extract stays idempotent; reads never invoke providers. Migration
+0010 preserves old attempts and refuses audit-destructive downgrade. No synthetic
+executor change. See [preparation recovery](PREPARATION_RECOVERY.md).
 
 ## Product direction
 

@@ -13,9 +13,11 @@ def test_0007_upgrade_check_downgrade_preserves_all_0006_data(review):
     app, _, engine, config, p, c, req, spec = review
     command.downgrade(config, '0006')
     names = set(inspect(engine).get_table_names()) - {'alembic_version'}
+    # Compare all columns present at this historical checkpoint after upgrades.
+    columns = {name: ','.join('"' + c['name'] + '"' for c in inspect(engine).get_columns(name)) for name in names}
     def snapshot():
         with engine.connect() as connection:
-            return {name: connection.execute(text(f'SELECT * FROM "{name}" ORDER BY rowid')).all() for name in names}
+            return {name: connection.execute(text(f'SELECT {columns[name]} FROM "{name}" ORDER BY rowid')).all() for name in names}
     original = snapshot()
     command.upgrade(config, '0007')
     assert snapshot() == original and set(inspect(engine).get_table_names()) == names | NEW | {'alembic_version'}
@@ -41,7 +43,7 @@ def test_downgrade_cannot_silently_delete_approval_evidence(review):
     assert app.get_campaign_requirement_review(p.id, c.id, req.id) == receipt
     assert app.get_campaign_readiness(p.id, c.id).status == 'READY'
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0009'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0010'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 

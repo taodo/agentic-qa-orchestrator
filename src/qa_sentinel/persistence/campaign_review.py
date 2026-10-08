@@ -1,4 +1,5 @@
 """Atomic approval receipts and bounded SQL-only traceability/readiness queries."""
+from .preparation_current import current_requirement, current_test
 from sqlalchemy import select, func, case, and_, update
 from qa_sentinel.domain.campaign_review import (ApprovalEvidence, ReviewError, ReviewState,
     RequirementTrace, TraceLink, approve, content_hash, coverage)
@@ -63,7 +64,7 @@ class CampaignReviewRepository:
             TestSpecificationReviewRow.project_id == Specification.project_id).correlate(Specification).exists()
         known_link = select(Link.test_spec_id).where(Link.test_spec_id == Specification.id,
             Link.campaign_id == Specification.campaign_id, Link.project_id == Specification.project_id).correlate(Specification).exists()
-        return and_(Specification.review_status == "APPROVED", func.json_array_length(Specification.information_markers) == 0,
+        return and_(current_test(), Specification.review_status == "APPROVED", func.json_array_length(Specification.information_markers) == 0,
             func.json_array_length(Specification.unresolved_requirement_refs) == 0,
             func.json_array_length(Specification.required_evidence) > 0, Specification.overall_expected_result.is_not(None),
             receipt, known_link)
@@ -72,9 +73,9 @@ class CampaignReviewRepository:
         grouped = select(Link.requirement_id.label("requirement_id"), func.count().label("linked"),
             func.sum(case((self._eligible_spec(), 1), else_=0)).label("approved")).join(Specification,
                 and_(Specification.id == Link.test_spec_id, Specification.project_id == Link.project_id,
-                    Specification.campaign_id == Link.campaign_id)).where(self._scope(Link, project_id, campaign_id)).group_by(Link.requirement_id).subquery()
+                    Specification.campaign_id == Link.campaign_id)).where(self._scope(Link, project_id, campaign_id), current_test()).group_by(Link.requirement_id).subquery()
         return select(Requirement.id.label("requirement_id"), Requirement.review_status,
-            func.coalesce(grouped.c.linked, 0).label("linked"), func.coalesce(grouped.c.approved, 0).label("approved"))            .outerjoin(grouped, grouped.c.requirement_id == Requirement.id).where(self._scope(Requirement, project_id, campaign_id))
+            func.coalesce(grouped.c.linked, 0).label("linked"), func.coalesce(grouped.c.approved, 0).label("approved"))            .outerjoin(grouped, grouped.c.requirement_id == Requirement.id).where(self._scope(Requirement, project_id, campaign_id), current_requirement())
 
     def traceability(self, project_id, campaign_id, limit):
         if type(limit) is not int or not 1 <= limit <= 200: raise ValueError("Invalid trace limit")
@@ -85,7 +86,7 @@ class CampaignReviewRepository:
         if ids:
             grouped = self.session.execute(select(Link.requirement_id, Specification.review_status, func.count())
                 .join(Specification, Specification.id == Link.test_spec_id)
-                .where(self._scope(Link, project_id, campaign_id), Link.requirement_id.in_(ids))
+                .where(self._scope(Link, project_id, campaign_id), Link.requirement_id.in_(ids), current_test())
                 .group_by(Link.requirement_id, Specification.review_status).limit(limit * 4 + 1)).all()
             if len(grouped) > limit * 4: raise ValueError("Stored review status limit")
             for id, status, count in grouped: states[id][status] = count
@@ -93,13 +94,13 @@ class CampaignReviewRepository:
             linked_test_count=r["linked"], approved_test_count=r["approved"], linked_test_review_states=states[r["requirement_id"]],
             coverage=coverage(r["linked"], r["approved"])) for r in rows[:limit])
         links = self.session.execute(select(Link.requirement_id, Link.test_spec_id, Specification.review_status.label("test_review_status"))
-            .join(Specification, Specification.id == Link.test_spec_id).where(self._scope(Link, project_id, campaign_id))
+            .join(Specification, Specification.id == Link.test_spec_id).where(self._scope(Link, project_id, campaign_id), Link.requirement_id.in_(select(Requirement.id).where(current_requirement())), current_test())
             .order_by(Link.requirement_id, Link.test_spec_id).limit(limit + 1)).mappings().all()
         return requirements, len(rows) > limit, tuple(TraceLink.model_validate(dict(r)) for r in links[:limit]), len(links) > limit
 
     def readiness_counts(self, project_id, campaign_id):
         def count(table, *conditions):
-            return self.session.scalar(select(func.count()).select_from(table).where(self._scope(table, project_id, campaign_id), *conditions))
+            return self.session.scalar(select(func.count()).select_from(table).where(self._scope(table, project_id, campaign_id), current_requirement() if table is Requirement else current_test(), *conditions))
         req_receipt = select(RequirementReviewRow.object_id).where(RequirementReviewRow.object_id == Requirement.id,
             RequirementReviewRow.project_id == Requirement.project_id, RequirementReviewRow.campaign_id == Requirement.campaign_id).correlate(Requirement).exists()
         valid_req = and_(req_receipt, func.json_array_length(Requirement.information_markers) == 0,

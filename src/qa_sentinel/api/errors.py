@@ -7,6 +7,11 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.EXTRACTION_ATTEMPT_NOT_FOUND: (404, "Extraction attempt not found in this Campaign"),
+    Code.EXTRACTION_RETRY_NOT_ALLOWED: (409, "Extraction is not eligible for another retry"),
+    Code.EXTRACTION_RETRY_CONFLICT: (409, "Retry attempt already started; inspect its history"),
+    Code.CLARIFICATION_INVALID: (422, "Clarification must contain bounded valid text"),
+    Code.REQUIREMENT_REVISION_CONFLICT: (409, "Requirement revision is stale, conflicting or unavailable"),
     Code.RUN_INVALID_STATE: (409, "QA Run lifecycle does not permit this action"),
     Code.RUN_EXECUTION_FAILED: (409, "Synthetic execution could not complete"),
     Code.CAMPAIGN_NOT_READY_FOR_RUN: (409, "Campaign preparation is not READY for a QA Run"),

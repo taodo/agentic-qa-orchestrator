@@ -104,7 +104,7 @@ def test_health_openapi_and_no_unversioned_domain_routes(api):
     expected |= {"/api/v1/tasks/{task_id}/executions", "/api/v1/executions/{execution_id}"}
     expected.add("/api/v1/tasks/{task_id}/reconciliation")
     expected |= {"/api/v1/projects/{project_id}/campaigns/{campaign_id}" + suffix for suffix in
-        ("/sources", "/sources/{source_id}", "/sources/{source_id}/extract-requirements", "/requirements", "/requirements/{requirement_id}", "/model-usage", "/test-imports", "/test-imports/{import_id}", "/generate-tests", "/test-generations", "/test-generations/{generation_id}", "/test-specifications", "/test-specifications/{test_spec_id}", "/requirements/{requirement_id}/review", "/test-specifications/{test_spec_id}/review", "/traceability", "/readiness")}
+        ("/extractions/{attempt_id}/retry", "/sources/{source_id}/extractions", "/requirements/{requirement_id}/clarifications", "/requirements/{requirement_id}/history", "/sources", "/sources/{source_id}", "/sources/{source_id}/extract-requirements", "/requirements", "/requirements/{requirement_id}", "/model-usage", "/test-imports", "/test-imports/{import_id}", "/generate-tests", "/test-generations", "/test-generations/{generation_id}", "/test-specifications", "/test-specifications/{test_spec_id}", "/requirements/{requirement_id}/review", "/test-specifications/{test_spec_id}/review", "/traceability", "/readiness")}
     expected |= {"/api/v1/projects/{project_id}/campaigns" + suffix for suffix in ("", "/{campaign_id}", "/{campaign_id}/transitions")}
     expected |= {"/api/v1/projects/{project_id}/campaigns/{campaign_id}/runs" + suffix for suffix in
                  ("", "/{run_id}", "/{run_id}/tests", "/{run_id}/requirements", "/{run_id}/start")}

@@ -148,6 +148,8 @@ class RequirementExtraction(Frozen):
     campaign_id: UUID
     source_id: UUID
     source_hash: Hash
+    attempt_number: int = Field(default=1, ge=1, le=3, strict=True)
+    parent_attempt_id: UUID | None = None
     contract_version: Literal["requirements-v1"] = "requirements-v1"
     agent: Literal["RESEARCHER"] = "RESEARCHER"
     model: Annotated[str, StringConstraints(min_length=1, max_length=128)]
@@ -159,6 +161,8 @@ class RequirementExtraction(Frozen):
 
     @model_validator(mode="after")
     def lifecycle(self):
+        if (self.attempt_number == 1) != (self.parent_attempt_id is None):
+            raise ValueError("Invalid extraction ancestry")
         if self.status == ExtractionStatus.STARTED:
             if self.finished_at is not None or self.error_code is not None or self.metadata is not None:
                 raise ValueError("Started extraction cannot claim completion")
@@ -175,3 +179,26 @@ def validate_citations(source, requirements):
                 raise ValueError("EXTRACTION_INVALID_CITATION")
             if ref.excerpt not in "\n".join(lines[ref.start_line-1:ref.end_line]):
                 raise ValueError("EXTRACTION_INVALID_CITATION")
+
+
+RETRYABLE_EXTRACTION_CODES = frozenset({
+    "EXTRACTION_INVALID_CITATION", "EXTRACTION_INVALID_OUTPUT", "MODEL_RATE_LIMIT",
+    "MODEL_TIMEOUT", "MODEL_CONNECTION", "MODEL_SERVER_ERROR",
+    "MODEL_MALFORMED_RESPONSE", "MODEL_INCOMPLETE_RESPONSE",
+})
+
+
+def extraction_retryable(attempt):
+    return attempt.status == "FAILED" and attempt.attempt_number < 3 and attempt.error_code in RETRYABLE_EXTRACTION_CODES
+
+
+class Clarification(Frozen):
+    id: UUID = Field(default_factory=uuid4)
+    project_id: UUID
+    campaign_id: UUID
+    requirement_id: UUID
+    source_id: UUID
+    request_key: Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")]
+    facts_hash: Hash
+    first_fact_line: Line
+    created_at: AwareDatetime = Field(default_factory=lambda: datetime.now(timezone.utc))
