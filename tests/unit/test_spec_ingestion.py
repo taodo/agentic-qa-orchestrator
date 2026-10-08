@@ -16,7 +16,7 @@ def output(value, **changes):
     fields = dict(source_id=value.id, source_hash=value.content_hash, analyzed_start_line=1,
         analyzed_end_line=value.line_count, requirements=[dict(key="LOGIN", title="Login", description="User must log in.",
         acceptance_criteria=[dict(key="C1",text="User must log in.")], information_markers=[],
-        source_references=[dict(source_id=value.id, source_hash=value.content_hash, start_line=1, end_line=1, excerpt="User must log in.")])])
+        source_references=[dict(source_id=value.id, source_hash=value.content_hash, start_line=1, end_line=1)])])
     fields.update(changes)
     return RequirementsOutput.model_validate(fields)
 
@@ -53,7 +53,8 @@ def test_markdown_links_includes_scripts_prompt_text_are_inert_data():
     class NoCalls:
         def generate(self,*args): pytest.fail('Preparing context is deterministic')
     request = RequirementExtractor(NoCalls(), ModelSettings(model='test-model')).prepare(value)
-    assert text in __import__('json').loads(request.user_input)['normalized_text']
+    rendered = __import__('json').loads(request.user_input)['line_numbered_text']
+    assert rendered == '\n'.join(f'{n:04d} | {line}' for n,line in enumerate(text.split('\n'),1))
     assert 'UNTRUSTED DATA' in request.system_instructions and request.agent_name == 'RESEARCHER'
 
 
@@ -65,7 +66,7 @@ def test_required_whole_context_fails_before_provider_without_truncation(text):
     assert value.normalized_text == text
 
 
-@pytest.mark.parametrize("change", ['source','hash','range','excerpt','coverage'])
+@pytest.mark.parametrize("change", ['source','hash','range','coverage'])
 def test_citation_and_full_coverage_validation(change):
     value = source()
     result = output(value).model_dump(mode='json')
@@ -75,20 +76,19 @@ def test_citation_and_full_coverage_validation(change):
         if change == 'source': ref['source_id'] = str(uuid4())
         if change == 'hash': ref['source_hash'] = '0'*64
         if change == 'range': ref['end_line'] = 3
-        if change == 'excerpt': ref['excerpt'] = 'Invented text'
     with pytest.raises(ValueError, match='EXTRACTION_INVALID_CITATION'):
         validate_output(value, RequirementsOutput.model_validate(result))
 
 
 def test_missing_information_duplicate_keys_and_unsupported_approval():
     value = source()
-    draft = output(value).requirements[0].model_dump(mode='json')
+    draft = validate_output(value, output(value)).requirements[0].model_dump(mode='json')
     draft['acceptance_criteria'] = []
     with pytest.raises(ValidationError): RequirementDraft.model_validate(draft)
     draft['information_markers'] = [dict(kind='MISSING_INFORMATION', description='Expected errors unspecified')]
     assert RequirementDraft.model_validate(draft).acceptance_criteria == ()
     with pytest.raises(ValidationError):
-        output(value, requirements=[draft,draft])
+        output(value, requirements=[output(value).requirements[0].model_dump()] * 2)
     with pytest.raises(ValidationError):
         RequirementDraft.model_validate({**draft, 'review_status':'APPROVED'})
     with pytest.raises(ValidationError):

@@ -58,9 +58,17 @@ supplied only as untrusted source data, never as system instructions. Prompts
 require explicit supported facts, ambiguity/missing-information markers, and
 no invented details or test-case generation.
 
-The complete normalized source plus UUID/hash/line metadata is serialized once.
+Task 3.9 renders the complete immutable normalized source as `line_numbered_text`
+plus UUID/hash/line metadata, serialized once as untrusted JSON data. Each LF line
+is prefixed `NNNN | ` (four-digit one-based number, space, pipe, space), including
+blank lines and a final empty line. Original source characters after the prefix
+are unchanged; embedded numbers/pipes do not determine positions. No duplicate
+raw-text payload is sent. Line numbering supports all 4,096 source lines.
 The entire serialized context must fit the existing 60,000-character ModelRequest
-bound. Otherwise EXTRACTION_CONTEXT_LIMIT (422) occurs before a reservation or
+bound, including the numbering and JSON escaping overhead. ContextSelection
+original_chars/selected_chars and selected_bytes measure that actual complete user
+context; revision includes its target/addendum metadata too. Otherwise
+EXTRACTION_CONTEXT_LIMIT (422) occurs before a reservation or
 provider call. There is no truncation, chunking, summarization or generic cache.
 Whole-source coverage fields must match lines 1 through line_count. A model's
 coverage declaration and semantic fidelity cannot be proven deterministically;
@@ -75,12 +83,34 @@ Campaign IDs, extraction ID, logical key, title (200 characters), description
 UUIDs derive from source UUID + contract version + local key; logical keys include
 the source UUID so changed snapshots cannot overwrite earlier requirements.
 
-Each reference carries source UUID/hash, LINES location type, inclusive normalized
-start/end line and a supporting excerpt of at most 512 characters. Deterministic
-validation requires the selected source/hash, valid range and an exact excerpt
-within those lines. All requirements and references are validated before any
-requirement insert. Invalid evidence/output fails the whole extraction atomically;
-no unsupported requirement is accepted. Exact excerpts cannot prove the semantic
+The model-facing CitationRange has only source_id, source_hash, start_line and
+end_line. It has no excerpt field (unexpected fields are rejected by schema-native
+structured output). Existing RequirementDraft content rules are reused; the model
+still selects evidence locations, not stored text.
+
+Backend canonicalization validates whole-source identity/coverage and every
+reference's UUID/hash and ordered one-based in-bounds range, then reconstructs:
+
+```python
+excerpt = "\n".join(source.normalized_text.split("\n")[start_line - 1:end_line])
+```
+
+No fuzzy/semantic matching, guessing, trimming or evidence truncation. Nonblank
+canonical evidence must fit the existing 512-character excerpt limit, including
+newlines. Blank-only or oversized ranges fail EXTRACTION_INVALID_CITATION. Both
+range-only output and canonical output obey the existing 131,072 UTF-8-byte total
+output bound. GroundedRequirementsOutput contains ordinary RequirementDraft and
+SourceCitation records; persisted fields/location_type remain unchanged. Excerpt
+validation now preserves exact source whitespace rather than stripping it;
+other ShortText fields keep their existing rules.
+
+New extraction writes require exact equality to the selected immutable range in
+both post-model validation and repository finish. The existing substring validator
+remains available for legacy citations; old partial excerpts are not rewritten or
+rejected on domain/API reads or terminal replay. No migration is required.
+All requirements and references are validated before any requirement insert.
+Invalid evidence/output fails the whole extraction atomically;
+no unsupported requirement is accepted. Canonical excerpts cannot prove the semantic
 inference: a citation may be real while a model interpretation is wrong.
 
 Missing acceptance criteria require an explicit MISSING_INFORMATION marker.
@@ -98,13 +128,19 @@ call. Its transaction closes before model work. Requirements, terminal status
 short transaction afterward. This record is not TaskState, Campaign status or
 ExecutionJobStatus, and does not create hidden workflow evidence.
 
-One requirements-v1 attempt is allowed per immutable source. Repeated requests
-return the existing terminal result, including FAILED, without another model
+Initial requirements-v1 extraction is idempotent per immutable source. Task 3.5
+adds [explicit bounded retry and clarification revision](PREPARATION_RECOVERY.md);
+Task 3.9 applies the same deterministic grounding to all three paths. Revision
+keeps exactly one target/local key, a new immutable version and addendum citation
+requirements. One adapter call per attempt, with no verifier/repair/regeneration
+call or automatic retry. Existing failed attempts/usage and retry limits remain.
+
+The original initial-extraction semantics remain: repeated requests return the existing terminal result, including FAILED, without another model
 call or duplicate requirements. Concurrent requests for STARTED return
 EXTRACTION_RECONCILIATION_REQUIRED. A process crash or failed completion
 persistence leaves STARTED visible and cannot be replayed automatically. There
-is no retry/recovery endpoint in this increment, no raw exception/refusal text,
-and no fabricated completion or usage. New contract versions/re-extraction need
+was no retry/recovery endpoint in Task 2.2; later explicit recovery is linked above.
+There is no raw exception/refusal text and no fabricated completion or usage. New contract versions/re-extraction need
 an explicit future policy rather than changing this source uniqueness silently.
 SDK transport retries remain disabled; application extraction does not duplicate
 Task ReliabilityService policy or retry automatically.

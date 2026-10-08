@@ -73,7 +73,7 @@ class CampaignContentRepository:
         source = self.source(extraction.source_id)
         prepared = [CampaignRequirement.model_validate(r.model_dump()) for r in requirements]
         if len(prepared) > 100: raise ValueError("Requirement output limit")
-        validate_citations(source, prepared)
+        validate_citations(source, prepared, canonical=True)
         for requirement in prepared:
             if requirement.review_status == "APPROVED": raise ValueError("Extraction cannot approve requirements")
             if (requirement.project_id, requirement.campaign_id, requirement.extraction_id) != (old.project_id, old.campaign_id, old.id):
