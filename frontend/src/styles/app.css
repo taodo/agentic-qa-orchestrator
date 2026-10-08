@@ -276,3 +276,14 @@ details[open] > summary { margin-bottom: 16px; color: var(--text); }
 .run-test-result[data-outcome=FAIL] { border-left-color: var(--danger); }
 .run-test-result[data-outcome=PASS] { border-left-color: var(--success); }
 @media (max-width: 760px) { .next-step { padding: 18px; } .readiness-checks li { align-items: start; } .campaign-counts { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+
+/* Action-local provider facts, not Campaign totals or billing estimates. */
+.ai-action-summary { margin: 16px 0; padding: 18px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--field); overflow-wrap: anywhere; }
+.ai-action-summary .panel-heading h4 { margin: 0; font-size: .95rem; }
+.ai-action-summary .metadata { margin: 14px 0; gap: 14px; }
+.ai-token-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); margin: 12px 0; border: 1px solid var(--border); border-radius: 4px; }
+.ai-token-metrics > div { padding: 10px 12px; }
+.ai-token-metrics dt { font-size: .75rem; color: var(--text-secondary); }
+.ai-token-metrics dd { margin: 4px 0 0; font-size: 1.12rem; font-variant-numeric: tabular-nums; }
+.ai-action-summary h5 { margin: 16px 0 8px; }
+@media(max-width:760px) { .ai-token-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); } .ai-model-metadata { grid-template-columns: 1fr; } }

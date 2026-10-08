@@ -1,6 +1,7 @@
 import { useCallback, useId, useState, type FormEvent } from 'react';
-import { generateTests, importTests, listRequirements } from '../api/campaigns';
+import { generateTests, importTests, listRequirements, listGenerations, campaignPath } from '../api/campaigns';
 import type { TestGeneration, TestImport } from '../api/campaignTypes';
+import { AIActionSummary } from './AIActionSummary';
 import { useResource } from '../app/useResource';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { validDocument, type PreparationScope } from './PreparationSources';
@@ -45,6 +46,7 @@ export function PreparationImport({ projectId, campaignId, changed }: Preparatio
 export function PreparationGeneration({ projectId, campaignId, changed }: PreparationScope) {
   const requirements = useResource(useCallback(() => listRequirements(projectId,campaignId),[projectId,campaignId]));
   const action = usePreparationAction<TestGeneration>(), [selected,setSelected] = useState<string[]>([]), [validation,setValidation] = useState('');
+  const history = usePreparationAction<Awaited<ReturnType<typeof listGenerations>>>();
   const eligible = new Set(requirements.data?.items.map(row => row.id));
   const chosen = [...new Set(selected)].filter(id => eligible.has(id));
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -63,5 +65,13 @@ export function PreparationGeneration({ projectId, campaignId, changed }: Prepar
       </fieldset><p role="status">{validation}{action.busy && 'Generating Test Specifications…'}{action.result && <>{action.result.status === 'SUCCEEDED' ? 'Test Specifications generated. Review is required.' : 'Test generation did not complete successfully.'} Status: {action.result.status}.{action.result.error_code && <> Code: {action.result.error_code}.</>} Equivalent selections may return an existing terminal attempt; unresolved attempts require operator attention.</>}</p>
       {action.error && <ErrorState error={action.error} />}</form><TruncationNotice truncated={requirements.data.truncated} />
     </>}
+    {action.result && <AIActionSummary attempt={action.result} kind="generation" base={campaignPath(projectId,campaignId)} />}
+    <div className="preparation-action"><button type="button" disabled={history.busy || action.busy} onClick={() => void history.run(() => listGenerations(projectId,campaignId))}>{history.busy ? 'Loading generation history…' : history.result ? 'Refresh generation history' : 'View generation history'}</button>
+      {history.error && <ErrorState error={history.error} />}
+      {history.result && <section aria-label="Test generation history"><h3>Test generation history</h3><p className="hint">Persisted attempts only. Viewing or refreshing never invokes a model.</p>
+        {!history.result.items.length && <EmptyState>No saved generation attempts.</EmptyState>}
+        {history.result.items.map(record => <article className="evidence-record" key={record.id}><p className="mono">{record.id}</p><AIActionSummary attempt={record} kind="generation" base={campaignPath(projectId,campaignId)} historical /></article>)}
+        <TruncationNotice truncated={history.result.truncated} /></section>}
+    </div>
   </section>;
 }

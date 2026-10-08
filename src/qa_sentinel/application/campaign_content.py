@@ -8,6 +8,7 @@ from qa_sentinel.models.base import ContextSelection
 from .test_specifications import TestGenerationView,generation_view
 from qa_sentinel.domain.test_specification import TestGeneration
 from .models import View
+from .ai_action_results import ActionOutput
 from .model_usage import UsageTotals, UsageGroup, totals, safe_metadata
 
 
@@ -59,11 +60,14 @@ class ExtractionView(View):
     usage: UsageTotals
     context_selection: ContextSelection | None
 
+    provider: str | None = None
+    output: ActionOutput | None = None
 
-def extraction_view(record, *, is_latest=True):
+
+def extraction_view(record, *, is_latest=True, output=None):
     metadata = None if record.metadata is None else safe_metadata(record.metadata.model_dump(mode="json"))
     fields = record.model_dump(include=set(ExtractionView.model_fields))
-    return ExtractionView(**fields, retryable=extraction_retryable(record), is_latest=is_latest, configured_model=record.model,
+    return ExtractionView(**fields, output=output, provider=None if metadata is None else metadata["provider"], retryable=extraction_retryable(record), is_latest=is_latest, configured_model=record.model,
         provider_model=None if metadata is None else metadata["model"], usage=totals([metadata]),
         context_selection=None if record.metadata is None else record.metadata.context_selection)
 

@@ -64,7 +64,7 @@ describe('workspace navigation and hierarchy', () => {
     const intake=within(main).getByRole('heading',{name:'Add PRD / Spec'});
     expect(heading.compareDocumentPosition(intake)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(main).getByRole('link',{name:'Add PRD / Spec'})).toHaveAttribute('href','#specification-sources');
-    const blocked=within(main).getByRole('heading',{name:blockedRequirement.title}).closest('li')!;
+    const blocked=(await within(main).findByRole('heading',{name:blockedRequirement.title})).closest('li')!;
     fireEvent.click(within(blocked).getByRole('button',{name:'Add Clarification / Provide Missing Information'}));
     expect(within(blocked).getByLabelText('Missing facts (no credentials or secrets)')).toBeVisible();
     expect(within(blocked).getByRole('button',{name:'Save Clarification'})).toBeVisible();

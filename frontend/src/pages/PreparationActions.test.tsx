@@ -63,7 +63,7 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
   });
   it('shows terminal FAILED attempt honestly without a success refresh or replay',async()=>{
     mock(()=>response({...attempt,status:'FAILED',error_code:'MODEL_INVALID_OUTPUT'}),{sources:[source]});open();fireEvent.click(await screen.findByRole('button',{name:'Extract Requirements'}));
-    expect(await screen.findByText(/MODEL_INVALID_OUTPUT/)).toHaveTextContent('FAILED');expect(posts()).toHaveLength(1);
+    const summary=await screen.findByRole('region',{name:'Requirement Extraction result'});expect(summary).toHaveTextContent('FAILED');expect(within(summary).getByText('MODEL_INVALID_OUTPUT')).toBeInTheDocument();expect(posts()).toHaveLength(1);
     expect(vi.mocked(fetch).mock.calls.filter(([url])=>url===api+'/requirements?limit=50')).toHaveLength(1);
   });
   it('keeps source input after a safe error and rejects oversized UTF-8 before POST',async()=>{

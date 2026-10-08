@@ -41,3 +41,5 @@ export const retryExtraction = (p:string,c:string,id:string) => request<Requirem
 export const listExtractionHistory = (p:string,c:string,id:string) => request<CollectionPage<RequirementExtraction>>(`${campaignPath(p,c)}/sources/${encodeURIComponent(id)}/extractions?limit=50`);
 export const addClarification = (p:string,c:string,id:string,body:{request_key:string;content:string}) => request<import('./campaignTypes').Clarification>(`${campaignPath(p,c)}/requirements/${encodeURIComponent(id)}/clarifications`,{method:'POST',body:JSON.stringify(body)});
 export const getRequirementHistory = (p:string,c:string,id:string) => request<CollectionPage<import('./campaignTypes').RequirementHistoryEntry>>(`${campaignPath(p,c)}/requirements/${encodeURIComponent(id)}/history`);
+
+export const listGenerations = (p:string,c:string) => request<CollectionPage<TestGeneration>>(`${campaignPath(p,c)}/test-generations?limit=50`);

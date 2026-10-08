@@ -58,15 +58,24 @@ export interface PreparationAttempt {
   id: UUID; project_id: UUID; campaign_id: UUID; status: 'STARTED' | 'SUCCEEDED' | 'FAILED';
   started_at: Timestamp; finished_at: Timestamp | null; error_code: string | null;
 }
-export interface RequirementExtraction extends PreparationAttempt {
+export interface TokenMetric { total: number | null; known_sum?: number | null; missing_records?: number }
+export interface ActionOutput {
+  generated_count: number; ready_for_review_count: number; needs_clarification_count: number;
+  inherited_clarification_count: number | null;
+  revised_requirement: { id: UUID; key: string; logical_key: string; version: number; review_status: ReviewStatus } | null;
+}
+export interface AIActionMetadata {
+  configured_model?: string; provider_model?: string | null; provider?: string | null;
+  usage?: Partial<Record<'input_tokens' | 'output_tokens' | 'reasoning_tokens' | 'total_tokens', TokenMetric>>;
+  output?: ActionOutput | null;
+}
+export interface RequirementExtraction extends PreparationAttempt, AIActionMetadata {
   source_id: UUID; source_hash: string; contract_version: string;
   attempt_number?: number; parent_attempt_id?: UUID | null; retryable?: boolean; is_latest?: boolean;
-  configured_model?: string; provider_model?: string | null;
-  usage?: { total_tokens: { total: number | null; known_sum: number | null } };
 }
 export interface Clarification { id: UUID; source_id: UUID; requirement_id: UUID; request_key: string; first_fact_line: number }
 export interface RequirementHistoryEntry { requirement: CampaignRequirement; version: number; is_current: boolean; supersedes_id: UUID | null }
-export interface TestGeneration extends PreparationAttempt { requirement_versions: { id: UUID; snapshot_hash: string }[]; contract_version: string }
+export interface TestGeneration extends PreparationAttempt, AIActionMetadata { requirement_versions: { id: UUID; snapshot_hash: string }[]; contract_version: string }
 export interface TestImport {
   id: UUID; project_id: UUID; campaign_id: UUID; name: string; format: 'CSV' | 'MARKDOWN' | 'XLSX';
   raw_hash: string; content_hash: string; contract_version: string; normalization_version: string;
