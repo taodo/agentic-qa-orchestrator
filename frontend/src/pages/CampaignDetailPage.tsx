@@ -13,9 +13,9 @@ import { PreparationImport, PreparationGeneration } from '../components/Preparat
 import { CampaignTransition } from '../components/CampaignTransition';
 
 interface CampaignContext { projectId: string; campaignId: string; campaign: CampaignView; base: string; readiness: ReturnType<typeof useResource<Readiness>>; transition: (value: CampaignView) => Promise<void> }
-function useCampaign() { return useOutletContext<CampaignContext>(); }
+export function useCampaign() { return useOutletContext<CampaignContext>(); }
 const sections = [['', 'Overview'], ['requirements', 'Requirements'], ['test-specifications', 'Test Specifications'],
-  ['traceability', 'Traceability'], ['readiness', 'Readiness']] as const;
+  ['traceability', 'Traceability'], ['readiness', 'Readiness'], ['runs', 'Runs']] as const;
 
 export function CampaignDetailPage({ projectId, campaignId }: { projectId: string; campaignId: string }) {
   const campaign = useResource(useCallback(() => getCampaign(projectId, campaignId), [projectId, campaignId]));

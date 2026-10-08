@@ -31,7 +31,7 @@ def test_0001_upgrade_backfills_only_existing_tasks_preserves_linked_history(tmp
     with engine.connect() as c:
         assert c.scalar(text("PRAGMA foreign_keys"))==1
         assert not c.execute(text("PRAGMA foreign_key_check")).all()
-        assert c.scalar(text("SELECT version_num FROM alembic_version"))=="0008"
+        assert c.scalar(text("SELECT version_num FROM alembic_version"))=="0009"
         projects=c.execute(text("SELECT * FROM projects")).mappings().all()
         if existing:
             assert len(projects)==1 and projects[0]["id"]==LEGACY_ID and projects[0]["key"]=="legacy-bootstrap"

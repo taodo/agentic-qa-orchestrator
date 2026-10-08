@@ -79,9 +79,21 @@ class QARun(Frozen):
     created_at: AwareDatetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     started_at: AwareDatetime | None = None
     completed_at: AwareDatetime | None = None
+    execution_error_code: Literal["RUN_EXECUTION_FAILED"] | None = None
 
     @model_validator(mode="after")
     def snapshot_owner(self):
+        if self.execution_status == "CREATED" and (self.started_at or self.completed_at or self.execution_error_code or self.qa_outcome != "NOT_EVALUATED"):
+            raise ValueError("Invalid CREATED lifecycle")
+        if self.execution_status == "RUNNING" and (self.started_at is None or self.completed_at or self.execution_error_code or self.qa_outcome != "NOT_EVALUATED"):
+            raise ValueError("Invalid RUNNING lifecycle")
+        if self.execution_status in {"COMPLETED", "FAILED"}:
+            if self.started_at is None or self.completed_at is None or self.completed_at < self.started_at:
+                raise ValueError("Terminal execution needs valid timestamps")
+            if self.execution_status == "FAILED" and (self.execution_error_code != "RUN_EXECUTION_FAILED" or self.qa_outcome not in {"PARTIAL", "NOT_EVALUATED"}):
+                raise ValueError("Invalid system failure")
+            if self.execution_status == "COMPLETED" and (self.execution_error_code or self.qa_outcome == "PARTIAL"):
+                raise ValueError("Invalid normal completion")
         if ((self.campaign_snapshot.project_id, self.campaign_snapshot.id) != (self.project_id, self.campaign_id)
                 or (self.readiness_at_creation.project_id, self.readiness_at_creation.campaign_id) != (self.project_id, self.campaign_id)
                 or self.readiness_at_creation.status != "READY" or self.readiness_at_creation.blocker_codes):
@@ -126,6 +138,8 @@ class QARunTest(Frozen):
 
     @model_validator(mode="after")
     def approved(self):
+        if (self.execution_status == "COMPLETED") != (self.qa_result != "NOT_EVALUATED"):
+            raise ValueError("QA results require completed test execution")
         validate_approval(self.content, self.approval, "TEST_SPECIFICATION")
         if (self.original_test_specification_id != self.content.id or not self.content.requirement_ids
                 or self.content.unresolved_requirement_refs):

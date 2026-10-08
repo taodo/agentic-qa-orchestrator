@@ -1,5 +1,6 @@
-"""Insert-only Run snapshots. Caller owns the short reserved SQLite transaction."""
-from sqlalchemy import select, func
+"""Immutable Run snapshots with narrow lifecycle updates in reserved transactions."""
+from sqlalchemy import select, func, update
+from qa_sentinel.domain.qa_run_lifecycle import start_run, start_test, finish_test, finish_run, RunLifecycleError
 from qa_sentinel.domain.qa_run import (QARun, QARunRequirement, QARunTest, PreparedQARun,
     MAX_SNAPSHOT_RECORDS, SnapshotSizeError)
 from .models import (QARunRow, QARunRequirementRow, QARunTestRow,
@@ -79,3 +80,55 @@ class QARunRepository:
         return [from_row(r, contract) for r in self.session.scalars(select(table).where(
             table.run_id == str(run.id), table.project_id == str(run.project_id), table.campaign_id == str(run.campaign_id),
             table.position > after_position).order_by(table.position).limit(self._limit(limit)))]
+
+    def all_entries(self, run, kind):
+        table, contract = (QARunTestRow, QARunTest) if kind == "tests" else (QARunRequirementRow, QARunRequirement)
+        rows = self.session.scalars(select(table).where(table.run_id == str(run.id),
+            table.project_id == str(run.project_id), table.campaign_id == str(run.campaign_id))
+            .order_by(table.position).limit(MAX_SNAPSHOT_RECORDS + 1))
+        entries = tuple(from_row(r, contract) for r in rows)
+        if len(entries) > MAX_SNAPSHOT_RECORDS:
+            raise SnapshotSizeError()
+        return entries
+
+    def preparation(self, run):
+        return PreparedQARun(run=run, requirements=self.all_entries(run, "requirements"), tests=self.all_entries(run, "tests"))
+
+    def test(self, run, id):
+        row = self.session.scalar(select(QARunTestRow).where(QARunTestRow.id == str(id),
+            QARunTestRow.run_id == str(run.id), QARunTestRow.project_id == str(run.project_id), QARunTestRow.campaign_id == str(run.campaign_id)))
+        if row is None:
+            raise RunLifecycleError("RUN_INVALID_STATE")
+        return from_row(row, QARunTest)
+
+    def _save_run_state(self, before, after):
+        changed = self.session.execute(update(QARunRow).where(QARunRow.id == str(before.id),
+            QARunRow.project_id == str(before.project_id), QARunRow.campaign_id == str(before.campaign_id),
+            QARunRow.execution_status == before.execution_status).values(**after.model_dump(
+                include={"execution_status", "qa_outcome", "started_at", "completed_at", "execution_error_code"})))
+        if changed.rowcount != 1:
+            raise RunLifecycleError("RUN_INVALID_STATE")
+        return after
+
+    def start(self, run):
+        return self._save_run_state(run, start_run(run))
+
+    def finish(self, run, *, failed=False):
+        return self._save_run_state(run, finish_run(run, self.all_entries(run, "tests"), failed=failed))
+
+    def _save_test_state(self, run, before, after):
+        if run.execution_status != "RUNNING":
+            raise RunLifecycleError("RUN_INVALID_STATE")
+        changed = self.session.execute(update(QARunTestRow).where(QARunTestRow.id == str(before.id),
+            QARunTestRow.run_id == str(run.id), QARunTestRow.project_id == str(run.project_id), QARunTestRow.campaign_id == str(run.campaign_id),
+            QARunTestRow.execution_status == before.execution_status, QARunTestRow.qa_result == before.qa_result)
+            .values(execution_status=after.execution_status, qa_result=after.qa_result))
+        if changed.rowcount != 1:
+            raise RunLifecycleError("RUN_INVALID_STATE")
+        return after
+
+    def start_test(self, run, test):
+        return self._save_test_state(run, test, start_test(test))
+
+    def complete_test(self, run, test, result):
+        return self._save_test_state(run, test, finish_test(test, result))

@@ -259,7 +259,7 @@ def test_api_create_read_replay_error_bounds_and_no_execution_endpoint(ready):
             entries = client.get(prefix + "/" + run["id"] + "/" + kind).json()
             assert entries["total_returned"] == 1 and entries["items"][0]["content"]["review_status"] == "APPROVED"
             assert client.get(prefix + "/" + run["id"] + "/" + kind + "?limit=201").status_code == 422
-        for action in ("start", "run", "execute", "resume"):
+        for action in ("run", "execute", "resume"):
             assert client.post(prefix + "/" + run["id"] + "/" + action).status_code == 404
         assert client.patch(prefix + "/" + run["id"], json={"qa_outcome": "PASS"}).status_code == 405
         assert client.post(prefix, json={}).json()["error"]["code"] == "INVALID_IDEMPOTENCY_KEY"

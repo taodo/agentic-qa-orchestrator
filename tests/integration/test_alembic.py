@@ -29,7 +29,7 @@ def test_fresh_upgrade_tables_revision_and_schema_match(migrated_factory):
     factory,engine,config=migrated_factory
     assert set(inspect(engine).get_table_names())==EXPECTED|{"alembic_version"}
     with engine.connect() as connection:
-        assert connection.scalar(text("select version_num from alembic_version"))=="0008"
+        assert connection.scalar(text("select version_num from alembic_version"))=="0009"
     reference=create_engine()
     try:
         Base.metadata.create_all(reference)

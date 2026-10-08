@@ -1,4 +1,4 @@
-"""0008 upgrade/downgrade, preservation, schema parity and durable ownership."""
+"""0008/0009 upgrade/downgrade, preservation, schema parity and durable ownership."""
 from uuid import uuid4
 import pytest
 from alembic import command
@@ -24,9 +24,10 @@ def test_0008_roundtrip_preserves_all_preparation_and_legacy_data(ready, bundle,
     command.upgrade(config, "0008")
     assert snapshot() == before
     assert set(inspect(engine).get_table_names()) == names | NEW | {"alembic_version"}
+    command.upgrade(config, "head")
     command.check(config)
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0008"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
     command.downgrade(config, "0007")
     assert snapshot() == before and not NEW & set(inspect(engine).get_table_names())
@@ -45,7 +46,7 @@ def test_downgrade_refuses_to_erase_historical_run(ready):
     assert app.get_qa_run(p.id, c.id, run.id) == run
     assert app.list_qa_run_tests(p.id, c.id, run.id) == tests
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0008"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
 
 
@@ -74,3 +75,40 @@ def test_unique_scoped_identities_are_enforced_by_database(ready, kind):
             connection.execute(text(f"INSERT INTO {table} ({names}) SELECT {values} FROM {table} WHERE run_id=:run"),
                 {"new_id": str(uuid4()), "different": different, "run": str(first.id)})
     assert app.get_qa_run(p.id, c.id, first.id) == first and app.get_qa_run(p.id, c.id, second.id) == second
+
+
+def test_0009_created_snapshot_roundtrip_and_null_backfill(ready):
+    app, _, engine, config, p, c, _, _ = ready
+    run = create(ready)
+    def facts():
+        with engine.connect() as connection:
+            return {
+                table: connection.execute(text(f'SELECT * FROM "{table}" ORDER BY rowid')).mappings().all()
+                for table in ("qa_runs", "qa_run_requirements", "qa_run_tests")
+            }
+    before = facts()
+    command.downgrade(config, "0008")
+    old = facts()
+    assert "execution_error_code" not in old["qa_runs"][0]
+    command.upgrade(config, "head")
+    assert facts() == before
+    assert app.get_qa_run(p.id, c.id, run.id) == run
+    assert before["qa_runs"][0]["execution_error_code"] is None
+    command.check(config)
+    with engine.connect() as connection:
+        assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(text("UPDATE qa_runs SET execution_error_code='raw exception'"))
+
+
+def test_0009_downgrade_preserves_execution_evidence_by_refusing(ready):
+    app, _, engine, config, p, c, _, _ = ready
+    run = create(ready)
+    finished = app.start_qa_run(p.id, c.id, run.id)
+    tests = app.list_qa_run_tests(p.id, c.id, run.id)
+    with pytest.raises(RuntimeError, match="cannot erase execution lifecycle evidence"):
+        command.downgrade(config, "0008")
+    assert app.get_qa_run(p.id, c.id, run.id) == finished
+    assert app.list_qa_run_tests(p.id, c.id, run.id) == tests
+    with engine.connect() as connection:
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009"

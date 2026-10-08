@@ -27,7 +27,7 @@ describe('Campaign routes and readiness', () => {
     routes(); open(suffix);
     expect(await screen.findByRole('heading', { name: heading, level: 2 })).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Campaign preparation' });
-    expect(within(nav).getAllByRole('link')).toHaveLength(5);
+    expect(within(nav).getAllByRole('link')).toHaveLength(6);
     expect(within(nav).getByRole('link', { name: suffix === '/readiness' ? 'Readiness' : heading })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: /Run|Mark Ready|Resolve|Execute/i })).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
