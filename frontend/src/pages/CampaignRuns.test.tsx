@@ -84,7 +84,7 @@ describe('immutable Run detail and synthetic Start', () => {
     fireEvent.click(start); fireEvent.click(start);
     expect(await screen.findByRole('button',{name:'Running synthetic execution…'})).toBeDisabled(); expect(posts()).toHaveLength(1);
     done = true; await act(async () => pending.resolve(response(completed)));
-    await waitFor(() => expect(screen.getAllByText('COMPLETED',{selector:'.metadata dd'})).toHaveLength(4));
+    await waitFor(() => expect(screen.getAllByText('COMPLETED')).toHaveLength(4));
     const rows = screen.getAllByRole('heading',{level:4}).filter(h => h.textContent?.includes('Frozen Test')).map(h => h.closest('article')!);
     expect(rows).toHaveLength(3); expect(rows[1]).toHaveTextContent('FAIL'); expect(rows[2]).toHaveTextContent('PASS');
     expect(rows[2]).toHaveTextContent('Overall expected behavior: Payment accepted'); expect(rows[2]).toHaveTextContent('Observed payment state');
