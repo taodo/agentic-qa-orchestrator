@@ -1,8 +1,16 @@
 # Agentic QA Orchestrator
 
-**Agentic QA Orchestrator** is a portfolio-grade QA engineering platform that combines reasoning agents with deterministic execution, explicit workflow gates, durable evidence, and controlled source mutation.
+**Agentic QA Orchestrator** is a QA platform for preparing requirements, test specifications, human review and coverage within Project-owned QA Campaigns.
 
-The project started as **QA Sentinel** and is evolving toward an end-to-end QA orchestration workflow for real software projects.
+The browser now starts with **Projects → Campaigns**. Open a Project, create a Campaign with a name and optional objective, then inspect Overview, Requirements, Test Specifications, Traceability and Readiness through direct links. These preparation views use saved backend records and read-only assessments. An empty Campaign stays empty; the browser does not invent demonstration requirements or tests.
+
+The product journey is PRD / Existing Tests → Requirements → Test Specifications → Human Review → Traceability / Readiness → future QA Run → Evidence / Analysis / Reporting.
+
+Phase 2 preparation APIs are implemented. Task 3.1 exposes Campaign creation and preparation inspection; ingestion, extraction, import, generation and approval are not browser actions yet. Campaign preparation `APPROVED` and derived readiness `READY` are separate. Neither indicates that tests have executed or passed. Bounded lists disclose omitted records; summary totals come from readiness aggregates.
+
+Legacy Task workflows remain available under **Legacy workflows** within a Project, with Operations in secondary navigation. Their runtime and evidence boundaries remain unchanged. Protected public demo modes are deterministic synthetic demonstrations; trusted real-local execution remains local operator infrastructure. Campaign execution, API/browser testing and QA reporting are future work.
+
+The project started as **QA Sentinel**. Source mutation and repair are historical infrastructure, not the product's primary journey.
 
 > **Agents reason. Tools act. Evidence records reality. The orchestrator controls progression.**
 
@@ -29,9 +37,9 @@ Phase 2 preparation now includes [explicit human approval, Requirement/Test
 traceability and derived Campaign readiness](docs/CAMPAIGN_REVIEW.md). Readiness
 is separate from Campaign preparation status and does not execute tests.
 
-## Current workflow
+## Legacy Task workflow
 
-A normal successful task progresses through:
+An existing legacy Task progresses through:
 
 ```text
 CREATED

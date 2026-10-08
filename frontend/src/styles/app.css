@@ -33,3 +33,40 @@
 .execution-history summary{cursor:pointer;max-width:100%;white-space:normal;margin-bottom:18px}
 @media(max-width:620px){.section-nav{gap:2px}.section-nav a{padding:8px}.expanded-json{max-height:420px}.record-heading{gap:8px}}
 @media(max-width:620px){.topbar{flex-wrap:wrap}.topbar button{flex-shrink:0}}
+
+/* Campaign preparation uses the existing shell, panels and visible status labels. */
+.campaign-eyebrow{margin-top:16px}
+.campaign-section{margin-top:20px}
+.preparation-status-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.preparation-status-grid h3{margin-top:0}
+.preparation-status-grid .hint{margin:12px 0 0}
+.campaign-counts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:22px;margin:20px 0 0}
+.campaign-counts dt{font-size:.8rem;color:#aebed0}
+.campaign-counts dd{margin:6px 0 0;font-size:1.6rem;font-weight:600}
+.preparation-records{list-style:none;padding:0;margin:0;overflow-wrap:anywhere}
+.preparation-records details,.readiness-blockers details{margin:16px 0}
+.preparation-records summary,.readiness-blockers summary{cursor:pointer;font-size:.85rem}
+.preparation-records blockquote{border-left:2px solid #586b81;margin:12px 0;padding-left:16px}
+.coverage-inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:.8rem}
+.clarification{border-left:3px solid #caac72;padding:1px 12px;margin:18px 0;color:#eed19f}
+.clarification li{margin:8px 0}
+.readiness-blockers{padding-left:20px;overflow-wrap:anywhere}
+.readiness-blockers li{margin:20px 0}
+.readiness-blockers p{margin-bottom:6px}
+.readiness-blockers a{font-size:.85rem}
+.readiness-blockers details{font-size:.75rem;color:#aebed0}
+.campaign-table-scroll{overflow-x:auto;max-width:100%;border:1px solid #303c4c;border-radius:5px}
+.campaign-table{width:100%;min-width:640px;border-collapse:collapse;font-size:.8rem;text-align:left}
+.campaign-table caption{padding:12px;text-align:left;color:#aebed0}
+.campaign-table th,.campaign-table td{padding:14px;border-top:1px solid #303c4c;vertical-align:top}
+.campaign-table th[scope=row]{max-width:360px;overflow-wrap:anywhere;font-weight:400}
+.campaign-table th p{font-size:.8rem;margin:6px 0}
+.campaign-table th details{font-size:.75rem}
+.campaign-table th ul{padding-left:18px}
+.campaign-table th li{margin:10px 0}
+.campaign-table th a{overflow-wrap:anywhere}
+.legacy-section{margin-top:36px;padding-top:20px;border-top:1px solid #303c4c}
+.legacy-toggle{background:transparent}
+.legacy-section .hint{margin-top:12px}
+@media(max-width:950px){.campaign-counts{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.preparation-status-grid{grid-template-columns:1fr}.brand{white-space:normal}.campaign-table-scroll{margin-right:0}.campaign-counts{gap:18px}}
