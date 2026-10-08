@@ -116,27 +116,26 @@ export function CampaignTestsPage() {
 
 export function CampaignTraceabilityPage() {
   const { projectId, campaignId, base } = useCampaign();
-  const resource = useResource(useCallback(async () => {
-    const [trace, requirements] = await Promise.all([getTraceability(projectId, campaignId), listRequirements(projectId, campaignId)]);
-    return { trace, requirements };
-  }, [projectId, campaignId]));
-  return <section className="panel"><div className="panel-heading"><h2>Traceability</h2><button disabled={resource.loading} onClick={() => void resource.reload()}>Refresh Traceability</button></div>
+  const resource = useResource(useCallback(() => getTraceability(projectId, campaignId), [projectId, campaignId]));
+  const names = useResource(useCallback(() => listRequirements(projectId, campaignId), [projectId, campaignId]));
+  return <section className="panel"><div className="panel-heading"><h2>Traceability</h2><button disabled={resource.loading} onClick={() => { void resource.reload(); void names.reload(); }}>Refresh Traceability</button></div>
     <p className="hint">Coverage means linkage to approved test specifications. It does not represent execution results or code coverage.</p>
+    {names.error && <p className="hint" role="status">Requirement names are unavailable. Requirement UUIDs identify the coverage rows.</p>}
     {resource.loading ? <LoadingState>Loading Traceability…</LoadingState> : resource.error ? <ErrorState error={resource.error} retry={() => void resource.reload()} /> : resource.data && <>
-      {!resource.data.trace.requirements.items.length ? <EmptyState>No Requirements to assess for traceability.</EmptyState> : <div className="campaign-table-scroll" role="region" aria-label="Requirement coverage table" tabIndex={0}>
+      {!resource.data.requirements.items.length ? <EmptyState>No Requirements to assess for traceability.</EmptyState> : <div className="campaign-table-scroll" role="region" aria-label="Requirement coverage table" tabIndex={0}>
         <table className="campaign-table"><caption>Requirement coverage — returned records</caption><thead><tr><th scope="col">Requirement</th><th scope="col">Review</th><th scope="col">Linked tests</th><th scope="col">Approved tests</th><th scope="col">Coverage</th></tr></thead>
-          <tbody>{resource.data.trace.requirements.items.map(row => {
-            const req = resource.data!.requirements.items.find(item => item.id === row.requirement_id);
-            const links = resource.data!.trace.links.items.filter(item => item.requirement_id === row.requirement_id);
+          <tbody>{resource.data.requirements.items.map(row => {
+            const req = (!names.error && !names.loading ? names.data?.items : undefined)?.find(item => item.id === row.requirement_id);
+            const links = resource.data!.links.items.filter(item => item.requirement_id === row.requirement_id);
             return <tr key={row.requirement_id}><th scope="row"><Link to={`${base}/requirements?requirement_id=${encodeURIComponent(row.requirement_id)}`}>{req?.logical_key ?? row.requirement_id}</Link>{req && <p>{req.title}</p>}
               <details><summary>Returned test links ({links.length})</summary>{links.length ? <ul>{links.map(link => <li key={link.test_spec_id}><Link to={`${base}/test-specifications?test_spec_id=${encodeURIComponent(link.test_spec_id)}`}>{link.test_spec_id}</Link> <CampaignStatusBadge status={link.test_review_status} /></li>)}</ul>
                 : <p>{row.linked_test_count === 0 ? 'No linked tests. This is a coverage gap.' : 'Links are not included in this bounded response.'}</p>}</details>
             </th><td><CampaignStatusBadge status={row.review_status} /></td><td>{row.linked_test_count === 0 ? '0 — coverage gap' : row.linked_test_count}</td><td>{row.approved_test_count}</td><td><CampaignStatusBadge status={row.coverage} /></td></tr>;
           })}</tbody></table>
       </div>}
-      {resource.data.trace.requirements.truncated && <p className="notice">Requirement coverage is bounded; additional Requirements are not shown. This is not a complete matrix.</p>}
-      {resource.data.trace.links.truncated && <p className="notice">Test links are bounded; additional links are not shown. Linked and approved counts include all stored links.</p>}
-      {resource.data.requirements.truncated && <p className="hint">Requirement names come from a bounded list; UUIDs identify rows whose names are not included.</p>}
+      {resource.data.requirements.truncated && <p className="notice">Requirement coverage is bounded; additional Requirements are not shown. This is not a complete matrix.</p>}
+      {resource.data.links.truncated && <p className="notice">Test links are bounded; additional links are not shown. Linked and approved counts include all stored links.</p>}
+      {!names.error && !names.loading && names.data?.truncated && <p className="hint">Requirement names come from a bounded list; UUIDs identify rows whose names are not included.</p>}
     </>}
   </section>;
 }

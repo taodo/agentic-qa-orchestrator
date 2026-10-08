@@ -107,6 +107,41 @@ describe('Requirements and executor-neutral Test Specifications', () => {
 });
 
 describe('Traceability and selected detail reads', () => {
+  it.each([500, 404])('keeps authoritative coverage when optional Requirement names fail (%s)', async status => {
+    routes({
+      [api+'/requirements?limit=50']: response({ stack: 'PRIVATE_AUXILIARY_ERROR', message: 'PRIVATE_AUXILIARY_ERROR' }, status),
+      [api+'/traceability?limit=50']: response({ ...traceability, requirements: page(traceability.requirements.items, true), links: page(traceability.links.items, true) }),
+    });
+    open('/traceability');
+    expect(await screen.findByText(/Requirement names are unavailable/)).toBeInTheDocument();
+    const table = await screen.findByRole('table');
+    expect(within(table).getAllByRole('row')).toHaveLength(4);
+    traceability.requirements.items.forEach(row => {
+      const link = within(table).getByRole('link', { name: row.requirement_id });
+      const cells = within(link.closest('tr')!).getAllByRole('cell');
+      expect(cells[0]).toHaveTextContent(row.review_status === 'APPROVED' ? 'Approved' : 'Needs clarification');
+      expect(cells[1]).toHaveTextContent(row.linked_test_count === 0 ? '0 — coverage gap' : String(row.linked_test_count));
+      expect(cells[2]).toHaveTextContent(String(row.approved_test_count));
+    });
+    for (const label of ['Covered', 'Partial', 'Not covered']) expect(within(table).getByText(label, { selector: '.badge' })).toBeInTheDocument();
+    expect(screen.getByText(/not a complete matrix/)).toBeInTheDocument();
+    expect(screen.getByText(/additional links are not shown/)).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('PRIVATE_AUXILIARY_ERROR');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual([api, api+'/traceability?limit=50', api+'/requirements?limit=50'].sort());
+  });
+  it('renders coverage before optional names finish and decorates without detail fan-out', async () => {
+    const pending = deferred<Response>();
+    routes({ [api+'/requirements?limit=50']: pending.promise }); open('/traceability');
+    const fallback = await screen.findByRole('link', { name: requirement.id });
+    expect(fallback).toBeInTheDocument(); expect(screen.getByText('Covered', { selector: '.badge' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading Traceability…')).not.toBeInTheDocument();
+    await act(async () => pending.resolve(response(page([requirement], true))));
+    expect(await screen.findByRole('link', { name: requirement.logical_key })).toBeInTheDocument();
+    expect(screen.getByText(requirement.title)).toBeInTheDocument(); expect(screen.getByText(/Requirement names come from a bounded list/)).toBeInTheDocument();
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it('renders all coverage semantics, gaps, status counts and honest independent truncation', async () => {
     routes({ [api+'/traceability?limit=50']: response({ ...traceability, requirements: page(traceability.requirements.items, true), links: page(traceability.links.items, true) }) }); open('/traceability');
     expect(await screen.findByText('0 — coverage gap')).toBeInTheDocument();
