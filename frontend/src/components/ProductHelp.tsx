@@ -14,7 +14,7 @@ export function ProductHelp() {
         <dt>Traceability</dt><dd>Shows which requirements have approved linked tests and which have gaps. Coverage does not prove a test passed.</dd>
         <dt>Readiness</dt><dd>A derived assessment of preparation, approvals and coverage. Campaign Approved and readiness Ready remain separate.</dd>
       </dl>
-      <p>These views read saved preparation data. Creating a Campaign does not upload a document, generate tests, approve content or start execution.</p>
+      <p>Add a specification on Requirements, explicitly extract and review Requirements, then import tests or generate designs from selected Requirements on Test Specifications. Approval and Campaign preparation submission are explicit actions. Creating a Campaign alone starts none of these actions. PDF/XLSX and clarification editing are unsupported; model preparation requires trusted local configuration. No Campaign execution is available.</p>
       <p className="notice">Demo evidence remains deterministic and synthetic. An empty Campaign stays empty until content is prepared; the browser does not invent requirements or tests.</p>
       <p className="hint">Historical Task screens are available under Legacy workflows in a Project; Operations remains available separately.</p>
     </div>

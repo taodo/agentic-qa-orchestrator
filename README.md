@@ -2,11 +2,11 @@
 
 **Agentic QA Orchestrator** is a QA platform for preparing requirements, test specifications, human review and coverage within Project-owned QA Campaigns.
 
-The browser now starts with **Projects → Campaigns**. Open a Project, create a Campaign with a name and optional objective, then inspect Overview, Requirements, Test Specifications, Traceability and Readiness through direct links. These preparation views use saved backend records and read-only assessments. An empty Campaign stays empty; the browser does not invent demonstration requirements or tests.
+The browser now starts with **Projects → Campaigns**. Open a Project, create a Campaign with a name and optional objective, then inspect Overview, Requirements, Test Specifications, Traceability and Readiness through direct links. These preparation views use saved backend records, explicit preparation commands and read-only readiness assessments. An empty Campaign stays empty; the browser does not invent demonstration requirements or tests.
 
 The product journey is PRD / Existing Tests → Requirements → Test Specifications → Human Review → Traceability / Readiness → future QA Run → Evidence / Analysis / Reporting.
 
-Phase 2 preparation APIs are implemented. Task 3.1 exposes Campaign creation and preparation inspection; ingestion, extraction, import, generation and approval are not browser actions yet. Campaign preparation `APPROVED` and derived readiness `READY` are separate. Neither indicates that tests have executed or passed. Bounded lists disclose omitted records; summary totals come from readiness aggregates.
+Phase 2 preparation APIs are implemented. Task 3.2 adds explicit browser preparation actions: paste TEXT/Markdown specifications, ingest sources, extract Requirements, import strict CSV/Markdown test cases, generate Test Specifications from 1–20 selected Requirements, and record human approval. Ingestion never starts extraction; model work is explicit and requires trusted local configuration. PDF/XLSX are unsupported. Blocked snapshots have no clarification/revision editor. Contextual Campaign submission/approval keeps preparation separate from readiness. Campaign preparation `APPROVED` and derived readiness `READY` are separate. Neither indicates that tests have executed or passed. Bounded lists disclose omitted records; summary totals come from readiness aggregates.
 
 Legacy Task workflows remain available under **Legacy workflows** within a Project, with Operations in secondary navigation. Their runtime and evidence boundaries remain unchanged. Protected public demo modes are deterministic synthetic demonstrations; trusted real-local execution remains local operator infrastructure. Campaign execution, API/browser testing and QA reporting are future work.
 

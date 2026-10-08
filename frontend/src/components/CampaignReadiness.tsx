@@ -4,11 +4,11 @@ import { CampaignStatusBadge } from './CampaignStatusBadge';
 
 const blockers: Record<ReadinessBlocker, { text: string; area: '' | 'requirements' | 'test-specifications' | 'traceability' }> = {
   CAMPAIGN_NOT_APPROVED: { text: 'Campaign preparation has not been approved.', area: '' },
-  NO_REQUIREMENTS: { text: 'No Requirements have been prepared.', area: 'requirements' },
+  NO_REQUIREMENTS: { text: 'No Requirements have been prepared. Add a specification and extract Requirements.', area: 'requirements' },
   REQUIREMENTS_NOT_APPROVED: { text: 'One or more Requirements still need approval.', area: 'requirements' },
   REQUIREMENTS_NEED_CLARIFICATION: { text: 'One or more Requirements need clarification.', area: 'requirements' },
-  NO_TEST_SPECIFICATIONS: { text: 'No Test Specifications have been prepared.', area: 'test-specifications' },
-  REQUIREMENT_COVERAGE_GAP: { text: 'One or more Requirements do not have approved test coverage.', area: 'traceability' },
+  NO_TEST_SPECIFICATIONS: { text: 'No Test Specifications have been prepared. Import existing tests or generate tests.', area: 'test-specifications' },
+  REQUIREMENT_COVERAGE_GAP: { text: 'One or more Requirements do not have approved test coverage. Inspect Traceability and prepare approved tests.', area: 'traceability' },
   INVALID_REQUIREMENT_APPROVAL: { text: 'Stored Requirement approval evidence is inconsistent; operator attention is required.', area: 'requirements' },
   INVALID_TEST_APPROVAL: { text: 'Stored Test Specification approval evidence is inconsistent; operator attention is required.', area: 'test-specifications' },
 };

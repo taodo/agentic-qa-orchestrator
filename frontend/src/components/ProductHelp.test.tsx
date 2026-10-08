@@ -22,7 +22,7 @@ it('provides a focusable inline help control and explains Project, Campaign, rev
   expect(screen.getByText(/One QA initiative/)).toBeVisible();
   expect(screen.getByText(/neither is automatically approved/)).toBeVisible();
   expect(screen.getByText(/Campaign Approved and readiness Ready remain separate/)).toBeVisible();
-  expect(screen.getByText(/does not upload a document/)).toBeVisible();
+  expect(screen.getByText(/Creating a Campaign alone starts none of these actions/)).toBeVisible();
   expect(screen.getByText(/deterministic and synthetic/)).toBeVisible();
   fireEvent.click(control);
   expect(screen.getByText(/One QA initiative/)).not.toBeVisible();
