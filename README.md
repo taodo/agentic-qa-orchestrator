@@ -189,6 +189,36 @@ Real local mode can bind a Project to an explicitly configured local workspace a
 
 Real local mode is intentionally loopback-only and operator-controlled.
 
+## Daily local start — already configured workspace
+
+After one-time Python/Node dependency setup, an existing Project, current database
+and trusted local config, use this from the source/editable checkout:
+
+```powershell
+$env:OPENAI_API_KEY = "sk-..."
+qa-sentinel local start --config .\qa-sentinel.local.json
+```
+
+Use your own key only in the current process environment; never save it in JSON,
+source or chat. Startup checks its presence, not provider connectivity or validity.
+
+- **Normal restart:** stop with Ctrl+C, then run the same command again:
+  frontend build → authoritative local validation → foreground loopback server.
+- **Frontend changed:** no extra step; start runs `npm run build` every time.
+  Configure `frontend_dist` to this checkout's `frontend/dist`. Node/npm and
+  already-installed frontend dependencies are required; start never runs `npm ci`.
+- **Database migration required:** startup stops, showing safe current/required
+  schema identifiers when available. No migration runs automatically. Stop hosts,
+  inspect the applicable migrations and explicitly upgrade the selected database
+  before starting again. See [manual DB preparation](docs/HOSTING.md#local-one-command-start).
+
+Startup runs no test suite or target proving action. Existing explicitly queued
+execution requests retain the normal host worker semantics after serve starts.
+Lower-level `qa-sentinel local validate --config ...` and
+`qa-sentinel serve --config ...` remain available for troubleshooting. Unlike
+`local start`, lower-level `serve` retains its existing migration/bootstrap behavior.
+See [local onboarding and hosting](docs/HOSTING.md#local-one-command-start).
+
 ## Quick start — synthetic demo
 
 Requirements:

@@ -11,7 +11,7 @@ from qa_sentinel.persistence.unit_of_work import UnitOfWork
 from qa_sentinel.mutation.policy import PROTECTED
 from .config import HostConfig, HostError, canonical_path, load_local_config
 from .preflight import real_components, validate_frontend
-from .database import CURRENT_REVISION
+from .database import require_current_schema
 
 
 def model_key_present() -> bool:
@@ -55,8 +55,7 @@ def validate_local(config: HostConfig) -> Readiness:
         engine = create_engine("sqlite+pysqlite://", creator=lambda: sqlite3.connect(
             path.as_uri() + "?mode=ro", uri=True))
         with engine.connect() as connection:
-            if connection.execute(text("select version_num from alembic_version")).scalars().all() != [CURRENT_REVISION]:
-                raise ValueError("Database must already be at the accepted schema")
+            require_current_schema(connection)
         with UnitOfWork(sessionmaker(engine)) as uow:
             for project in config.projects:
                 if uow.projects.get_by_key(project.key) is None:
