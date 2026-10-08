@@ -17,9 +17,11 @@ def test_0008_roundtrip_preserves_all_preparation_and_legacy_data(ready, bundle,
         store_bundle(uow, bundle)
         uow.commit()
     names = set(inspect(engine).get_table_names()) - {"alembic_version"}
+    # Compare all columns present at this historical checkpoint after upgrades.
+    columns = {name: ','.join('"' + c['name'] + '"' for c in inspect(engine).get_columns(name)) for name in names}
     def snapshot():
         with engine.connect() as connection:
-            return {name: connection.execute(text(f'SELECT * FROM "{name}" ORDER BY rowid')).all() for name in names}
+            return {name: connection.execute(text(f'SELECT {columns[name]} FROM "{name}" ORDER BY rowid')).all() for name in names}
     before = snapshot()
     command.upgrade(config, "0008")
     assert snapshot() == before
@@ -27,7 +29,7 @@ def test_0008_roundtrip_preserves_all_preparation_and_legacy_data(ready, bundle,
     command.upgrade(config, "head")
     command.check(config)
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
     command.downgrade(config, "0007")
     assert snapshot() == before and not NEW & set(inspect(engine).get_table_names())
@@ -46,7 +48,7 @@ def test_downgrade_refuses_to_erase_historical_run(ready):
     assert app.get_qa_run(p.id, c.id, run.id) == run
     assert app.list_qa_run_tests(p.id, c.id, run.id) == tests
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
 
 
@@ -111,4 +113,4 @@ def test_0009_downgrade_preserves_execution_evidence_by_refusing(ready):
     assert app.get_qa_run(p.id, c.id, run.id) == finished
     assert app.list_qa_run_tests(p.id, c.id, run.id) == tests
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0009"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"

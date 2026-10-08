@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initializeAccess } from './access';
-import { ingestSource, listSources, extractRequirements, importTests, generateTests, reviewRequirement, reviewTest, getRequirementReview, getTestReview, transitionCampaign } from './campaigns';
+import { ingestSource, listSources, extractRequirements, importTests, generateTests, reviewRequirement, reviewTest, getRequirementReview, getTestReview, transitionCampaign, retryExtraction, addClarification } from './campaigns';
 import { response } from '../test/fixtures';
 const root='/api/v1/projects/p%2Fa/campaigns/c%2Fb';
 const approval={action:'APPROVE' as const,reviewer_label:'qa-human',note:'Reviewed.'};
 const writes = [
+  [() => retryExtraction('p/a','c/b','a/x'), '/extractions/a%2Fx/retry', {}],
+  [() => addClarification('p/a','c/b','r/x',{request_key:'intent-1',content:'Facts'}), '/requirements/r%2Fx/clarifications', {request_key:'intent-1',content:'Facts'}],
   [() => ingestSource('p/a','c/b',{name:'PRD',source_type:'MARKDOWN',content:'# Spec'}), '/sources', {name:'PRD',source_type:'MARKDOWN',content:'# Spec'}],
   [() => extractRequirements('p/a','c/b','s/x'), '/sources/s%2Fx/extract-requirements', {}],
   [() => importTests('p/a','c/b',{name:'Tests',format:'CSV',content:'data'}), '/test-imports', {name:'Tests',format:'CSV',content:'data'}],

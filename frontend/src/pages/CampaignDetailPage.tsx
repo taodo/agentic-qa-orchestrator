@@ -7,6 +7,7 @@ import { DateTime } from '../components/DateTime';
 import { LoadingState, EmptyState, ErrorState, TruncationNotice } from '../components/Feedback';
 import { CampaignStatusBadge } from '../components/CampaignStatusBadge';
 import { CampaignReadiness } from '../components/CampaignReadiness';
+import { PreparationRecovery } from '../components/PreparationRecovery';
 import { PreparationSources } from '../components/PreparationSources';
 import { PreparationReview } from '../components/PreparationReview';
 import { PreparationImport, PreparationGeneration } from '../components/PreparationTests';
@@ -82,6 +83,7 @@ export function CampaignRequirementsPage() {
           <p className="coverage-inline">Coverage: {trace ? <CampaignStatusBadge status={trace.coverage} /> : <span className="muted">Not included in the current traceability response.</span>} <Link to={`${base}/traceability`}>Inspect Traceability</Link></p>
           {req.acceptance_criteria.length > 0 && <details><summary>Acceptance criteria</summary><ul>{req.acceptance_criteria.map(item => <li key={item.key}><strong>{item.key}</strong> <span className="prose">{item.text}</span></li>)}</ul></details>}
           <Markers markers={req.information_markers} />
+          <PreparationRecovery requirement={req} projectId={projectId} campaignId={campaignId} changed={changed} />
           <PreparationReview projectId={projectId} campaignId={campaignId} objectId={req.id} kind="Requirement" status={req.review_status} blocked={req.information_markers.length > 0} changed={async () => { setFeedback('Approval recorded.'); await Promise.all([requirements.reload(),traceability.reload(),readiness.reload()]); heading.current?.focus(); }} />
           <details><summary>Source evidence ({req.source_references.length})</summary><ul>{req.source_references.map((ref, index) => <li key={index}>
             <p>Source <code>{ref.source_id}</code> · lines {ref.start_line}–{ref.end_line}</p><blockquote className="prose">{ref.excerpt}</blockquote>

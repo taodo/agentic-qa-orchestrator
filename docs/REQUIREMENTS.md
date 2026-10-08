@@ -172,3 +172,12 @@ scoping, DB reopen, API/body limits and populated upgrade/downgrade.
 Task 2.3 now consumes stable requirement identities, ordered criteria, clarification
 markers and cited immutable sources for [imported/generated test specifications](TEST_SPECIFICATIONS.md).
 Requirement/test approval, readiness, execution and reporting remain later work.
+
+## Task 3.5 recovery
+
+[Preparation recovery](PREPARATION_RECOVERY.md) supersedes the original single-attempt
+and unsupported-clarification limitations: explicit bounded retry history, inert
+addendum evidence and separate revision into new Requirement identities. Current
+readiness/coverage/new Run selection exclude superseded Requirements and their
+dependent Tests. Historical content/approvals remain audit evidence. No automatic
+retry, approval transfer, executor or auth change.

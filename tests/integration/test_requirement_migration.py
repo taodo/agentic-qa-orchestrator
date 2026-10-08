@@ -2,7 +2,7 @@
 from uuid import uuid4
 import pytest
 from alembic import command
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, Table, MetaData, select
 from sqlalchemy.exc import IntegrityError
 from qa_sentinel.domain.campaign import QACampaign
 from qa_sentinel.domain.project import Project
@@ -28,11 +28,18 @@ def test_0004_upgrade_reopen_and_downgrade_preserve_every_existing_row(migrated_
     source=ingest(campaign.project_id,campaign.id,name='PRD',source_type='TEXT',content='Login required.\n')
     attempt=RequirementExtraction(project_id=source.project_id,campaign_id=source.campaign_id,source_id=source.id,source_hash=source.content_hash,model='test-model')
     with UnitOfWork(factory) as uow:
-        uow.campaign_content.add_source(source);uow.campaign_content.reserve(attempt);uow.commit()
+        uow.campaign_content.add_source(source)
+        # Freeze the 0005 schema; current ORM columns belong to later migrations.
+        historical = Table('campaign_requirement_extractions', MetaData(), autoload_with=uow.session.connection())
+        values = attempt.model_dump(mode='json', exclude={'attempt_number', 'parent_attempt_id', 'metadata'})
+        uow.session.execute(historical.insert().values(**values))
+        uow.commit()
     engine.dispose()
     with UnitOfWork(factory) as uow:
         assert uow.campaign_content.source(source.id)==source
-        assert uow.campaign_content.extraction_for_source(source.id)==attempt
+        historical = Table('campaign_requirement_extractions', MetaData(), autoload_with=uow.session.connection())
+        stored = uow.session.execute(select(historical)).mappings().one()
+        assert RequirementExtraction.model_validate(dict(stored)) == attempt
     with engine.connect() as connection:
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
         assert connection.scalar(text('select version_num from alembic_version'))=='0005'
@@ -62,6 +69,6 @@ def test_composite_ownership_and_unique_reservations_enforced(migrated_factory,k
             elif kind=='duplicate-content':
                 connection.execute(text('INSERT INTO campaign_sources SELECT :id,project_id,campaign_id,source_type,name,content_hash,raw_hash,normalization_version,original_bytes,normalized_chars,line_count,status,normalized_text,error_code,created_at FROM campaign_sources'),dict(id=str(uuid4())))
             else:
-                connection.execute(text('INSERT INTO campaign_requirement_extractions SELECT :id,project_id,campaign_id,source_id,source_hash,contract_version,agent,model,status,started_at,finished_at,error_code,metadata FROM campaign_requirement_extractions'),dict(id=str(uuid4())))
+                connection.execute(text('INSERT INTO campaign_requirement_extractions (id,project_id,campaign_id,source_id,source_hash,contract_version,agent,model,status,started_at,finished_at,error_code,metadata) SELECT :id,project_id,campaign_id,source_id,source_hash,contract_version,agent,model,status,started_at,finished_at,error_code,metadata FROM campaign_requirement_extractions'),dict(id=str(uuid4())))
     with UnitOfWork(factory) as uow:
         assert uow.campaign_content.source(source.id)==source

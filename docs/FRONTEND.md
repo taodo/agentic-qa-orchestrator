@@ -388,3 +388,12 @@ unchanged. Sign-in recovery requires fresh history/state inspection, and sign-ou
 does not cancel backend work. Narrow topbars wrap, keeping logout accessible.
 Production CSP allows existing same-origin bundles/styles and blocks external
 script assets. [Hosted access](HOSTED_ACCESS.md) documents expiry and trust limits.
+
+## Task 3.5 recovery UX
+
+[Preparation recovery](PREPARATION_RECOVERY.md) supersedes the original single-attempt
+and unsupported-clarification limitations: explicit bounded retry history, inert
+addendum evidence and separate revision into new Requirement identities. Current
+readiness/coverage/new Run selection exclude superseded Requirements and their
+dependent Tests. Historical content/approvals remain audit evidence. No automatic
+retry, approval transfer, executor or auth change.

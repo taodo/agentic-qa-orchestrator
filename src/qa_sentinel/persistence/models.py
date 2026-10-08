@@ -99,7 +99,10 @@ class RequirementExtractionRow(Base):
     __tablename__ = "campaign_requirement_extractions"
     __table_args__ = (
         ForeignKeyConstraint(["source_id", "campaign_id", "project_id"], ["campaign_sources.id", "campaign_sources.campaign_id", "campaign_sources.project_id"], name="fk_requirement_extractions_source_owner", deferrable=True, initially="DEFERRED"),
-        UniqueConstraint("source_id", name="uq_requirement_extractions_source"),
+        UniqueConstraint("source_id", "attempt_number", name="uq_requirement_extractions_attempt"),
+        UniqueConstraint("parent_attempt_id", name="uq_requirement_extractions_parent"),
+        ForeignKeyConstraint(["parent_attempt_id", "campaign_id", "project_id"], ["campaign_requirement_extractions.id", "campaign_requirement_extractions.campaign_id", "campaign_requirement_extractions.project_id"], name="fk_extraction_parent", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("attempt_number BETWEEN 1 AND 3 AND ((attempt_number=1 AND parent_attempt_id IS NULL) OR (attempt_number>1 AND parent_attempt_id IS NOT NULL))", name="ck_extraction_attempt"),
         UniqueConstraint("id", "campaign_id", "project_id", name="uq_requirement_extractions_owner"),
         CheckConstraint("(status='STARTED' AND finished_at IS NULL AND error_code IS NULL AND metadata IS NULL) OR (status='SUCCEEDED' AND finished_at IS NOT NULL AND error_code IS NULL) OR (status='FAILED' AND finished_at IS NOT NULL AND error_code IS NOT NULL)", name="ck_requirement_extractions_lifecycle"),
         Index("ix_requirement_extractions_campaign", "campaign_id", "started_at", "id"),
@@ -117,6 +120,8 @@ class RequirementExtractionRow(Base):
     finished_at: Mapped[datetime | None] = mapped_column(ISODateTime(), nullable=True)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     metadata_json: Mapped[Any] = mapped_column("metadata", JSON(none_as_null=True), nullable=True)
+    attempt_number: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    parent_attempt_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class CampaignRequirementRow(Base):
@@ -526,3 +531,42 @@ class QARunTestRow(Base):
     linked_requirement_snapshot_ids: Mapped[Any] = mapped_column(JSON, nullable=False)
     execution_status: Mapped[str] = mapped_column(String(16), nullable=False)
     qa_result: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class ClarificationRow(Base):
+    __tablename__ = "campaign_clarifications"
+    __table_args__ = (
+        ForeignKeyConstraint(["requirement_id", "campaign_id", "project_id"], ["campaign_requirements.id", "campaign_requirements.campaign_id", "campaign_requirements.project_id"], name="fk_clarification_requirement", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["source_id", "campaign_id", "project_id"], ["campaign_sources.id", "campaign_sources.campaign_id", "campaign_sources.project_id"], name="fk_clarification_source", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("campaign_id", "request_key", name="uq_clarification_request"),
+        UniqueConstraint("source_id", name="uq_clarification_source"),
+        UniqueConstraint("id", "campaign_id", "project_id", name="uq_clarification_owner"),
+        CheckConstraint("length(request_key) BETWEEN 1 AND 128 AND length(facts_hash)=64 AND first_fact_line BETWEEN 1 AND 4096", name="ck_clarification_bounds"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    requirement_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    request_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    facts_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    first_fact_line: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
+class RequirementRevisionRow(Base):
+    __tablename__ = "campaign_requirement_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(["requirement_id", "campaign_id", "project_id"], ["campaign_requirements.id", "campaign_requirements.campaign_id", "campaign_requirements.project_id"], name="fk_revision_current", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["supersedes_id", "campaign_id", "project_id"], ["campaign_requirements.id", "campaign_requirements.campaign_id", "campaign_requirements.project_id"], name="fk_revision_previous", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["clarification_id", "campaign_id", "project_id"], ["campaign_clarifications.id", "campaign_clarifications.campaign_id", "campaign_clarifications.project_id"], name="fk_revision_clarification", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("supersedes_id", name="uq_revision_previous"),
+        UniqueConstraint("clarification_id", name="uq_revision_clarification"),
+        CheckConstraint("version BETWEEN 2 AND 10 AND requirement_id != supersedes_id", name="ck_revision_version"),
+    )
+    requirement_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    supersedes_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    clarification_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)

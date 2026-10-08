@@ -81,3 +81,9 @@ class ImportTestsRequest(RequestModel):
 
 class GenerateTestsRequest(RequestModel):
     requirement_ids: tuple[UUID, ...] = Field(min_length=1, max_length=20)
+
+
+class ClarificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_key: str = Field(min_length=1,max_length=128,pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+    content: str = Field(min_length=1,max_length=4000)

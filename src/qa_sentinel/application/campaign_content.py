@@ -3,7 +3,7 @@ from datetime import datetime
 from uuid import UUID
 from typing import Literal
 from qa_sentinel.domain.campaign_content import (SourceType, IngestionStatus, ParseError,
-    CampaignRequirement, ExtractionStatus)
+    CampaignRequirement, ExtractionStatus, extraction_retryable, Clarification)
 from qa_sentinel.models.base import ContextSelection
 from .test_specifications import TestGenerationView,generation_view
 from qa_sentinel.domain.test_specification import TestGeneration
@@ -26,6 +26,8 @@ class CampaignSourceView(View):
     status: IngestionStatus
     error_code: ParseError | None
     created_at: datetime
+    latest_extraction: "ExtractionView | None" = None
+    clarification_requirement_id: UUID | None = None
 
 
 class CampaignSourceDetail(CampaignSourceView):
@@ -42,6 +44,10 @@ class ExtractionView(View):
     campaign_id: UUID
     source_id: UUID
     source_hash: str
+    attempt_number: int
+    parent_attempt_id: UUID | None
+    retryable: bool
+    is_latest: bool = True
     contract_version: str
     agent: str
     configured_model: str
@@ -54,10 +60,10 @@ class ExtractionView(View):
     context_selection: ContextSelection | None
 
 
-def extraction_view(record):
+def extraction_view(record, *, is_latest=True):
     metadata = None if record.metadata is None else safe_metadata(record.metadata.model_dump(mode="json"))
     fields = record.model_dump(include=set(ExtractionView.model_fields))
-    return ExtractionView(**fields, configured_model=record.model,
+    return ExtractionView(**fields, retryable=extraction_retryable(record), is_latest=is_latest, configured_model=record.model,
         provider_model=None if metadata is None else metadata["model"], usage=totals([metadata]),
         context_selection=None if record.metadata is None else record.metadata.context_selection)
 
@@ -77,7 +83,7 @@ class CampaignModelUsage(View):
     estimated_cost: None = None
 
 
-def campaign_usage(project_id, campaign_id, records, limit):
+def campaign_usage(project_id, campaign_id, records, limit, *, latest_attempt_ids):
     from collections import defaultdict
     truncated = len(records) > limit
     selected = records[:limit]
@@ -87,7 +93,7 @@ def campaign_usage(project_id, campaign_id, records, limit):
         models[record.model if metadata is None else metadata["model"]].append(metadata)
     groups = sorted((UsageGroup(identity=name, usage=totals(items, incomplete=truncated)) for name, items in models.items()),
         key=lambda g: (-(g.usage.total_tokens.known_sum or 0), g.identity))
-    rows = tuple(generation_view(r) if isinstance(r,TestGeneration) else extraction_view(r) for r in selected)
+    rows = tuple(generation_view(r) if isinstance(r,TestGeneration) else extraction_view(r, is_latest=r.id in latest_attempt_ids) for r in selected)
     agents=defaultdict(list);purposes=defaultdict(list)
     for record,value in zip(selected,values):
         agents[record.agent].append(value)
@@ -99,3 +105,17 @@ def campaign_usage(project_id, campaign_id, records, limit):
         by_model=tuple(groups[:20]), model_groups_truncated=len(groups)>20, truncated=truncated,
         top_invocations=tuple(row.id for row in sorted((r for r in rows if r.usage.total_tokens.known_sum is not None),
             key=lambda r: (-(r.usage.total_tokens.known_sum or 0), str(r.id)))[:10]))
+
+
+class ClarificationView(Clarification):
+    pass
+
+
+class RequirementHistoryEntry(View):
+    requirement: CampaignRequirementView
+    version: int
+    is_current: bool
+    supersedes_id: UUID | None
+
+CampaignSourceView.model_rebuild()
+CampaignSourceDetail.model_rebuild()

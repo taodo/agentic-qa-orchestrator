@@ -1,5 +1,6 @@
 """Scoped immutable imports/designs, single-attempt generation and explicit link storage."""
 from uuid import UUID
+from .preparation_current import current_requirement,current_test
 from sqlalchemy import select,func,or_
 from qa_sentinel.domain.test_specification import TestImport,TestGeneration,CampaignTestSpecification
 from qa_sentinel.agents.test_generation import generation_identity
@@ -30,7 +31,7 @@ class TestSpecificationRepository:
         try:ident=str(UUID(ref))
         except ValueError:ident=None
         predicate=CampaignRequirementRow.id==ident if ident is not None else or_(CampaignRequirementRow.logical_key==ref,CampaignRequirementRow.key==ref)
-        rows=list(self.session.scalars(select(CampaignRequirementRow).where(CampaignRequirementRow.campaign_id==str(campaign_id),predicate).limit(2)))
+        rows=list(self.session.scalars(select(CampaignRequirementRow).where(CampaignRequirementRow.campaign_id==str(campaign_id),current_requirement(),predicate).limit(2)))
         return requirement_from(rows[0]) if len(rows)==1 else None
 
     def _add_specs(self,records,owner):
@@ -48,7 +49,7 @@ class TestSpecificationRepository:
                 raise ValueError('Import provenance outside source')
             for id in record.requirement_ids:
                 row=self.session.get(CampaignRequirementRow,str(id))
-                if row is None or (row.project_id,row.campaign_id)!=(str(owner.project_id),str(owner.campaign_id)):raise ValueError('Requirement ownership mismatch')
+                if row is None or self.session.scalar(select(CampaignRequirementRow.id).where(CampaignRequirementRow.id==row.id,current_requirement())) is None or (row.project_id,row.campaign_id)!=(str(owner.project_id),str(owner.campaign_id)):raise ValueError('Requirement ownership mismatch')
                 if isinstance(owner,TestGeneration) and id not in {r.id for r in owner.requirement_versions}:raise ValueError('Unselected requirement link')
         for record in prepared:
             values=row_values(record);ids=values.pop('requirement_ids')
@@ -77,7 +78,7 @@ class TestSpecificationRepository:
         requirements=[]
         for version in record.requirement_versions:
             row=self.session.get(CampaignRequirementRow,str(version.id))
-            if row is None or (row.project_id,row.campaign_id)!=(str(record.project_id),str(record.campaign_id)):raise ValueError('Selected requirement ownership mismatch')
+            if row is None or self.session.scalar(select(CampaignRequirementRow.id).where(CampaignRequirementRow.id==row.id,current_requirement())) is None or (row.project_id,row.campaign_id)!=(str(record.project_id),str(record.campaign_id)):raise ValueError('Selected requirement ownership mismatch')
             requirements.append(requirement_from(row))
         versions,identity=generation_identity(requirements)
         if versions!=record.requirement_versions or identity!=record.request_hash:raise ValueError('Requirement snapshot mismatch')
@@ -116,7 +117,7 @@ class TestSpecificationRepository:
         return limit+1
 
     def specifications(self,campaign_id,limit):
-        rows=list(self.session.scalars(select(TestSpecificationRow).where(TestSpecificationRow.campaign_id==str(campaign_id))
+        rows=list(self.session.scalars(select(TestSpecificationRow).where(TestSpecificationRow.campaign_id==str(campaign_id),current_test())
             .order_by(func.qa_utc_microseconds(TestSpecificationRow.created_at),TestSpecificationRow.id).limit(self._limit(limit))))
         return self._specs(rows)
 

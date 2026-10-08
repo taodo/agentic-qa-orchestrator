@@ -25,7 +25,7 @@ export function PreparationReview({ projectId, campaignId, changed, objectId, ki
     {evidence.result && !receipt && <p role="status">Approval evidence is unavailable in this response.</p>}
     {receipt && <dl className="metadata"><div><dt>Reviewer label (operator assertion)</dt><dd>{receipt.reviewer_label}</dd></div><div><dt>Approved time</dt><dd><DateTime value={receipt.approved_at} /></dd></div><div><dt>Review note</dt><dd className="prose">{receipt.note ?? 'No note provided.'}</dd></div></dl>}
   </div>;
-  if (status !== 'READY_FOR_REVIEW' || blocked) return <p className="notice">Approval is blocked: {status === 'DRAFT' ? 'this record is still Draft.' : 'unresolved clarification or traceability facts remain.'} Clarification/revision is not yet supported. No Resolve action is available.</p>;
+  if (status !== 'READY_FOR_REVIEW' || blocked) return <p className="notice">Approval is blocked: {status === 'DRAFT' ? 'this record is still Draft.' : 'unresolved clarification or traceability facts remain.'} Provide grounded missing facts for Requirements, then explicitly revise and review. Test replacements require import/generation and review. No Resolve-to-Approved action is available.</p>;
   return <form className="preparation-action" aria-label={'Approve '+kind} onSubmit={submit}><fieldset disabled={action.busy}><legend>Human review: {kind}</legend>
     <p className="hint">Reviewer label is an operator assertion, not an authenticated account identity. Never enter credentials or secrets in labels or notes. Approval does not execute tests.</p>
     <label htmlFor={id+'label'}>Reviewer label</label><input id={id+'label'} name="reviewer_label" required maxLength={64} />

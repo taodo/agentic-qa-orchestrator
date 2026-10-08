@@ -7,6 +7,7 @@ MAX_REVIEW_BODY_BYTES = 8192
 REVIEW_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:requirements|test-specifications)/[^/]+/review$")
 RUN_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/runs$")
 START_RUN_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/runs/[^/]+/start$")
+RECOVERY_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:requirements/[^/]+/clarifications|extractions/[^/]+/retry)$")
 SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:sources|test-imports|generate-tests)$")
 
 
@@ -17,7 +18,7 @@ class SourceBodyLimit:
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or scope["method"] != "POST":
             return await self.app(scope, receive, send)
-        review = REVIEW_PATH.fullmatch(scope["path"])
+        review = REVIEW_PATH.fullmatch(scope["path"]) or RECOVERY_PATH.fullmatch(scope["path"])
         run = RUN_PATH.fullmatch(scope["path"]) or START_RUN_PATH.fullmatch(scope["path"])
         if not review and not run and not SOURCE_PATH.fullmatch(scope["path"]):
             return await self.app(scope, receive, send)

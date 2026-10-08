@@ -1,4 +1,5 @@
 """Immutable Run snapshots with narrow lifecycle updates in reserved transactions."""
+from .preparation_current import current_requirement,current_test
 from sqlalchemy import select, func, update
 from qa_sentinel.domain.qa_run_lifecycle import start_run, start_test, finish_test, finish_run, RunLifecycleError
 from qa_sentinel.domain.qa_run import (QARun, QARunRequirement, QARunTest, PreparedQARun,
@@ -42,7 +43,8 @@ class QARunRepository:
         records = []
         for table in (CampaignRequirementRow, TestSpecificationRow):
             rows = list(self.session.scalars(select(table).where(table.project_id == str(project_id),
-                table.campaign_id == str(campaign_id), table.review_status == "APPROVED")
+                table.campaign_id == str(campaign_id), table.review_status == "APPROVED",
+                current_requirement() if table is CampaignRequirementRow else current_test())
                 .order_by(table.logical_key, table.id).limit(MAX_SNAPSHOT_RECORDS + 1)))
             if len(rows) > MAX_SNAPSHOT_RECORDS:
                 raise SnapshotSizeError()
