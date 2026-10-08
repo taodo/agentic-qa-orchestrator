@@ -48,3 +48,29 @@ export interface CampaignReadiness {
   invalid_approved_requirements: number; invalid_approved_test_specifications: number;
   blocker_codes: ReadinessBlocker[];
 }
+
+export interface CampaignSource {
+  id: UUID; project_id: UUID; campaign_id: UUID; source_type: 'TEXT' | 'MARKDOWN' | 'PDF'; name: string;
+  content_hash: string; raw_hash: string; normalization_version: string; original_bytes: number;
+  normalized_chars: number; line_count: number; status: 'INGESTED' | 'REJECTED'; error_code: string | null; created_at: Timestamp;
+}
+export interface PreparationAttempt {
+  id: UUID; project_id: UUID; campaign_id: UUID; status: 'STARTED' | 'SUCCEEDED' | 'FAILED';
+  started_at: Timestamp; finished_at: Timestamp | null; error_code: string | null;
+}
+export interface RequirementExtraction extends PreparationAttempt { source_id: UUID; source_hash: string; contract_version: string }
+export interface TestGeneration extends PreparationAttempt { requirement_versions: { id: UUID; snapshot_hash: string }[]; contract_version: string }
+export interface TestImport {
+  id: UUID; project_id: UUID; campaign_id: UUID; name: string; format: 'CSV' | 'MARKDOWN' | 'XLSX';
+  raw_hash: string; content_hash: string; contract_version: string; normalization_version: string;
+  original_bytes: number; status: 'IMPORTED' | 'REJECTED'; error_code: string | null; test_count: number; created_at: Timestamp;
+}
+export interface ApprovalCommand { action: 'APPROVE'; reviewer_label: string; note?: string }
+export interface ApprovalEvidence {
+  object_id: UUID; object_kind: 'REQUIREMENT' | 'TEST_SPECIFICATION'; project_id: UUID; campaign_id: UUID;
+  status: 'APPROVED'; reviewer_label: string; note: string | null; content_hash: string; approved_at: Timestamp;
+}
+export interface ReviewState {
+  project_id: UUID; campaign_id: UUID; object_id: UUID; object_kind: 'REQUIREMENT' | 'TEST_SPECIFICATION';
+  review_status: ReviewStatus; evidence: ApprovalEvidence | null;
+}

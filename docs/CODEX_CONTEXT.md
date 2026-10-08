@@ -39,20 +39,23 @@ explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. No QA Run or campaign
 executor exists. Migration head is 0007; see [review contracts](CAMPAIGN_REVIEW.md).
 
-## Current Phase 3 increment: Task 3.1
+## Current Phase 3 increment: Task 3.2
 
-The Campaign-first browser shell makes Project → Campaign the primary journey.
-Campaign creation accepts only name and optional objective. Deep-linkable Overview,
-Requirements, Test Specifications, Traceability and Readiness views inspect the
-accepted Phase 2 APIs. Readiness aggregates supply full counts; bounded collections
-and independent traceability limits are disclosed. User-selected records outside a
-list use one scoped detail read, never automatic link fan-out.
+Task 3.1 established Project → Campaign navigation and bounded preparation views.
+Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
+strict CSV/Markdown test import, generation from 1–20 explicitly selected
+Requirements, and Requirement/Test approval with operator-asserted reviewer labels.
+Review evidence loads only on request. PDF/XLSX and clarification/revision editing
+remain unsupported. Ingestion never invokes extraction automatically; no write or
+model action runs on mount, polls, or automatically retries. Shared same-origin
+session/CSRF/error transport remains unchanged; route changes discard late action
+completion. Contextual Campaign transitions preserve DRAFT → READY_FOR_REVIEW →
+APPROVED independently of derived READY/NOT_READY. Scoped reads refresh after writes;
+traceability and name decoration remain independent, bounded resources.
 
-Preparation APPROVED, review status, coverage and readiness READY remain distinct.
-No Campaign Run, ingestion, extraction, import, generation, approval or edit UI is
-implemented here. Legacy Tasks and Operations remain functional secondary routes.
-Authentication/session/CSRF, evidence laziness, runtime and backend contracts are
-unchanged. Phase 3.2 and later work must follow their own issue specifications.
+No Campaign Run, execution, PASS/FAIL, source mutation or auth redesign is added.
+Legacy Tasks/Operations and trusted local interpreter boundaries remain unchanged.
+Task 3.3 owns its own future QA Run domain/snapshot contract, not execution here.
 
 ## Product direction
 

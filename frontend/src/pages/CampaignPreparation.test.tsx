@@ -14,7 +14,7 @@ function routes(overrides: Record<string, Response | Promise<Response>> = {}) {
     const url = String(input);
     if (overrides[url]) return Promise.resolve(overrides[url]);
     const fixtures: Record<string, unknown> = { [api]: campaign, [api+'/readiness']: readiness,
-      [api+'/requirements?limit=50']: page([requirement, blockedRequirement]), [api+'/traceability?limit=50']: traceability,
+      [api+'/sources?limit=50']: page([]), [api+'/requirements?limit=50']: page([requirement, blockedRequirement]), [api+'/traceability?limit=50']: traceability,
       [api+'/test-specifications?limit=50']: page([specification, blockedSpecification]),
       ['/api/v1/projects/'+project.id]: project, ['/api/v1/projects/'+project.id+'/campaigns?limit=50']: page([campaign]) };
     if (!(url in fixtures)) return Promise.reject(new Error('Unexpected mocked request: '+url));
@@ -29,7 +29,7 @@ describe('Campaign routes and readiness', () => {
     const nav = screen.getByRole('navigation', { name: 'Campaign preparation' });
     expect(within(nav).getAllByRole('link')).toHaveLength(5);
     expect(within(nav).getByRole('link', { name: suffix === '/readiness' ? 'Readiness' : heading })).toHaveAttribute('aria-current', 'page');
-    expect(screen.queryByRole('button', { name: /Run|Approve|Generate|Import|Mark Ready/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Run|Mark Ready|Resolve|Execute/i })).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
   });
   it('separates preparation Approved from Not ready and uses full aggregates', async () => {
@@ -55,8 +55,8 @@ describe('Campaign routes and readiness', () => {
   });
   it('handles empty readiness through meaningful blockers', async () => {
     routes({ [api+'/readiness']: response({ ...readiness, total_requirements: 0, total_test_specifications: 0, approved_requirements: 0, approved_test_specifications: 0, blocker_codes: ['NO_REQUIREMENTS', 'NO_TEST_SPECIFICATIONS'] }) }); open('/readiness');
-    expect(await screen.findByText('No Requirements have been prepared.')).toBeInTheDocument();
-    expect(screen.getByText('No Test Specifications have been prepared.')).toBeInTheDocument();
+    expect(await screen.findByText('No Requirements have been prepared. Add a specification and extract Requirements.')).toBeInTheDocument();
+    expect(screen.getByText('No Test Specifications have been prepared. Import existing tests or generate tests.')).toBeInTheDocument();
   });
   it('handles Campaign not found without child calls or action controls', async () => {
     routes({ [api]: response({ error: { code: 'CAMPAIGN_NOT_FOUND', message: 'Campaign not found' } }, 404) }); open('/requirements');
@@ -96,7 +96,7 @@ describe('Requirements and executor-neutral Test Specifications', () => {
     expect(await screen.findAllByText('Imported')).toHaveLength(2); expect(screen.getByText('AI-generated')).toBeInTheDocument();
     expect(screen.getByText('No known Requirement links.')).toBeInTheDocument(); expect(screen.getByText(/UNKNOWN-CURRENCY/)).toBeInTheDocument();
     expect(screen.getByText('Missing')).toBeInTheDocument(); expect(screen.getByText(/Additional records/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Execute|Import|Generate|Approve/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Execute|Resolve/ })).not.toBeInTheDocument();
   });
   it('renders untrusted source/marker text without executing HTML or following links', async () => {
     const text = '<img src="https://invalid.example" onerror="bad()">';
@@ -128,7 +128,7 @@ describe('Traceability and selected detail reads', () => {
     expect(screen.getByText(/additional links are not shown/)).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('PRIVATE_AUXILIARY_ERROR');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual([api, api+'/traceability?limit=50', api+'/requirements?limit=50'].sort());
+    expect(vi.mocked(fetch).mock.calls.map(([url]) => String(url)).sort()).toEqual([api, api+'/readiness', api+'/traceability?limit=50', api+'/requirements?limit=50'].sort());
   });
   it('renders coverage before optional names finish and decorates without detail fan-out', async () => {
     const pending = deferred<Response>();
@@ -139,7 +139,7 @@ describe('Traceability and selected detail reads', () => {
     await act(async () => pending.resolve(response(page([requirement], true))));
     expect(await screen.findByRole('link', { name: requirement.logical_key })).toBeInTheDocument();
     expect(screen.getByText(requirement.title)).toBeInTheDocument(); expect(screen.getByText(/Requirement names come from a bounded list/)).toBeInTheDocument();
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 
   it('renders all coverage semantics, gaps, status counts and honest independent truncation', async () => {
@@ -149,7 +149,7 @@ describe('Traceability and selected detail reads', () => {
     expect(screen.getByText(/not a complete matrix/)).toBeInTheDocument(); expect(screen.getByText(/additional links are not shown/)).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Requirement coverage table' })).toHaveAttribute('tabindex', '0');
     expect(screen.getByRole('link', { name: specification.id })).toHaveAttribute('href', base+'/test-specifications?test_spec_id=test-a');
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
   it.each([['requirements', 'requirement_id', requirement, '/requirements/requirement-a'], ['test-specifications', 'test_spec_id', specification, '/test-specifications/test-a']] as const)('loads one selected record outside the bounded %s list', async (section, param, record, detail) => {
     routes({ [api+'/'+section+'?limit=50']: response(page([], true)), [api+detail]: response(record) });
@@ -161,7 +161,7 @@ describe('Traceability and selected detail reads', () => {
   });
   it('uses a listed selected test without a redundant detail request', async () => {
     routes(); open('/test-specifications?test_spec_id=test-a'); await screen.findByText(specification.title);
-    expect(fetch).toHaveBeenCalledTimes(2); expect(screen.getByRole('link', { name: 'Clear selection' })).toHaveAttribute('href', base+'/test-specifications');
+    expect(fetch).toHaveBeenCalledTimes(4); expect(screen.getByRole('link', { name: 'Clear selection' })).toHaveAttribute('href', base+'/test-specifications');
   });
 });
 

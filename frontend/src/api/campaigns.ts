@@ -1,4 +1,5 @@
 import { request } from './client';
+import type { CampaignSource, RequirementExtraction, TestImport, TestGeneration, ApprovalCommand, ReviewState, PreparationStatus } from './campaignTypes';
 import type { CollectionPage } from './types';
 import type { CampaignView, CampaignRequirement, CampaignTestSpecification, CampaignTraceability, CampaignReadiness } from './campaignTypes';
 
@@ -17,3 +18,21 @@ export const getRequirement = (projectId: string, campaignId: string, requiremen
   request<CampaignRequirement>(`${campaignPath(projectId, campaignId)}/requirements/${encodeURIComponent(requirementId)}`);
 export const getTestSpecification = (projectId: string, campaignId: string, testId: string) =>
   request<CampaignTestSpecification>(`${campaignPath(projectId, campaignId)}/test-specifications/${encodeURIComponent(testId)}`);
+
+export const listSources = (p: string, c: string) => request<CollectionPage<CampaignSource>>(`${campaignPath(p, c)}/sources?limit=50`);
+export const ingestSource = (p: string, c: string, body: { name: string; source_type: 'TEXT' | 'MARKDOWN'; content: string }) =>
+  request<CampaignSource>(`${campaignPath(p, c)}/sources`, { method: 'POST', body: JSON.stringify(body) });
+export const extractRequirements = (p: string, c: string, sourceId: string) =>
+  request<RequirementExtraction>(`${campaignPath(p, c)}/sources/${encodeURIComponent(sourceId)}/extract-requirements`, { method: 'POST', body: '{}' });
+export const importTests = (p: string, c: string, body: { name: string; format: 'CSV' | 'MARKDOWN'; content: string }) =>
+  request<TestImport>(`${campaignPath(p, c)}/test-imports`, { method: 'POST', body: JSON.stringify(body) });
+export const generateTests = (p: string, c: string, requirementIds: string[]) =>
+  request<TestGeneration>(`${campaignPath(p, c)}/generate-tests`, { method: 'POST', body: JSON.stringify({ requirement_ids: requirementIds }) });
+export const reviewRequirement = (p: string, c: string, id: string, body: ApprovalCommand) =>
+  request<ReviewState>(`${campaignPath(p, c)}/requirements/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify(body) });
+export const reviewTest = (p: string, c: string, id: string, body: ApprovalCommand) =>
+  request<ReviewState>(`${campaignPath(p, c)}/test-specifications/${encodeURIComponent(id)}/review`, { method: 'POST', body: JSON.stringify(body) });
+export const getRequirementReview = (p: string, c: string, id: string) => request<ReviewState>(`${campaignPath(p, c)}/requirements/${encodeURIComponent(id)}/review`);
+export const getTestReview = (p: string, c: string, id: string) => request<ReviewState>(`${campaignPath(p, c)}/test-specifications/${encodeURIComponent(id)}/review`);
+export const transitionCampaign = (p: string, c: string, status: Exclude<PreparationStatus, 'DRAFT'>) =>
+  request<CampaignView>(`${campaignPath(p, c)}/transitions`, { method: 'POST', body: JSON.stringify({ status }) });
