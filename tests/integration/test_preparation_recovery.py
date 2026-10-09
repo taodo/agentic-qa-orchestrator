@@ -199,7 +199,7 @@ def test_0010_roundtrip_preserves_initial_failed_attempt_and_refuses_history_los
     app.retry_campaign_extraction(p.id,c.id,first.id)
     with pytest.raises(RuntimeError,match='cannot erase preparation recovery audit history'):command.downgrade(config,'0009')
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0010'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0011'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 

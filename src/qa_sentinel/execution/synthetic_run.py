@@ -8,3 +8,12 @@ class SyntheticRunExecutor:
         # that immutable snapshot, not to a live Campaign or semantic title rule.
         snapshot = QARunTest.model_validate(snapshot.model_dump())
         return QAResult.PASS if snapshot.position % 2 else QAResult.FAIL
+
+
+def execute_synthetic(executor, snapshot: QARunTest):
+    """Wrap the accepted pure evaluation seam in the typed result boundary."""
+    from qa_sentinel.domain.qa_run_evidence import SyntheticObservation, EvidenceDraft, TestExecutionResult
+    result = executor.evaluate(snapshot)
+    observation = SyntheticObservation(position=snapshot.position, outcome=result)
+    return TestExecutionResult(qa_result=result, evidence=(
+        EvidenceDraft(payload=observation, summary=observation.safe_summary()),))

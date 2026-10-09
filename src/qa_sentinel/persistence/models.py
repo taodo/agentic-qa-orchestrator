@@ -1,7 +1,7 @@
 """SQLAlchemy storage only; no domain or workflow behavior."""
 from datetime import datetime
 from typing import Any
-from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, ForeignKeyConstraint, text
+from sqlalchemy import event, DDL, String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, ForeignKeyConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from .types import ISODateTime
 
@@ -515,6 +515,7 @@ class QARunTestRow(Base):
     __table_args__ = (
         ForeignKeyConstraint(["run_id", "campaign_id", "project_id"], ["qa_runs.id", "qa_runs.campaign_id", "qa_runs.project_id"], name="fk_qa_run_tests_owner", deferrable=True, initially="DEFERRED"),
         UniqueConstraint("run_id", "original_test_specification_id", name="uq_qa_run_tests_original"),
+        UniqueConstraint("id", "run_id", "campaign_id", "project_id", name="uq_qa_run_tests_owner"),
         UniqueConstraint("run_id", "position", name="uq_qa_run_tests_order"),
         CheckConstraint("position BETWEEN 1 AND 1000", name="ck_qa_run_tests_position"),
         CheckConstraint("execution_status IN ('NOT_STARTED','RUNNING','COMPLETED','BLOCKED')", name="ck_qa_run_tests_execution"),
@@ -570,3 +571,35 @@ class RequirementRevisionRow(Base):
     supersedes_id: Mapped[str] = mapped_column(String(36), nullable=False)
     clarification_id: Mapped[str] = mapped_column(String(36), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class QARunEvidenceRow(Base):
+    __tablename__ = "qa_run_evidence"
+    __table_args__ = (
+        ForeignKeyConstraint(["run_test_id", "run_id", "campaign_id", "project_id"],
+            ["qa_run_tests.id", "qa_run_tests.run_id", "qa_run_tests.campaign_id", "qa_run_tests.project_id"],
+            name="fk_qa_run_evidence_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("run_test_id", "sequence", name="uq_qa_run_evidence_order"),
+        CheckConstraint("sequence BETWEEN 1 AND 20", name="ck_qa_run_evidence_order"),
+        CheckConstraint("schema_version='qa-run-evidence-v1' AND kind='EXECUTION_OBSERVATION' AND length(source) BETWEEN 1 AND 64", name="ck_qa_run_evidence_contract"),
+        CheckConstraint("length(summary) BETWEEN 1 AND 512 AND length(CAST(payload AS BLOB)) <= 2048", name="ck_qa_run_evidence_bounds"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_test_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    recorded_at: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[Any] = mapped_column(JSON, nullable=False)
+
+
+# SQLite accepted evidence is append-only, including direct ORM update/delete.
+for _action in ("UPDATE", "DELETE"):
+    event.listen(QARunEvidenceRow.__table__, "after_create", DDL(
+        f"CREATE TRIGGER qa_run_evidence_no_{_action.lower()} BEFORE {_action} ON qa_run_evidence "
+        "BEGIN SELECT RAISE(ABORT, 'Run evidence is immutable'); END"))

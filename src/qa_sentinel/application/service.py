@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from uuid import UUID, uuid5, NAMESPACE_URL
 from pydantic import ValidationError
 from qa_sentinel.domain.campaign_review import ApprovalCommand, ReviewError, assess_readiness
-from qa_sentinel.execution.synthetic_run import SyntheticRunExecutor
+from qa_sentinel.execution.synthetic_run import SyntheticRunExecutor, execute_synthetic
 from qa_sentinel.domain.qa_run_lifecycle import RunLifecycleError
 from .campaign_review import CampaignTraceability, ReviewState, RequirementTrace, TraceLink, Readiness
 from qa_sentinel.domain.qa_run import (CreateQARun, QARun, QARunRequirement, QARunTest,
@@ -410,12 +410,12 @@ class QASentinelApplication:
                     run = uow.qa_runs.get(project_id, campaign_id, run_id)
                     running = uow.qa_runs.start_test(run, uow.qa_runs.test(run, snapshot.id))
                     uow.commit()
-                result = self._synthetic_run_executor.evaluate(running)  # Pure; no open DB transaction.
+                result = execute_synthetic(self._synthetic_run_executor, running)  # Pure; no open DB transaction.
                 with persistence_boundary(), UnitOfWork(self._factory) as uow:
                     uow.session.connection(execution_options={"qa_job_write": True})
                     run = uow.qa_runs.get(project_id, campaign_id, run_id)
                     uow.qa_runs.complete_test(run, uow.qa_runs.test(run, snapshot.id), result)
-                    uow.commit()  # Durable result before processing the next test, including FAIL.
+                    uow.commit()  # Durable result AND evidence before processing the next test, including FAIL.
             return self._finish_qa_run(project_id, campaign_id, run_id)
         except Exception:
             # No raw exception text/evidence; earlier committed test results survive.
@@ -459,6 +459,40 @@ class QASentinelApplication:
 
     def list_qa_run_requirements(self, project_id, campaign_id, run_id, *, limit=50, after_position=0) -> CollectionPage[QARunRequirement]:
         return self._qa_run_entries(project_id, campaign_id, run_id, "requirements", limit, after_position)
+
+    def get_qa_run_results(self, project_id, campaign_id, run_id, *, limit=50, after_position=0):
+        from .qa_run_results import QARunResults, QARunResultSummary, QARunTestResult
+        from qa_sentinel.domain.qa_run_evidence import EVIDENCE_PREVIEW_LIMIT
+        project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
+        limit = list_limit(limit)
+        if type(after_position) is not int or not 0 <= after_position <= 1000:
+            raise ApplicationError(Code.INVALID_INPUT)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            run = self._qa_run(uow, project_id, campaign_id, run_id)
+            tests = page(uow.qa_runs.entries(run, "tests", limit, after_position), limit, QARunTest)
+            evidence = uow.qa_runs.evidence_preview(run, [t.id for t in tests.items], EVIDENCE_PREVIEW_LIMIT)
+            items = []
+            for test in tests.items:
+                count, records = evidence.get(str(test.id), (0, []))
+                items.append(QARunTestResult(**test.model_dump(), evidence_count=count,
+                    evidence=CollectionPage(items=tuple(records), total_returned=len(records), truncated=count > len(records))))
+            return QARunResults(run=run, summary=QARunResultSummary(**uow.qa_runs.result_counts(run)),
+                tests=CollectionPage(items=tuple(items), total_returned=len(items), truncated=tests.truncated))
+
+    def list_qa_run_test_evidence(self, project_id, campaign_id, run_id, test_id, *, limit=50, after_sequence=0):
+        from qa_sentinel.domain.qa_run_evidence import QARunEvidence, MAX_TEST_EVIDENCE
+        project_id, campaign_id, run_id, test_id = map(identifier, (project_id, campaign_id, run_id, test_id))
+        limit = list_limit(limit)
+        if type(after_sequence) is not int or not 0 <= after_sequence <= MAX_TEST_EVIDENCE:
+            raise ApplicationError(Code.INVALID_INPUT)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            run = self._qa_run(uow, project_id, campaign_id, run_id)
+            # Conceal foreign/missing Test identities with the established scoped Run error.
+            try:
+                uow.qa_runs.test(run, test_id)
+            except RunLifecycleError:
+                raise ApplicationError(Code.RUN_NOT_FOUND) from None
+            return page(uow.qa_runs.evidence(run, test_id, limit, after_sequence), limit, QARunEvidence)
 
     def get_campaign_model_usage(self, project_id, campaign_id, *, limit=200) -> CampaignModelUsage:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)

@@ -18,7 +18,7 @@ def test_explicit_commit_persists_related_records(factory,bundle,store_bundle):
         assert uow.execution_jobs.get(job.id)==job
     with factory() as session:
         for table in Base.metadata.tables.values():
-            expected = 0 if table.name in {"campaign_clarifications", "campaign_requirement_revisions", "qa_runs", "qa_run_requirements", "qa_run_tests", "campaign_requirement_reviews", "campaign_test_reviews", "qa_campaigns", "campaign_sources", "campaign_requirement_extractions", "campaign_requirements", "campaign_test_imports", "campaign_test_generations", "campaign_test_specifications", "campaign_test_requirement_links"} else 1  # Legacy workflow writes never create a Campaign or QA Run.
+            expected = 0 if table.name in {"qa_run_evidence", "campaign_clarifications", "campaign_requirement_revisions", "qa_runs", "qa_run_requirements", "qa_run_tests", "campaign_requirement_reviews", "campaign_test_reviews", "qa_campaigns", "campaign_sources", "campaign_requirement_extractions", "campaign_requirements", "campaign_test_imports", "campaign_test_generations", "campaign_test_specifications", "campaign_test_requirement_links"} else 1  # Legacy workflow writes never create a Campaign or QA Run.
             assert session.scalar(select(func.count()).select_from(table)) == expected
 
 

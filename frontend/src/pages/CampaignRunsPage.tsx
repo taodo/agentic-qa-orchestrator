@@ -3,8 +3,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCampaign } from './CampaignDetailPage';
 import { useResource } from '../app/useResource';
 import { usePreparationAction } from '../app/usePreparationAction';
-import { createRun, getRun, listRuns, listRunRequirements, listRunTests, runsPath, startRun } from '../api/runs';
+import { createRun, getRunResults, listRuns, listRunRequirements, runsPath, startRun } from '../api/runs';
 import type { QARun } from '../api/runTypes';
+import { RunResultsTable } from '../components/RunResultsTable';
 import { DateTime } from '../components/DateTime';
 import { ErrorState, EmptyState, LoadingState, TruncationNotice } from '../components/Feedback';
 import { StateBadge } from '../components/StatusBadge';
@@ -53,36 +54,36 @@ export function CampaignRunDetailPage() {
 function RunDetail({runId}:{runId:string}) {
   const { projectId:p, campaignId:c, base } = useCampaign();
   const [reqPosition,setReqPosition] = useState(0), [testPosition,setTestPosition] = useState(0);
-  const run = useResource(useCallback(() => getRun(p,c,runId),[p,c,runId]));
+  const results = useResource(useCallback(() => getRunResults(p,c,runId,testPosition),[p,c,runId,testPosition]));
+  const run = {...results,data:results.data?.run};
+  const tests = {...results,data:results.data?.tests};
   const reqs = useResource(useCallback(() => listRunRequirements(p,c,runId,reqPosition),[p,c,runId,reqPosition]));
-  const tests = useResource(useCallback(() => listRunTests(p,c,runId,testPosition),[p,c,runId,testPosition]));
   const action = usePreparationAction<QARun>();
-  async function refresh() { await Promise.all([run.reload(),tests.reload()]); }
+  async function refresh() { await results.reload(); }
   return <><Link to={`${base}/runs`}>← Runs</Link><SectionHeader title="QA Run detail" /><SyntheticNotice />
     <p>This Run uses the immutable preparation snapshot captured when the Run was created. Later Campaign changes do not alter this Run.</p>
     <button disabled={run.loading || action.busy} onClick={() => void refresh()}>Refresh Run and results</button>
     {action.error && <ErrorState error={action.error} />}
     {run.loading ? <LoadingState>Loading Run…</LoadingState> : run.error ? <ErrorState error={run.error} retry={() => void refresh()} /> : run.data && <section className="panel run-summary"><h3>RUN-{String(run.data.run_number).padStart(3,'0')}</h3><p className="mono muted technical-id">{run.data.id}</p><RunSummary run={run.data} />
+      {results.data && <dl className="metadata" aria-label="Run result totals">{Object.entries({Total:results.data.summary.total,Completed:results.data.summary.completed,Passed:results.data.summary.passed,Failed:results.data.summary.failed,Skipped:results.data.summary.skipped,'Not evaluated':results.data.summary.not_evaluated,Remaining:results.data.summary.remaining}).map(([label,count])=><div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}</dl>}
       <p>Snapshot hash: <code>{run.data.snapshot_hash}</code></p><p>Readiness at creation: {run.data.readiness_at_creation.status}</p><p>Captured Campaign: {run.data.campaign_snapshot.name}</p>
-      {run.data.execution_error_code && <p role="alert">{run.data.execution_error_code}: Synthetic execution could not complete. Earlier results remain saved.</p>}
+      {run.data.execution_error_code && <p role="alert">{run.data.execution_error_code}: Synthetic execution could not complete. Earlier completed QA results and evidence remain saved. Interrupted and unstarted tests are not evaluated; this is an execution-system failure, not a product assertion failure.</p>}
       {run.data.execution_status === 'CREATED' && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(async () => {
         try { return await startRun(p,c,runId); } catch (error) { await refresh(); throw error; }
       }, async () => { await refresh(); })}>{action.busy ? 'Running synthetic execution…' : 'Start Synthetic Run'}</button>}
       {action.busy && <p role="status">Results refresh when synchronous execution completes.</p>}
       {run.data.execution_status === 'RUNNING' && <p>Execution is RUNNING. Refresh to inspect saved progress. Restart/resume is unavailable.</p>}
     </section>}
+    <section className="panel campaign-section"><h3>Test Results</h3>{tests.loading ? <LoadingState>Loading Test snapshot…</LoadingState> : tests.error ? <ErrorState error={tests.error} retry={() => void tests.reload()} /> : tests.data && <>
+      {!tests.data.items.length && <EmptyState>No Test snapshots on this page.</EmptyState>}
+      {tests.data.items.length>0 && <RunResultsTable items={tests.data.items} p={p} c={c} runId={runId}/>}
+      <TruncationNotice truncated={tests.data.truncated} />{tests.data.truncated && <button onClick={() => setTestPosition(tests.data!.items.at(-1)!.position)}>Next Test snapshot page</button>}{testPosition > 0 && <button onClick={() => setTestPosition(0)}>First Test snapshot page</button>}
+    </>}</section>
     <section className="panel campaign-section"><h3>Requirement snapshot</h3>{reqs.loading ? <LoadingState>Loading Requirement snapshot…</LoadingState> : reqs.error ? <ErrorState error={reqs.error} retry={() => void reqs.reload()} /> : reqs.data && <>
       {!reqs.data.items.length && <EmptyState>No Requirement snapshots on this page.</EmptyState>}
       {reqs.data.items.map(item => <article key={item.id} className="evidence-record"><h4>{item.content.title}</h4><p>{item.content.logical_key}</p><p className="prose">{item.content.description}</p><ul>{item.content.acceptance_criteria.map(ac => <li key={ac.key}>{ac.key}: {ac.text}</li>)}</ul>
         <details><summary>Frozen source and approval evidence</summary><p>Original Requirement: {item.original_requirement_id}</p><p>Snapshot identity: {item.id}</p><p>Approval hash: {item.approval.content_hash}</p>{item.content.source_references.map((ref,i) => <blockquote key={i}>Source {ref.source_id}, lines {ref.start_line}–{ref.end_line}: {ref.excerpt}</blockquote>)}</details></article>)}
       <TruncationNotice truncated={reqs.data.truncated} />{reqs.data.truncated && <button onClick={() => setReqPosition(reqs.data!.items.at(-1)!.position)}>Next Requirement snapshot page</button>}{reqPosition > 0 && <button onClick={() => setReqPosition(0)}>First Requirement snapshot page</button>}
     </>}</section>
-    <section className="panel campaign-section"><h3>Test snapshot and synthetic results</h3>{tests.loading ? <LoadingState>Loading Test snapshot…</LoadingState> : tests.error ? <ErrorState error={tests.error} retry={() => void tests.reload()} /> : tests.data && <>
-      {!tests.data.items.length && <EmptyState>No Test snapshots on this page.</EmptyState>}
-      {tests.data.items.map(item => <article key={item.id} className="evidence-record run-test-result" data-outcome={item.qa_result}><h4>{item.position}. {item.content.title}</h4><p>{item.content.logical_key}</p><p>Synthetic result — generated by the demo execution adapter. No external application was tested.</p>
-        <dl className="metadata"><div><dt>Test execution status</dt><dd><StateBadge status={item.execution_status} /></dd></div><div><dt>QA result</dt><dd><StateBadge status={item.qa_result} /></dd></div></dl>
-        <p>Overall expected behavior: {item.content.overall_expected_result}</p><h5>Steps and expected behavior snapshot</h5><ol className="test-steps">{item.content.steps.map(step => <li key={step.index}>{step.action} — Expected: {step.expected}</li>)}</ol><h5>Required evidence description</h5><ul>{item.content.required_evidence.map((e,i) => <li key={i}>{e}</li>)}</ul>
-        <details><summary>Frozen test identity and provenance</summary><p>Original test: {item.original_test_specification_id}</p><p>Snapshot: {item.id}</p><p>Approval hash: {item.approval.content_hash}</p><p>Origin: {item.content.provenance.origin}</p><p>Linked Requirement snapshots: {item.linked_requirement_snapshot_ids.join(', ')}</p></details></article>)}
-      <TruncationNotice truncated={tests.data.truncated} />{tests.data.truncated && <button onClick={() => setTestPosition(tests.data!.items.at(-1)!.position)}>Next Test snapshot page</button>}{testPosition > 0 && <button onClick={() => setTestPosition(0)}>First Test snapshot page</button>}
-    </>}</section></>;
+  </>;
 }

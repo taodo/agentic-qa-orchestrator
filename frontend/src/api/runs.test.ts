@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initializeAccess } from './access';
-import { createRun, getRun, listRuns, listRunTests, listRunRequirements, startRun } from './runs';
+import { createRun, getRun, listRuns, listRunTests, listRunRequirements, startRun, getRunResults, getRunTestEvidence } from './runs';
 import { response } from '../test/fixtures';
 
 afterEach(async () => { vi.mocked(fetch).mockResolvedValue(response({mode:'demo'})); await initializeAccess(); vi.unstubAllGlobals(); });
 describe('scoped Run transport', () => {
   it.each([
+    [() => getRunResults('p/a','c/b','r/c',50), '/projects/p%2Fa/campaigns/c%2Fb/runs/r%2Fc/results?limit=50&after_position=50'],
+    [() => getRunTestEvidence('p/a','c/b','r/c','t/d'), '/projects/p%2Fa/campaigns/c%2Fb/runs/r%2Fc/tests/t%2Fd/evidence?limit=20'],
     [() => listRuns('p/a','c/b'), '/projects/p%2Fa/campaigns/c%2Fb/runs?limit=50'],
     [() => getRun('p/a','c/b','r/c'), '/projects/p%2Fa/campaigns/c%2Fb/runs/r%2Fc'],
     [() => listRunTests('p/a','c/b','r/c',50), '/projects/p%2Fa/campaigns/c%2Fb/runs/r%2Fc/tests?limit=50&after_position=50'],

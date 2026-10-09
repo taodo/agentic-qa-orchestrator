@@ -93,7 +93,7 @@ def test_stale_database_blocks_and_safe_current_required(prepared, monkeypatch, 
     assert cli.main(["local", "start", "--config", str(path)]) == 1
     output = capsys.readouterr()
     current = revision if revision.isdigit() else "UNAVAILABLE"
-    assert f"Current: {current}" in output.err and "Required: 0010" in output.err
+    assert f"Current: {current}" in output.err and "Required: 0011" in output.err
     assert "No migration was run automatically" in output.err
     assert "secret-not-a-revision" not in output.err and "private-key" not in output.err
     assert prepared[0].database.read_bytes() == state

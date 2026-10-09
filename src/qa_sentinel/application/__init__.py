@@ -15,11 +15,12 @@ from .models import (
 )
 
 from qa_sentinel.domain.qa_run import CreateQARun, QARun, QARunRequirement, QARunTest
+from .qa_run_results import QARunResults, QARunEvidence
 
 from .campaign_review import ApprovalCommand, ReviewState, CampaignTraceability, Readiness
 
 __all__ = [
-    "CreateQARun", "QARun", "QARunRequirement", "QARunTest",
+    "CreateQARun", "QARun", "QARunRequirement", "QARunTest", "QARunResults", "QARunEvidence",
     "ApprovalCommand", "ReviewState", "CampaignTraceability", "Readiness",
     "TestImportView", "TestImportDetail", "TestSpecificationView", "TestGenerationView", "ImportFormat",
     "QASentinelApplication", "ApplicationError", "ApplicationErrorCode", "ProjectExecutionBundle",

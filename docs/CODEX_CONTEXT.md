@@ -38,7 +38,7 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
-Campaign executor exists. Migration head is 0010; see
+Campaign executor exists. Migration head is 0011; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11
@@ -99,7 +99,7 @@ content/approval/links/positions never update. Only CREATED starts; concurrent a
 terminal starts reject. No models, network, browser, subprocess, target filesystem,
 legacy Task/job evidence, retry/resume, Stop or crash replay. Frontend uses explicit
 intent keys, bounded snapshot pages, shared CSRF and stale-completion guards, with
-clear synthetic warnings. Phase 4 evidence/reporting remains future work.
+clear synthetic warnings. Task 4.1 adds the evidence/results boundary below; reporting remains future work.
 
 Task 3.5 adds explicit extraction retry (three attempts/source), independent usage
 and durable history, plus inert operator clarification sources and separate AI
@@ -135,6 +135,18 @@ Model citations select source identity/ranges only; backend reconstructs exact L
 excerpts and validates canonical citations before new persistence writes. Existing
 citations/history remain readable; no migration, extra model call, automatic retry
 or review/readiness/Run change. See [citation grounding](REQUIREMENTS.md).
+
+## Current Phase 4 increment: Task 4.1
+
+Run Tests now own bounded immutable executor-neutral evidence envelopes. The
+current synthetic path emits typed synthetic observations and persists each result
+and evidence atomically before continuing, including FAIL. Migration 0011 preserves
+old Runs and refuses evidence-destructive downgrade. New scoped read-only Results
+and explicit evidence routes provide full persisted aggregates and bounded batched
+previews without N+1/provider/tool work. Run Detail is a table-first Results view
+with strong SYNTHETIC labeling, immutable snapshot context and separate execution/
+QA outcomes. No real executor, analysis, defect/report, retry/resume or preparation/
+model/token change. See [Run Results and evidence](QA_RUN_RESULTS.md).
 
 ## Product direction
 
