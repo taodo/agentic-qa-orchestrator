@@ -17,7 +17,13 @@ from .status import add_runtime_status
 
 class FrontendFiles(StaticFiles):
     """StaticFiles owns containment/lookup. Only known browser routes get fallback."""
-    UI_ROUTE = re.compile(r"/(?:operations|projects(?:/[A-Za-z0-9_-]+)?|tasks/[A-Za-z0-9_-]+)/?$")
+    # Keep aligned with the explicit browser routes in frontend/src/app/App.tsx.
+    UI_ROUTE = re.compile(
+        r"/(?:operations|projects(?:/[A-Za-z0-9_-]+"
+        r"(?:/campaigns/[A-Za-z0-9_-]+"
+        r"(?:/(?:requirements|test-specifications|traceability|readiness|runs(?:/[A-Za-z0-9_-]+)?))?"
+        r")?)?|tasks/[A-Za-z0-9_-]+)/?$"
+    )
     ASSET_SUFFIXES = {".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".woff", ".woff2", ".txt"}
 
     async def __call__(self, scope, receive, send):

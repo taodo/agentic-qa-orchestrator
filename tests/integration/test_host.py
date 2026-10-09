@@ -166,6 +166,39 @@ def test_fallback_never_masks_api_assets_or_traversal(config, path):
         assert "Built frontend" not in response.text and "OUTSIDE_SECRET" not in response.text
 
 
+@pytest.mark.parametrize("suffix", ["", "/requirements?requirement_id=revised-v2", "/test-specifications?test_spec_id=test-a", "/traceability", "/readiness", "/runs", "/runs/run-a", "/requirements/"])
+@pytest.mark.parametrize("mode", ["demo", "local"])
+def test_campaign_spa_deep_links(config, tmp_path, monkeypatch, suffix, mode):
+    value = config
+    if mode == "local":
+        value = local(config, tmp_path)
+        seed(config, "real-project")
+        monkeypatch.setenv("OPENAI_API_KEY", "SYNTHETIC_LOCAL_KEY")
+    with TestClient(create_host_app(value)) as client:
+        path = "/projects/project-a/campaigns/campaign-a" + suffix
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert response.text == (config.frontend_dist / "index.html").read_text()
+        assert client.head(path).status_code == 200
+
+
+@pytest.mark.parametrize("path", [
+    "/projects/project-a/campaigns", "/projects/project-a/campaigns/campaign-a/unknown",
+    "/projects/project-a/campaigns/campaign-a/requirements/extra",
+    "/projects/project-a/campaigns/campaign-a/runs/run-a/extra",
+    "/projects/project-a/campaigns/campaign-a/api/v1/missing",
+    "/api/projects/project-a/campaigns/campaign-a/requirements",
+    "/api/v1/projects/project-a/campaigns/campaign-a/unknown",
+])
+def test_campaign_fallback_remains_narrow(config, path):
+    with TestClient(create_host_app(config)) as client:
+        response = client.get(path)
+        assert response.status_code == 404
+        assert response.json() == {"error": {"code": "HTTP_ERROR", "message": "Route not found"}}
+        assert "Built frontend" not in response.text
+
+
 def test_assets_api_health_schema_and_no_cors(config):
     with TestClient(create_host_app(config)) as client:
         assert client.get("/assets/app.js").status_code == 200

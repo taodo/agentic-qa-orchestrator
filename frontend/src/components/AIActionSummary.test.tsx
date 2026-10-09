@@ -174,3 +174,31 @@ it('retains extraction result beside the focused Requirement heading after scope
   const heading=screen.getByRole('heading',{name:'Requirements',level:2});expect(heading).toHaveFocus();expect(heading.compareDocumentPosition(summary)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(posts()).toHaveLength(1);
 });
+
+
+it('opens the revised Requirement document destination with scoped selection and focus',async()=>{
+  const revised={...requirement,id:'revised-v2',version:2,title:'Revised Requirement version 2'};
+  const result={...attempt,output:{...output,revised_requirement:{id:revised.id,key:revised.key,logical_key:revised.logical_key,version:2,review_status:revised.review_status}}};
+  const view=render(<AIActionSummary attempt={result} kind="revision" base={base}/>);
+  const destination=screen.getByRole('link',{name:'Review revised Requirement'}).getAttribute('href')!;
+  expect(destination).toBe(base+'/requirements?requirement_id=revised-v2');
+  expect(fetch).not.toHaveBeenCalled();
+  view.unmount();
+  vi.mocked(fetch).mockImplementation(async input=>{
+    const url=String(input);
+    if(url===api)return response(campaign);
+    if(url===api+'/readiness')return response(readiness);
+    if(url===api+'/requirements?limit=50')return response(page([],true));
+    if(url===api+'/requirements/'+revised.id)return response(revised);
+    if(url===api+'/traceability?limit=50')return response(traceability);
+    if(url===api+'/sources?limit=50')return response(page([]));
+    throw new Error('Unexpected read '+url);
+  });
+  // A document navigation remounts the SPA at the action link's exact location.
+  render(<MemoryRouter initialEntries={[destination]}><App/></MemoryRouter>);
+  expect(await screen.findByRole('heading',{name:revised.title})).toBeInTheDocument();
+  await waitFor(()=>expect(document.getElementById('requirement-'+revised.id)).toHaveFocus());
+  expect(screen.getByText(/selected Requirement is outside the bounded list/)).toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url)===api+'/requirements/'+revised.id)).toHaveLength(1);
+  expect(posts()).toHaveLength(0);
+});
