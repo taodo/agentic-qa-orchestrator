@@ -7,7 +7,7 @@ import { DateTime } from './DateTime';
 import { ErrorState } from './Feedback';
 
 export function PreparationReview({ projectId, campaignId, changed, objectId, kind, status, blocked }: PreparationScope & {
-  objectId: string; kind: 'Requirement' | 'Test Specification'; status: ReviewStatus; blocked: boolean;
+  objectId: string; kind: 'Requirement' | 'Test Case'; status: ReviewStatus; blocked: boolean;
 }) {
   const action = usePreparationAction<ReviewState>(), evidence = usePreparationAction<ReviewState>();
   const id = useId(), [validation, setValidation] = useState('');

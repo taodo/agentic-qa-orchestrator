@@ -295,3 +295,11 @@ details[open] > summary { margin-bottom: 16px; color: var(--text); }
 .requirements-table td:last-child { min-width: 240px; max-width: 480px; }
 .requirements-table details > summary { cursor: pointer; }
 .campaign-table tr:focus-within { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.test-cases-table { min-width: 1080px; }
+.test-cases-table h3 { font-size: .85rem; margin: 4px 0; }
+.test-cases-table td { padding: 10px 12px; }
+.test-cases-table td:last-child { min-width: 260px; max-width: 480px; }
+.preparation-row { cursor: pointer; }
+.preparation-row.is-expanded { background: var(--surface-raised); }
+.preparation-row summary { cursor: pointer; }

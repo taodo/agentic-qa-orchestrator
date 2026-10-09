@@ -75,7 +75,8 @@ describe('workspace navigation and hierarchy', () => {
   it('displays Test steps, required evidence, explicit Requirement links and secondary provenance', async () => {
     routes();open('/test-specifications');
     const title=await screen.findByRole('heading',{name:specification.title});
-    const record=title.closest('li')!;
+    const record=title.closest('tr')!;
+    fireEvent.click(within(record).getByRole('rowheader'));
     expect(within(record).getByText('Submit a payment')).toBeVisible();
     expect(within(record).getByText('Observed payment state')).toBeVisible();
     expect(within(record).getByRole('link',{name:requirement.id})).toHaveAttribute('href',base+'/requirements?requirement_id='+requirement.id);
@@ -94,7 +95,7 @@ describe('read-only preparation guidance', () => {
     expect(within(checks).getAllByText('Satisfied')).toHaveLength(4);
     expect(within(checks).getAllByText('Blocking')).toHaveLength(2);
     const summary=screen.getByRole('heading',{name:'Preparation summary'}).closest('section')!;
-    expect(summary).toHaveTextContent('Requirements100');expect(summary).toHaveTextContent('Test Specifications130');
+    expect(summary).toHaveTextContent('Requirements100');expect(summary).toHaveTextContent('Test Cases130');
     expect(fetch).toHaveBeenCalledTimes(2);
   });
   it('offers only navigation to Runs when backend says READY, without execution claims', async () => {

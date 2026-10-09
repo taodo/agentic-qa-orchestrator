@@ -50,8 +50,15 @@ synthetic Run with mixed results. Do not invoke a real provider for visual revie
 - Failed extraction: eligible Retry is explicit; history and token warning remain.
 - NEEDS_CLARIFICATION: grounded-facts form is reachable; saving, revising and human
   approval remain separate. Blocked content must not offer an approval bypass.
-- Test Specifications: structured steps/expected result/evidence, markers, linked
-  Requirements, secondary provenance, import and generation controls.
+- Test Cases: compact current-only key/title table, returned-count filters, visible
+  selection/export and sequential eligible bulk approval. Structured row detail,
+  lazy approval evidence and separate out-of-list audit content remain explicit.
+  Import and approved-only generation are secondary collapsible sections.
+- Requirements/Test Cases: broad noninteractive row click and focused Enter/Space
+  toggle detail; checkbox, buttons, links, forms and nested summaries act independently.
+  Check selected/expanded cues and visible native disclosure controls.
+- CSV: visible and selected subsets, truncation notice, Unicode/multiline/quote
+  round trips and safe formula handling; see [CSV contract](TEST_CASES_WORKSPACE.md).
 - Traceability: coverage text, linked/approved counts, optional-name UUID fallback,
   truncation notices and contained table scrolling. No automatic detail fan-out.
   Test Design Workbench enables per-row/batch Generate only for current APPROVED

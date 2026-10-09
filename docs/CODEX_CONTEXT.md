@@ -41,7 +41,7 @@ preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
 Campaign executor exists. Migration head is 0010; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
-## Current Phase 3 increment: Task 3.10
+## Current Phase 3 increment: Task 3.11
 
 Task 3.1 established Project → Campaign navigation and bounded preparation views.
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
@@ -64,6 +64,17 @@ The Responses adapter retains provider status/usage before strict structured JSO
 validation; incomplete output cannot be mislabeled by an earlier JSON parse failure.
 Models, budgets, retry policy, historical evidence and preparation/Run semantics stay
 unchanged. See [preparation workflow](PREPARATION_WORKFLOW.md).
+
+Task 3.11 names the operator workspace Test Cases while preserving the
+CampaignTestSpecification domain and existing routes. A current-only bounded
+table adds filters, visible selection, sequential single-record bulk approval,
+structured row detail and browser-local six-column human-readable CSV export
+without API/provider calls. Compact Test Case bulk approval sits above the table.
+Requirements and Test Cases share noninteractive row/keyboard disclosure; explicit
+out-of-list Test Case details remain separate read-only audit content. Import and
+approved-only generation remain secondary; Traceability remains primary. Backend,
+model usage, approval/readiness/Run semantics, migrations and dependencies are
+unchanged. See [Test Cases workspace and CSV contract](TEST_CASES_WORKSPACE.md).
 
 Task 3.2 adds no Campaign Run, execution, PASS/FAIL, source mutation or auth redesign.
 Legacy Tasks/Operations and trusted local interpreter boundaries remain unchanged.

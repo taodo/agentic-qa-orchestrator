@@ -93,25 +93,25 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
   });
   it('has no implicit selection and generates from only explicit unique IDs, preventing duplicates',async()=>{
     const pending=deferred<Response>();const {state}=mock(()=>pending.promise);open('test-specifications');
-    const checkbox=await screen.findByRole('checkbox',{name:/PAY/});expect(checkbox).not.toBeChecked();expect(screen.getByRole('button',{name:'Generate Test Specifications'})).toBeDisabled();expect(posts()).toHaveLength(0);
-    fireEvent.click(checkbox);expect(screen.getByText(/Selected: 1 of at most 20/)).toBeInTheDocument();submit('Generate Test Specifications');submit('Generate Test Specifications');
+    const checkbox=await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findByRole('checkbox',{name:/PAY/});expect(checkbox).not.toBeChecked();expect(screen.getByRole('button',{name:'Generate Test Cases'})).toBeDisabled();expect(posts()).toHaveLength(0);
+    fireEvent.click(checkbox);expect(screen.getByText(/Selected: 1 of at most 20/)).toBeInTheDocument();submit('Generate Test Cases');submit('Generate Test Cases');
     expect(posts()).toHaveLength(1);expect(JSON.parse(String(posts()[0][1]?.body))).toEqual({requirement_ids:[requirement.id]});expect(screen.getByRole('button',{name:'Generating…'})).toBeDisabled();
     state.tests=[{...readyTest,provenance:{...readyTest.provenance,origin:'AI_GENERATED',contract_version:'test-specs-v1',start_line:null,end_line:null}}];await act(async()=>pending.resolve(response(attempt)));
-    expect(await screen.findByText(/Test Specifications generated. Review is required/)).toBeInTheDocument();expect(await screen.findByText('AI-generated')).toBeInTheDocument();expect(posts()).toHaveLength(1);
+    expect(await screen.findByText(/Test Cases generated. Review is required/)).toBeInTheDocument();expect(await screen.findByText('AI-generated')).toBeInTheDocument();expect(posts()).toHaveLength(1);
   });
   it('enforces 20 selected Requirements and never includes an omitted record',async()=>{
     mock(()=>response(attempt),{requirements:Array.from({length:21},(_,i)=>({...requirement,id:'r'+i,logical_key:'REQ-'+i,title:'Requirement '+i}))});open('test-specifications');
-    const boxes=await screen.findAllByRole('checkbox');boxes.slice(0,20).forEach(box=>fireEvent.click(box));expect(boxes[20]).toBeDisabled();submit('Generate Test Specifications');
-    await screen.findByText(/Test Specifications generated/);const ids=JSON.parse(String(posts()[0][1]?.body)).requirement_ids;expect(ids).toHaveLength(20);expect(new Set(ids).size).toBe(20);expect(ids).not.toContain('r20');
+    const boxes=await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findAllByRole('checkbox');boxes.slice(0,20).forEach(box=>fireEvent.click(box));expect(boxes[20]).toBeDisabled();submit('Generate Test Cases');
+    await screen.findByText(/Test Cases generated/);const ids=JSON.parse(String(posts()[0][1]?.body)).requirement_ids;expect(ids).toHaveLength(20);expect(new Set(ids).size).toBe(20);expect(ids).not.toContain('r20');
   });
   it('retains selection after provider failure without automatic retry',async()=>{
-    mock(()=>response({error:{code:'MODEL_TIMEOUT',message:'Model request timed out'}},409));open('test-specifications');const box=await screen.findByRole('checkbox',{name:/PAY/});fireEvent.click(box);submit('Generate Test Specifications');
+    mock(()=>response({error:{code:'MODEL_TIMEOUT',message:'Model request timed out'}},409));open('test-specifications');const box=await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findByRole('checkbox',{name:/PAY/});fireEvent.click(box);submit('Generate Test Cases');
     expect(await screen.findByRole('alert')).toHaveTextContent('MODEL_TIMEOUT');expect(box).toBeChecked();expect(posts()).toHaveLength(1);
   });
  });
 
  describe('human review and contextual Campaign transitions',()=>{
-  it.each(['Requirement','Test Specification'])('records %s approval explicitly with asserted label and refreshes scoped data',async kind=>{
+  it.each(['Requirement','Test Case'])('records %s approval explicitly with asserted label and refreshes scoped data',async kind=>{
     mock((path,body,s)=>{expect(body).toEqual({action:'APPROVE',reviewer_label:'qa-human',note:'Reviewed against PRD.'});if(kind==='Requirement')s.requirements=[requirement];else s.tests=[specification];return response(receipt(kind==='Requirement'?'REQUIREMENT':'TEST_SPECIFICATION',kind==='Requirement'?requirement.id:specification.id));},{requirements:[readyReq,blockedRequirement]});open(kind==='Requirement'?'requirements':'test-specifications');
     const form=await screen.findByRole('form',{name:'Approve '+kind});fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa-human'}});fireEvent.change(within(form).getByLabelText('Review note (optional)'),{target:{value:'Reviewed against PRD.'}});fireEvent.submit(form);
     expect(await screen.findByText('Approval recorded.')).toBeInTheDocument();expect(posts()).toHaveLength(1);
@@ -121,7 +121,7 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
   it('blocks Draft/clarification and unresolved/missing links without fake resolution',async()=>{
     mock(undefined,{requirements:[blockedRequirement,{...readyReq,id:'draft',review_status:'DRAFT'}],tests:[blockedSpecification,{...readyTest,id:'unlinked',requirement_ids:[]}]});open();
     await screen.findByText(blockedRequirement.title);expect(screen.queryByRole('button',{name:'Approve Requirement'})).not.toBeInTheDocument();expect(screen.getAllByText(/No Resolve-to-Approved action is available/)).toHaveLength(2);
-    fireEvent.click(screen.getByRole('link',{name:'Test Specifications'}));await screen.findByText(blockedSpecification.title);expect(screen.queryByRole('button',{name:'Approve Test Specification'})).not.toBeInTheDocument();expect(screen.getByText(/UNKNOWN-CURRENCY/)).toBeInTheDocument();expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('link',{name:'Test Cases'}));await screen.findByText(blockedSpecification.title);expect(screen.queryByRole('button',{name:'Approve Test Case'})).not.toBeInTheDocument();expect(screen.getByText(/UNKNOWN-CURRENCY/)).toBeInTheDocument();expect(posts()).toHaveLength(0);
   });
   it('requires a valid reviewer label and retains note after a safe approval conflict',async()=>{
     mock(()=>response({error:{code:'REVIEW_CONFLICT',message:'Review intent conflicts with existing evidence'}},409),{requirements:[readyReq,blockedRequirement]});open();const form=await screen.findByRole('form',{name:'Approve Requirement'});fireEvent.submit(form);expect(posts()).toHaveLength(0);
@@ -142,7 +142,7 @@ it.each(['extract','generate'])('discards stale %s completions after Campaign na
   const pending=deferred<Response>();mock(()=>pending.promise,{sources:[source]});const oldMock=vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation((input,options)=>String(input).includes('/campaigns/other') ? Promise.resolve(response(String(input).endsWith('/readiness')?{...readiness,campaign_id:'other'}:{...campaign,id:'other',name:'Other Campaign'})) : oldMock(input,options));
   render(<MemoryRouter initialEntries={[base+'/'+(kind==='extract'?'requirements':'test-specifications')]}><Link to={'/projects/'+campaign.project_id+'/campaigns/other'}>Switch Campaign</Link><App /></MemoryRouter>);
-  if(kind==='extract')fireEvent.click(await screen.findByRole('button',{name:'Extract Requirements'}));else{fireEvent.click(await screen.findByRole('checkbox',{name:/PAY/}));submit('Generate Test Specifications');}
+  if(kind==='extract')fireEvent.click(await screen.findByRole('button',{name:'Extract Requirements'}));else{fireEvent.click(await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findByRole('checkbox',{name:/PAY/}));submit('Generate Test Cases');}
   fireEvent.click(screen.getByRole('link',{name:'Switch Campaign'}));await screen.findByRole('heading',{name:'Other Campaign'});const reads=vi.mocked(fetch).mock.calls.length;
   await act(async()=>pending.resolve(response(attempt)));expect(vi.mocked(fetch).mock.calls).toHaveLength(reads);expect(screen.queryByText(/extraction complete|Specifications generated/)).not.toBeInTheDocument();expect(screen.getByRole('heading',{name:'Other Campaign'})).toBeInTheDocument();
 });
@@ -178,23 +178,23 @@ it('distinguishes missing approval evidence from a fabricated reviewer',async()=
   open();fireEvent.click(await screen.findByRole('button',{name:'View approval evidence'}));expect(await screen.findByText('Approval evidence is unavailable in this response.')).toBeInTheDocument();expect(screen.queryByText('qa-human')).not.toBeInTheDocument();expect(posts()).toHaveLength(0);
 });
 it('surfaces public-mode model unavailability without invented generated tests',async()=>{
-  mock(()=>response({error:{code:'GENERATION_NOT_CONFIGURED',message:'Generation is not configured'}},409),{tests:[]});open('test-specifications');fireEvent.click(await screen.findByRole('checkbox',{name:/PAY/}));submit('Generate Test Specifications');
+  mock(()=>response({error:{code:'GENERATION_NOT_CONFIGURED',message:'Generation is not configured'}},409),{tests:[]});open('test-specifications');fireEvent.click(await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findByRole('checkbox',{name:/PAY/}));submit('Generate Test Cases');
   expect(await screen.findByRole('alert')).toHaveTextContent('GENERATION_NOT_CONFIGURED');expect(screen.queryByText(/Specifications generated/)).not.toBeInTheDocument();expect(posts()).toHaveLength(1);
 });
 
 
 it.each(['FAILED','STARTED'])('discloses generation %s without success copy, polling or test refresh',async status=>{
-  mock(()=>response({...attempt,status,error_code:status==='FAILED'?'MODEL_INVALID_OUTPUT':null}));open('test-specifications');fireEvent.click(await screen.findByRole('checkbox',{name:/PAY/}));submit('Generate Test Specifications');
+  mock(()=>response({...attempt,status,error_code:status==='FAILED'?'MODEL_INVALID_OUTPUT':null}));open('test-specifications');fireEvent.click(await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findByRole('checkbox',{name:/PAY/}));submit('Generate Test Cases');
   expect(await screen.findByText(/Test generation did not complete successfully/)).toHaveTextContent('Status: '+status);expect(screen.queryByText(/Specifications generated. Review is required/)).not.toBeInTheDocument();
   expect(posts()).toHaveLength(1);expect(vi.mocked(fetch).mock.calls.filter(([url])=>url===api+'/test-specifications?limit=50')).toHaveLength(1);
 });
 it('rejects oversized import bytes and reviewer note before network work',async()=>{
   mock();open('test-specifications');await screen.findByLabelText('Import name');fillImport('あ'.repeat(22000));submit('Import Test Cases');expect(posts()).toHaveLength(0);
-  const form=await screen.findByRole('form',{name:'Approve Test Specification'});fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa-human'}});fireEvent.change(within(form).getByLabelText('Review note (optional)'),{target:{value:'x'.repeat(1001)}});fireEvent.submit(form);expect(posts()).toHaveLength(0);expect(within(form).getByRole('status')).toHaveTextContent('note up to 1,000');
+  const form=await screen.findByRole('form',{name:'Approve Test Case'});fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa-human'}});fireEvent.change(within(form).getByLabelText('Review note (optional)'),{target:{value:'x'.repeat(1001)}});fireEvent.submit(form);expect(posts()).toHaveLength(0);expect(within(form).getByRole('status')).toHaveTextContent('note up to 1,000');
 });
 it('moves focus to refreshed tests and loads fresh Traceability when visited after approval',async()=>{
   mock((_path,_body,s)=>{s.tests=[specification];return response(receipt('TEST_SPECIFICATION',specification.id));});open('test-specifications');
-  const form=await screen.findByRole('form',{name:'Approve Test Specification'});fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa-human'}});fireEvent.submit(form);await screen.findByText('Approval recorded.');
-  await waitFor(()=>expect(screen.getByRole('heading',{name:'Test Specifications'})).toHaveFocus());
+  const form=await screen.findByRole('form',{name:'Approve Test Case'});fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa-human'}});fireEvent.submit(form);await screen.findByText('Approval recorded.');
+  await waitFor(()=>expect(screen.getByRole('heading',{name:'Test Cases'})).toHaveFocus());
   fireEvent.click(screen.getByRole('link',{name:'Traceability'}));await screen.findByText('Covered',{selector:'.badge'});expect(vi.mocked(fetch).mock.calls.filter(([url])=>url===api+'/traceability?limit=50')).toHaveLength(1);expect(posts()).toHaveLength(1);
 });

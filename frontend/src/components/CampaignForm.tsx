@@ -24,7 +24,7 @@ export function CampaignForm({ projectId, onCreated }: { projectId: string; onCr
     } catch (failure) { if (active.current) setError(publicError(failure)); }
     finally { gate.current = false; if (active.current) setBusy(false); }
   }
-  return <section className="panel"><h2>Create Campaign</h2><p className="hint">Group requirements and test specifications for one QA initiative. Creation starts preparation; it does not run tests.</p>
+  return <section className="panel"><h2>Create Campaign</h2><p className="hint">Group requirements and test cases for one QA initiative. Creation starts preparation; it does not run tests.</p>
     <form onSubmit={submit}><fieldset disabled={busy}>
       <label htmlFor="campaign-name">Campaign name <span className="muted">required</span></label>
       <input id="campaign-name" name="name" required maxLength={200} aria-describedby="campaign-name-hint" />

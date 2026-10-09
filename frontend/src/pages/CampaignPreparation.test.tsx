@@ -23,7 +23,7 @@ function routes(overrides: Record<string, Response | Promise<Response>> = {}) {
 }
 
 describe('Campaign routes and readiness', () => {
-  it.each([['', 'Overview'], ['/requirements', 'Requirements'], ['/test-specifications', 'Test Specifications'], ['/traceability', 'Traceability'], ['/readiness', 'Readiness assessment']])('loads deep link %s with preparation navigation', async (suffix, heading) => {
+  it.each([['', 'Overview'], ['/requirements', 'Requirements'], ['/test-specifications', 'Test Cases'], ['/traceability', 'Traceability'], ['/readiness', 'Readiness assessment']])('loads deep link %s with preparation navigation', async (suffix, heading) => {
     routes(); open(suffix);
     expect(await screen.findByRole('heading', { name: heading, level: 2 })).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Campaign preparation' });
@@ -37,7 +37,7 @@ describe('Campaign routes and readiness', () => {
     expect(screen.getByText('Approved', { selector: '.badge' })).toBeInTheDocument();
     expect(screen.getByText('One or more Requirements need clarification.')).toBeInTheDocument();
     const counts = screen.getByRole('heading', { name: 'Preparation summary' }).closest('section')!;
-    expect(counts).toHaveTextContent('Requirements100'); expect(counts).toHaveTextContent('Test Specifications130');
+    expect(counts).toHaveTextContent('Requirements100'); expect(counts).toHaveTextContent('Test Cases130');
     expect(fetch).toHaveBeenCalledTimes(2);
   });
   it('shows Ready as preparation without claiming execution results', async () => {
@@ -56,7 +56,7 @@ describe('Campaign routes and readiness', () => {
   it('handles empty readiness through meaningful blockers', async () => {
     routes({ [api+'/readiness']: response({ ...readiness, total_requirements: 0, total_test_specifications: 0, approved_requirements: 0, approved_test_specifications: 0, blocker_codes: ['NO_REQUIREMENTS', 'NO_TEST_SPECIFICATIONS'] }) }); open('/readiness');
     expect(await screen.findByText('No Requirements have been prepared. Add a specification and extract Requirements.')).toBeInTheDocument();
-    expect(screen.getByText('No Test Specifications have been prepared. Import existing tests or generate tests.')).toBeInTheDocument();
+    expect(screen.getByText('No Test Cases have been prepared. Import existing tests or generate tests.')).toBeInTheDocument();
   });
   it('handles Campaign not found without child calls or action controls', async () => {
     routes({ [api]: response({ error: { code: 'CAMPAIGN_NOT_FOUND', message: 'Campaign not found' } }, 404) }); open('/requirements');
@@ -72,7 +72,7 @@ describe('Campaign routes and readiness', () => {
   });
 });
 
-describe('Requirements and executor-neutral Test Specifications', () => {
+describe('Requirements and executor-neutral Test Cases', () => {
   it('renders requirement markers, criteria, citations and coverage', async () => {
     routes(); open('/requirements'); await screen.findByText(requirement.title);
     expect(screen.getByText('PAY')).toBeInTheDocument(); expect(screen.getByText('Clarify the supported currency.')).toBeInTheDocument();
@@ -155,7 +155,7 @@ describe('Traceability and selected detail reads', () => {
     routes({ [api+'/'+section+'?limit=50']: response(page([], true)), [api+detail]: response(record) });
     open('/'+section+'?'+param+'='+record.id);
     expect(await screen.findByRole('heading', { name: record.title })).toBeInTheDocument();
-    expect(screen.getByText(/outside the bounded list/)).toBeInTheDocument();
+    expect(screen.getByText(/outside the bounded (current )?list/)).toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.filter(([url]) => String(url) === api+detail)).toHaveLength(1);
     await waitFor(() => expect(document.getElementById((section === 'requirements' ? 'requirement-' : 'test-')+record.id)).toHaveFocus());
   });
@@ -166,13 +166,13 @@ describe('Traceability and selected detail reads', () => {
 });
 
 describe('loading, empty and safe error states', () => {
-  it.each([['requirements', 'No Requirements in this view.'], ['test-specifications', 'No Test Specifications have been imported or generated yet.'], ['traceability', 'No Requirements to assess for traceability.']])('handles empty %s without fake records', async (section, message) => {
+  it.each([['requirements', 'No Requirements in this view.'], ['test-specifications', 'No Test Cases in this view.'], ['traceability', 'No Requirements to assess for traceability.']])('handles empty %s without fake records', async (section, message) => {
     routes({ [api+'/'+section+'?limit=50']: response(section === 'traceability' ? { ...traceability, requirements: page([]), links: page([]) } : page([])) }); open('/'+section);
     expect(await screen.findByText(message)).toBeInTheDocument();
   });
   it.each(['requirements', 'test-specifications', 'traceability', 'readiness'])('shows loading for %s', async section => {
     const pending = deferred<Response>(); const path = api+'/'+section+(section === 'readiness' ? '' : '?limit=50'); routes({ [path]: pending.promise }); open('/'+section);
-    expect(await screen.findByText('Loading '+(section === 'test-specifications' ? 'Test Specifications' : section === 'requirements' ? 'Requirements' : section === 'traceability' ? 'Traceability' : 'readiness')+'…')).toBeInTheDocument();
+    expect(await screen.findByText('Loading '+(section === 'test-specifications' ? 'Test Cases' : section === 'requirements' ? 'Requirements' : section === 'traceability' ? 'Traceability' : 'readiness')+'…')).toBeInTheDocument();
   });
   it.each(['requirements', 'test-specifications', 'traceability', 'readiness'])('safely presents errors in %s without raw exceptions or automatic retries', async section => {
     const path = api+'/'+section+(section === 'readiness' ? '' : '?limit=50'); routes({ [path]: response({ stack: 'DO_NOT_RENDER_STACK' }, 500) }); open('/'+section);

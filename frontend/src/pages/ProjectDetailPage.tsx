@@ -19,7 +19,7 @@ function ProjectCampaigns({ projectId }: { projectId: string }) {
   return <div className="content-grid"><section className="panel" aria-labelledby="campaign-list-heading">
     <div className="panel-heading"><h2 id="campaign-list-heading">QA Campaigns</h2><button disabled={campaigns.loading} onClick={() => void campaigns.reload()}>Refresh Campaigns</button></div>
     {campaigns.loading ? <LoadingState>Loading Campaigns…</LoadingState> : campaigns.error ? <ErrorState error={campaigns.error} retry={() => void campaigns.reload()} /> : campaigns.data && <>
-      {!campaigns.data.items.length ? <EmptyState>No Campaigns yet. Create a Campaign to prepare requirements, test specifications, review and coverage for a QA initiative.</EmptyState>
+      {!campaigns.data.items.length ? <EmptyState>No Campaigns yet. Create a Campaign to prepare requirements, test cases, review and coverage for a QA initiative.</EmptyState>
         : <ul className="record-list">{campaigns.data.items.map(campaign => <li key={campaign.id}><div>
           <Link className="record-title" to={campaignPath(projectId, campaign.id)}>{campaign.name}</Link>
           <p className="prose muted">{campaign.objective || 'No objective provided.'}</p><p className="muted">Updated <DateTime value={campaign.updated_at} /></p>
