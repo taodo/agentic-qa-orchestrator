@@ -12,8 +12,9 @@ class SyntheticRunExecutor:
 
 def execute_synthetic(executor, snapshot: QARunTest):
     """Wrap the accepted pure evaluation seam in the typed result boundary."""
-    from qa_sentinel.domain.qa_run_evidence import SyntheticObservation, EvidenceDraft, TestExecutionResult
+    from qa_sentinel.domain.qa_run_evidence import EvidenceDraft, TestExecutionResult
+    from qa_sentinel.domain.evidence_variants import SyntheticObservation, SYNTHETIC_EVIDENCE
     result = executor.evaluate(snapshot)
     observation = SyntheticObservation(position=snapshot.position, outcome=result)
     return TestExecutionResult(qa_result=result, evidence=(
-        EvidenceDraft(payload=observation, summary=observation.safe_summary()),))
+        EvidenceDraft(source=SYNTHETIC_EVIDENCE.source, payload=observation, summary=observation.safe_summary()),))

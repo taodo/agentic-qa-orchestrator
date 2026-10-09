@@ -135,8 +135,8 @@ class QARunRepository:
 
     def complete_test(self, run, test, result):
         result = TestExecutionResult.model_validate(result.model_dump())
-        if any(e.payload.position != test.position for e in result.evidence):
-            raise RunLifecycleError("RUN_INVALID_STATE")
+        for draft in result.evidence:
+            draft.validate_snapshot(test)
         completed = self._save_test_state(run, test, finish_test(test, result.qa_result))
         for sequence, draft in enumerate(result.evidence, 1):
             evidence = QARunEvidence(**draft.model_dump(), project_id=run.project_id,

@@ -8,7 +8,8 @@ from alembic import command
 from fastapi.testclient import TestClient
 from qa_sentinel.api import create_api_app
 from qa_sentinel.application import ApplicationError
-from qa_sentinel.domain.qa_run_evidence import EvidenceDraft, SyntheticObservation, TestExecutionResult as ResultContract
+from qa_sentinel.domain.qa_run_evidence import EvidenceDraft, QARunEvidence, TestExecutionResult as ResultContract
+from qa_sentinel.domain.evidence_variants import SyntheticObservation, SyntheticEvidencePolicy
 from qa_sentinel.execution.synthetic_run import SyntheticRunExecutor, execute_synthetic
 from qa_sentinel.persistence.models import QARunEvidenceRow
 from qa_sentinel.persistence.unit_of_work import UnitOfWork
@@ -108,16 +109,18 @@ def test_bounded_ordered_evidence_preview_and_explicit_pages(ready):
     {'payload':{'strategy':'synthetic-position-v1','position':1,'outcome':'PASS','authorization':'secret'}},
     {'payload':{'strategy':'synthetic-position-v1','position':1,'outcome':'NOT_EVALUATED'}},
     {'payload':{'strategy':'synthetic-position-v1','position':1,'outcome':'PASS','path':'C:/secret'}},
+    {'payload':{'variant':'unreviewed','strategy':'synthetic-position-v1','position':1,'outcome':'PASS'}},
+    {'payload':{'strategy':'unsupported','position':1,'outcome':'PASS'}},
 ])
 def test_closed_safe_payload_contract_rejects_unbounded_or_untrusted_data(change):
     observation=SyntheticObservation(position=1,outcome='PASS')
-    data=EvidenceDraft(payload=observation,summary=observation.safe_summary()).model_dump()
+    data=EvidenceDraft(source="synthetic", payload=observation,summary=observation.safe_summary()).model_dump()
     with pytest.raises(ValidationError): EvidenceDraft.model_validate({**data,**change})
 
 
 def test_result_bounds_and_frozen_contract():
     observation=SyntheticObservation(position=1,outcome='FAIL')
-    draft=EvidenceDraft(payload=observation,summary=observation.safe_summary())
+    draft=EvidenceDraft(source="synthetic", payload=observation,summary=observation.safe_summary())
     with pytest.raises(ValidationError): draft.summary='Changed'
     for result,evidence in [('PASS',(draft,)),('FAIL',()),('FAIL',(draft,)*21),('NOT_EVALUATED',(draft,))]:
         with pytest.raises(ValidationError): ResultContract(qa_result=result,evidence=evidence)
@@ -132,7 +135,7 @@ def test_immutable_and_composite_ownership_enforced_in_storage(ready):
             connection.execute(text(action))
     with pytest.raises(ValidationError): item.summary='Changed'
     for change in [{'run_id':str(uuid4())},{'run_test_id':str(uuid4())},{'campaign_id':str(uuid4())},{'project_id':str(uuid4())},{'sequence':21},{'summary':'x'*513},{'payload':{'padding':'x'*2049}}]:
-        values={**item.model_dump(mode='json'),'id':str(uuid4()),'sequence':2,**change}
+        values={**item.model_dump(mode='json', exclude={'presentation'}),'id':str(uuid4()),'sequence':2,**change}
         with pytest.raises(IntegrityError),engine.begin() as connection:
             connection.execute(QARunEvidenceRow.__table__.insert().values(**values))
     assert result_view(ready,run).tests.items[0].evidence.items==(item,)
@@ -176,7 +179,11 @@ def test_scoped_bounded_api_and_constant_query_count_without_live_reads(showcase
         assert data['summary']['total']==3 and data['tests']['truncated']
         test=data['tests']['items'][0]
         assert test['evidence_count']==1 and test['qa_result']=='PASS'
-        assert client.get(path+f"/tests/{test['id']}/evidence").json()['total_returned']==1
+        projection=test['evidence']['items'][0]['presentation']
+        assert projection['variant']=='synthetic-observation-v1' and projection['display_label']=='SYNTHETIC'
+        assert projection['details'][1]=={'label':'Snapshot position','value':'1'}
+        explicit=client.get(path+f"/tests/{test['id']}/evidence").json()
+        assert explicit['total_returned']==1 and explicit['items'][0]['presentation']==projection
         assert client.get(path+f'/tests/{uuid4()}/evidence').json()['error']['code']=='RUN_NOT_FOUND'
         assert client.get(path+'/results?limit=201').status_code==422
         assert client.get(path+'/results?after_position=-1').status_code==422
@@ -231,3 +238,83 @@ def test_historical_completed_0010_run_gets_no_fabricated_evidence(ready):
         assert view.summary.completed==view.summary.failed==1 and view.summary.remaining==0
         assert view.tests.items[0].evidence_count==0 and not view.tests.items[0].evidence.items
     finally:reopened.dispose()
+
+
+def test_common_result_persistence_and_reads_access_variant_fields_only_inside_policy(ready, monkeypatch):
+    from contextvars import ContextVar
+    from functools import wraps
+    inside_policy = ContextVar('inside_evidence_policy', default=False)
+    original_getattribute = SyntheticObservation.__getattribute__
+    def guarded(payload, name):
+        if name in {'position','outcome','strategy'} and not inside_policy.get():
+            raise AssertionError('Generic infrastructure accessed variant-specific field')
+        return original_getattribute(payload, name)
+    def scoped(original):
+        @wraps(original)
+        def wrapped(*args, **kwargs):
+            token = inside_policy.set(True)
+            try: return original(*args, **kwargs)
+            finally: inside_policy.reset(token)
+        return wrapped
+    observation = SyntheticObservation(position=1, outcome='FAIL')
+    summary = observation.safe_summary()
+    for name in ['validate_identity','validate_envelope','validate_result','validate_snapshot','presentation']:
+        monkeypatch.setattr(SyntheticEvidencePolicy, name, scoped(getattr(SyntheticEvidencePolicy,name)))
+    monkeypatch.setattr(SyntheticObservation, '__getattribute__', guarded)
+    app,factory,_,_,p,c,_,_=ready
+    run=create(ready)
+    result=ResultContract(qa_result='FAIL', evidence=(EvidenceDraft(source='synthetic',payload=observation,summary=summary),))
+    with UnitOfWork(factory) as uow:
+        running=uow.qa_runs.start(run)
+        test=uow.qa_runs.start_test(running,uow.qa_runs.all_entries(run,'tests')[0])
+        uow.qa_runs.complete_test(running,test,result)
+        uow.qa_runs.finish(running)
+        uow.commit()
+    view=result_view(ready,run)
+    assert view.run.execution_status=='COMPLETED' and view.summary.failed==1
+    record=view.tests.items[0].evidence.items[0]
+    assert record.presentation.display_label=='SYNTHETIC'
+    assert record.presentation.variant=='synthetic-observation-v1'
+    assert record.presentation.details[1].value=='1'
+    assert app.list_qa_run_test_evidence(p.id,c.id,run.id,test.id).items==(record,)
+
+
+def test_synthetic_snapshot_mismatch_rejects_before_result_update(ready):
+    app,factory,_,_,p,c,_,_=ready
+    run=create(ready)
+    observation=SyntheticObservation(position=2,outcome='FAIL')
+    result=ResultContract(qa_result='FAIL',evidence=(EvidenceDraft(source='synthetic',payload=observation,summary=observation.safe_summary()),))
+    with UnitOfWork(factory) as uow:
+        running=uow.qa_runs.start(run)
+        test=uow.qa_runs.start_test(running,uow.qa_runs.all_entries(run,'tests')[0])
+        uow.commit()
+    with pytest.raises(ValueError,match='snapshot'),UnitOfWork(factory) as uow:
+        uow.qa_runs.complete_test(running,test,result)
+        uow.commit()
+    view=result_view(ready,run)
+    assert view.tests.items[0].qa_result=='NOT_EVALUATED'
+    assert view.tests.items[0].execution_status=='RUNNING' and view.tests.items[0].evidence_count==0
+
+
+def test_legacy_0011_payload_without_discriminator_projects_without_storage_rewrite(ready):
+    from qa_sentinel.domain.qa_run_lifecycle import finish_test
+    from sqlalchemy import select
+    _,factory,engine,_,p,c,_,_=ready
+    run=create(ready)
+    with UnitOfWork(factory) as uow:
+        running=uow.qa_runs.start(run)
+        test=uow.qa_runs.start_test(running,uow.qa_runs.all_entries(run,'tests')[0])
+        draft=execute_synthetic(SyntheticRunExecutor(),test).evidence[0]
+        record=QARunEvidence(**draft.model_dump(),project_id=p.id,campaign_id=c.id,run_id=run.id,run_test_id=test.id,sequence=1)
+        values=record.model_dump(mode='json')
+        values['payload'].pop('variant')
+        uow.qa_runs._save_test_state(running,test,finish_test(test,'PASS'))
+        uow.session.add(QARunEvidenceRow(**values))
+        uow.qa_runs.finish(running)
+        uow.commit()
+    view=result_view(ready,run)
+    saved=view.tests.items[0].evidence.items[0]
+    assert saved.payload.variant=='synthetic-observation-v1' and saved.presentation.display_label=='SYNTHETIC'
+    assert 'No external target was tested.' in saved.summary
+    with engine.connect() as connection:
+        assert connection.scalar(select(QARunEvidenceRow.payload))==values['payload']

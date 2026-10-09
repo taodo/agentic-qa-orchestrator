@@ -139,7 +139,11 @@ or review/readiness/Run change. See [citation grounding](REQUIREMENTS.md).
 ## Current Phase 4 increment: Task 4.1
 
 Run Tests now own bounded immutable executor-neutral evidence envelopes. The
-current synthetic path emits typed synthetic observations and persists each result
+closed discriminated payload boundary delegates source/result/snapshot validation
+and bounded presentation to a reviewed variant policy registry. Synthetic is the
+only admitted variant; generic result/persistence/UI code assumes no Synthetic fields.
+Read APIs project authoritative labels/details without storing presentation metadata.
+The current synthetic path emits typed synthetic observations and persists each result
 and evidence atomically before continuing, including FAIL. Migration 0011 preserves
 old Runs and refuses evidence-destructive downgrade. New scoped read-only Results
 and explicit evidence routes provide full persisted aggregates and bounded batched

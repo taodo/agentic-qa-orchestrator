@@ -461,7 +461,7 @@ class QASentinelApplication:
         return self._qa_run_entries(project_id, campaign_id, run_id, "requirements", limit, after_position)
 
     def get_qa_run_results(self, project_id, campaign_id, run_id, *, limit=50, after_position=0):
-        from .qa_run_results import QARunResults, QARunResultSummary, QARunTestResult
+        from .qa_run_results import QARunResults, QARunResultSummary, QARunTestResult, evidence_page
         from qa_sentinel.domain.qa_run_evidence import EVIDENCE_PREVIEW_LIMIT
         project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
         limit = list_limit(limit)
@@ -475,12 +475,13 @@ class QASentinelApplication:
             for test in tests.items:
                 count, records = evidence.get(str(test.id), (0, []))
                 items.append(QARunTestResult(**test.model_dump(), evidence_count=count,
-                    evidence=CollectionPage(items=tuple(records), total_returned=len(records), truncated=count > len(records))))
+                    evidence=CollectionPage(items=evidence_page(records, EVIDENCE_PREVIEW_LIMIT).items, total_returned=len(records), truncated=count > len(records))))
             return QARunResults(run=run, summary=QARunResultSummary(**uow.qa_runs.result_counts(run)),
                 tests=CollectionPage(items=tuple(items), total_returned=len(items), truncated=tests.truncated))
 
     def list_qa_run_test_evidence(self, project_id, campaign_id, run_id, test_id, *, limit=50, after_sequence=0):
-        from qa_sentinel.domain.qa_run_evidence import QARunEvidence, MAX_TEST_EVIDENCE
+        from qa_sentinel.domain.qa_run_evidence import MAX_TEST_EVIDENCE
+        from .qa_run_results import evidence_page
         project_id, campaign_id, run_id, test_id = map(identifier, (project_id, campaign_id, run_id, test_id))
         limit = list_limit(limit)
         if type(after_sequence) is not int or not 0 <= after_sequence <= MAX_TEST_EVIDENCE:
@@ -492,7 +493,7 @@ class QASentinelApplication:
                 uow.qa_runs.test(run, test_id)
             except RunLifecycleError:
                 raise ApplicationError(Code.RUN_NOT_FOUND) from None
-            return page(uow.qa_runs.evidence(run, test_id, limit, after_sequence), limit, QARunEvidence)
+            return evidence_page(uow.qa_runs.evidence(run, test_id, limit, after_sequence), limit)
 
     def get_campaign_model_usage(self, project_id, campaign_id, *, limit=200) -> CampaignModelUsage:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)

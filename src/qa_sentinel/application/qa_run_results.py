@@ -3,6 +3,7 @@ from pydantic import Field, model_validator
 from qa_sentinel.domain.qa_run import QARun, QARunTest, MAX_SNAPSHOT_RECORDS
 from qa_sentinel.domain.qa_run_evidence import QARunEvidence, MAX_TEST_EVIDENCE
 from .models import View, CollectionPage
+from qa_sentinel.domain.evidence_variants import EvidencePresentation, evidence_policy
 
 
 class QARunResultSummary(View):
@@ -23,9 +24,24 @@ class QARunResultSummary(View):
         return self
 
 
+class QARunEvidenceView(QARunEvidence):
+    """Read-only policy projection; never stored or accepted as executor input."""
+    presentation: EvidencePresentation
+
+    @classmethod
+    def from_record(cls, record):
+        return cls(**record.model_dump(),
+            presentation=evidence_policy(record.payload).presentation(record.payload))
+
+
+def evidence_page(records, limit):
+    items = tuple(QARunEvidenceView.from_record(record) for record in records[:limit])
+    return CollectionPage[QARunEvidenceView](items=items, total_returned=len(items), truncated=len(records) > limit)
+
+
 class QARunTestResult(QARunTest):
     evidence_count: int = Field(ge=0, le=MAX_TEST_EVIDENCE)
-    evidence: CollectionPage[QARunEvidence]
+    evidence: CollectionPage[QARunEvidenceView]
 
 
 class QARunResults(View):

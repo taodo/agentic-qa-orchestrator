@@ -24,9 +24,12 @@ const results: RunTest[] = tests.map((t,i) => ({ ...t, execution_status: 'COMPLE
 function open(suffix='/runs') { return render(<MemoryRouter initialEntries={[base+suffix]}><App /></MemoryRouter>); }
 function evidence(test:RunTest,sequence=1):RunEvidence {return {
   id:`evidence-${test.id}-${sequence}`,project_id:project.id,campaign_id:campaign.id,run_id:test.run_id,run_test_id:test.id,
+  presentation:{variant:'synthetic-observation-v1',display_label:'SYNTHETIC',details:[
+    {label:'Strategy',value:'synthetic-position-v1'},{label:'Snapshot position',value:String(test.position)},
+    {label:'Observed synthetic outcome',value:test.qa_result==='FAIL'?'FAIL':'PASS'}]},
   sequence,recorded_at:project.updated_at,schema_version:'qa-run-evidence-v1',kind:'EXECUTION_OBSERVATION',source:'synthetic',
   summary:`Synthetic fixture position ${test.position}: ${test.qa_result}. No external target was tested.`,
-  payload:{strategy:'synthetic-position-v1',position:test.position,outcome:test.qa_result as 'PASS'|'FAIL'|'SKIP'},
+  payload:{variant:'synthetic-observation-v1',strategy:'synthetic-position-v1',position:test.position,outcome:test.qa_result as 'PASS'|'FAIL'|'SKIP'},
 };}
 function resultPage(saved:QARun,items:RunTest[],truncated=false):RunResults {
   return {run:saved,summary:{total:saved.test_count,completed:items.filter(t=>t.execution_status==='COMPLETED').length,
@@ -189,9 +192,12 @@ describe('Run Results and execution evidence',()=>{
   });
   it('loads additional bounded evidence only by explicit action and isolates button clicks',async()=>{
     const data=resultPage(completed,results.slice(0,1));const first=data.tests.items[0];first.evidence_count=7;first.evidence=page([evidence(first)],true);
-    routes(url=>url.includes('/results?')?response(data):url.endsWith('/tests/snapshot-1/evidence?limit=20')?response(page(Array.from({length:7},(_,i)=>evidence(first,i+1)))):undefined);
-    open('/runs/run-a');await screen.findByRole('table');const row=screen.getByRole('heading',{name:'1. Frozen Test 1'}).closest('tr')!;fireEvent.click(within(row).getByRole('rowheader'));
-    expect(within(row).getByText(/Only the bounded evidence preview/)).toBeVisible();const before=vi.mocked(fetch).mock.calls.length;
+    routes(url=>url.includes('/results?')?response(data):url.endsWith('/tests/snapshot-1/evidence?limit=7')?response(page(Array.from({length:7},(_,i)=>evidence(first,i+1)))):undefined);
+    open('/runs/run-a');await screen.findByRole('table');
+    // Settle mount effects before the operator interaction, including initial disclosure state.
+    await act(async()=>{});
+    const row=screen.getByRole('heading',{name:'1. Frozen Test 1'}).closest('tr')!;fireEvent.click(within(row).getByRole('rowheader'));
+    await waitFor(()=>expect(within(row).getByText(/Only the bounded evidence preview/)).toBeVisible());const before=vi.mocked(fetch).mock.calls.length;
     fireEvent.click(within(row).getByRole('button',{name:'View bounded test evidence'}));await waitFor(()=>expect(within(row).getAllByText('SYNTHETIC')).toHaveLength(7));
     expect(row.querySelector('details')!.open).toBe(true);expect(fetch).toHaveBeenCalledTimes(before+1);expect(posts()).toHaveLength(0);
   });

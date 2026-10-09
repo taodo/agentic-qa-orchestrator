@@ -9,8 +9,8 @@ provider and synthetic lifecycle policies are unchanged.
 
 The pure synthetic evaluation seam is wrapped into a frozen `TestExecutionResult`
 containing one completed QA result and 1–20 validated `EvidenceDraft` records.
-`QARunRepository.complete_test` validates the complete typed result, verifies
-observation position against the immutable test position, then writes COMPLETED,
+`QARunRepository.complete_test` revalidates the complete typed result and dispatches
+snapshot validation through each draft's registered policy, then writes COMPLETED,
 QA result and all evidence in one short reserved transaction. A failed insert or
 commit rolls back that test's result/evidence together. Earlier committed tests
 survive. No transaction spans executor evaluation.
@@ -30,7 +30,8 @@ summary and typed payload. It is separate from legacy Task/TestRun/artifact evid
 
 - Envelope version: `qa-run-evidence-v1`; kind: `EXECUTION_OBSERVATION`.
 - Current admitted source/payload: synthetic only. Payload contains exactly
-  `strategy=synthetic-position-v1`, immutable `position` (1–1000) and observed
+  discriminator `variant=synthetic-observation-v1`, `strategy=synthetic-position-v1`,
+  immutable `position` (1–1000) and observed
   synthetic `outcome` (PASS/FAIL/SKIP). Default fixture returns odd PASS/even FAIL;
   existing trusted test-only injection still exercises SKIP/system failures.
 - Summary is exact generated text, e.g. `Synthetic fixture position 2: FAIL.
@@ -51,6 +52,61 @@ summary and typed payload. It is separate from legacy Task/TestRun/artifact evid
 - recorded_at is the host's real recording time, not a claimed target timestamp.
   Synthetic evidence never claims screenshots, HTTP/browser/DOM observations,
   application/database logs, target filesystem access or StayFinder behavior.
+
+## Closed typed variant / policy boundary (review patch)
+
+The generic envelope and `TestExecutionResult` import `EvidencePayload`, a native
+Pydantic discriminated boundary defined in `domain/evidence_variants.py`. Today its
+closed `oneOf` contains only `SyntheticObservation`. The immutable policy registry
+maps reviewed payload classes and discriminator identities to their validation and
+presentation policy. There is no runtime registration API, arbitrary JSON payload,
+third-party plugin loading or operator-configured schema.
+
+`SyntheticEvidencePolicy` alone owns source compatibility, supported strategy,
+exact safe summary, observation outcome == completed QA result and observation
+position == immutable RunTest position. Generic result validation dispatches a policy
+hook; generic persistence dispatches snapshot validation. Neither reads universal
+`payload.outcome`, `.position` or `.strategy` fields. Atomic write/lifecycle rules
+stay unchanged. Unknown classes, discriminators or envelope identities fail closed.
+
+A future reviewed observation variant requires its typed model, policy, addition to
+the closed discriminated type alias and explicit registry entry in that module.
+The common result, repository, lifecycle and frontend components need no executor
+branches. No API/browser/screenshot variant is implemented here. Existing protocol
+version/kind continue to apply; protocol changes require separate review.
+
+Pre-patch 0011 payloads lack `variant`. Only the explicitly registered historical
+identity may use its typed default discriminator. Reads neither update stored JSON
+nor clear/rewrite evidence. Other unknown or malformed identities still reject.
+
+Read-only `QARunEvidenceView` adds a server-derived `presentation`: variant identity,
+display_label and at most eight typed text detail pairs. Label bounds are 64 characters,
+values 512. The policy constructs this projection from validated payloads; executors
+cannot supply it as evidence input and it is not a database column. The generic UI
+renders the projection without inspecting raw payload fields. Synthetic labeling and
+strategy/position/outcome detail names live in the Synthetic policy only.
+
+### Policy values versus fixed safety invariants
+
+- Source compatibility, display label, detail projection and variant-specific result/
+  snapshot validation are reviewed policy values in one closed registry module.
+- Executor selection stays at the trusted execution composition boundary. This task
+  preserves the existing explicit Synthetic Start; it adds no selection configuration,
+  environment-specific paths/URLs/credentials, or new executor.
+- Schema/discriminator/strategy versions and `EXECUTION_OBSERVATION` are immutable
+  protocol identities. The position-v1 fixture behavior remains versioned, not an
+  operator override.
+- `MAX_TEST_EVIDENCE=20`, `EVIDENCE_PREVIEW_LIMIT=5`, `MAX_EVIDENCE_BYTES=2048`,
+  `MAX_EVIDENCE_SUMMARY_CHARS=512`, identity/detail bounds and existing snapshot/
+  pagination limits are fixed domain/security invariants. They cap accepted data,
+  memory/output and queries and must not be loosened via configuration.
+- Runtime evidence bounds are named in `evidence_variants.py`; API cursor validation
+  reuses the application-exported bound. Versioned migration 0011/ORM SQL constraints
+  retain their accepted literal limits unchanged. UI explicit evidence read size comes
+  from the authoritative test evidence_count rather than a duplicated executor cap.
+
+“Configurable” must not weaken evidence validation. New policies require code review;
+no arbitrary schema or secret-bearing payload becomes admissible through configuration.
 
 ## Bounded authoritative reads
 
@@ -76,7 +132,8 @@ inconsistent persisted summary fails safely rather than hiding missing snapshots
 Counts are derived SQL visibility, not new workflow truth or stored counters.
 
 A single batched window query supplies exact evidence counts and first five records
-per returned test, ordered by sequence. At most 1000 preview records return for a
+per returned test, ordered by sequence. Both preview and explicit pages carry the
+same bounded policy-derived presentation without extra SQL or per-record API calls. At most 1000 preview records return for a
 200-test page; storage cardinality is separately capped at 20/test. Query count
 is independent of page row count. No automatic per-row API/detail fan-out occurs.
 The explicit evidence endpoint accepts the existing 1–200 collection limit but
@@ -111,6 +168,12 @@ Existing older evidence-protecting downgrade guards still apply. Packaged migrat
 and the host required revision advance to 0011; local startup still requires an
 explicit manual migration when stale, never silently migrates during local start.
 No dependencies are added.
+
+Offline regression includes guarded runtime field access proving that result,
+persistence and read projection access Synthetic fields only inside its policy,
+strict unknown-variant rejection, mismatched outcome/position/strategy checks and
+unchanged legacy 0011 JSON reads. A frontend fixture with no readable payload proves
+the generic renderer consumes only authoritative metadata.
 
 Offline regression covers FAIL continuation and per-test durability, insert rollback,
 late system failure, strict schemas/bounds/immutability/ownership, ordered previews,

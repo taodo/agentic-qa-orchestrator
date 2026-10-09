@@ -5,7 +5,7 @@ from fastapi import APIRouter, Query, Body
 from pydantic import BaseModel, ConfigDict
 from qa_sentinel.application.models import CollectionPage
 from qa_sentinel.application import CreateQARun, QARun, QARunRequirement, QARunTest
-from qa_sentinel.application import QARunResults, QARunEvidence
+from qa_sentinel.application import QARunResults, QARunEvidenceView, MAX_TEST_EVIDENCE
 from .dependencies import Application, CollectionLimit
 from .errors import ERROR_RESPONSES
 
@@ -55,7 +55,7 @@ def get_results(project_id: UUID, campaign_id: UUID, run_id: UUID, application: 
     return application.get_qa_run_results(project_id, campaign_id, run_id, limit=limit, after_position=after_position)
 
 
-@router.get("/{run_id}/tests/{test_id}/evidence", response_model=CollectionPage[QARunEvidence])
+@router.get("/{run_id}/tests/{test_id}/evidence", response_model=CollectionPage[QARunEvidenceView])
 def get_evidence(project_id: UUID, campaign_id: UUID, run_id: UUID, test_id: UUID, application: Application,
-                 limit: CollectionLimit = 50, after_sequence: Annotated[int, Query(ge=0, le=20)] = 0):
+                 limit: CollectionLimit = 50, after_sequence: Annotated[int, Query(ge=0, le=MAX_TEST_EVIDENCE)] = 0):
     return application.list_qa_run_test_evidence(project_id, campaign_id, run_id, test_id, limit=limit, after_sequence=after_sequence)

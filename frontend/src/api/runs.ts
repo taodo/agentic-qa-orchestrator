@@ -11,4 +11,4 @@ export const listRunTests = (p: string,c: string,id: string,after=0) => request<
 export const listRunRequirements = (p: string,c: string,id: string,after=0) => request<CollectionPage<RunRequirement>>(`${runsPath(p,c,id)}/requirements?limit=50&after_position=${after}`);
 
 export const getRunResults = (p:string,c:string,id:string,after=0) => request<RunResults>(`${runsPath(p,c,id)}/results?limit=50&after_position=${after}`);
-export const getRunTestEvidence = (p:string,c:string,id:string,testId:string) => request<CollectionPage<RunEvidence>>(`${runsPath(p,c,id)}/tests/${encodeURIComponent(testId)}/evidence?limit=20`);
+export const getRunTestEvidence = (p:string,c:string,id:string,testId:string,limit:number) => request<CollectionPage<RunEvidence>>(`${runsPath(p,c,id)}/tests/${encodeURIComponent(testId)}/evidence?limit=${limit}`);

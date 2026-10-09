@@ -3,7 +3,7 @@ import { getRunTestEvidence } from '../api/runs';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { PreparationRow } from './PreparationRow';
 import { StateBadge } from './StatusBadge';
-import { DateTime } from './DateTime';
+import { RunEvidenceRecord } from './RunEvidenceRecord';
 import { ErrorState, TruncationNotice } from './Feedback';
 
 function EvidenceDetail({test,p,c,runId}:{test:RunTestResult;p:string;c:string;runId:string}) {
@@ -12,16 +12,9 @@ function EvidenceDetail({test,p,c,runId}:{test:RunTestResult;p:string;c:string;r
   return <section aria-label={`Evidence for ${test.content.title}`}>
     <h5>Recorded execution evidence ({test.evidence_count})</h5>
     {!evidence.items.length && <p>No recorded execution evidence. Historical completed tests may predate evidence collection; missing evidence is not a QA result.</p>}
-    <ol>{evidence.items.map(item=><li key={item.id} className="evidence-record">
-      <strong>SYNTHETIC</strong><p className="prose">{item.summary}</p>
-      <dl className="metadata"><div><dt>Source</dt><dd>{item.source}</dd></div><div><dt>Kind</dt><dd>{item.kind}</dd></div>
-        <div><dt>Strategy</dt><dd>{item.payload.strategy}</dd></div><div><dt>Snapshot position</dt><dd>{item.payload.position}</dd></div>
-        <div><dt>Observed synthetic outcome</dt><dd>{item.payload.outcome}</dd></div><div><dt>Recorded by host</dt><dd><DateTime value={item.recorded_at}/></dd></div>
-        <div><dt>Evidence order</dt><dd>{item.sequence}</dd></div></dl>
-      <details><summary>Evidence audit identity</summary><p>{item.id} · {item.schema_version}</p></details>
-    </li>)}</ol>
+    <ol>{evidence.items.map(item=><RunEvidenceRecord key={item.id} record={item}/>)}</ol>
     <TruncationNotice truncated={evidence.truncated}/>
-    {evidence.truncated && <><p className="notice">Only the bounded evidence preview is shown.</p><button disabled={read.busy} onClick={()=>void read.run(()=>getRunTestEvidence(p,c,runId,test.id))}>{read.busy?'Loading evidence…':'View bounded test evidence'}</button></>}
+    {evidence.truncated && <><p className="notice">Only the bounded evidence preview is shown.</p><button disabled={read.busy} onClick={()=>void read.run(()=>getRunTestEvidence(p,c,runId,test.id,test.evidence_count))}>{read.busy?'Loading evidence…':'View bounded test evidence'}</button></>}
     {read.error && <ErrorState error={read.error}/>}
   </section>;
 }
