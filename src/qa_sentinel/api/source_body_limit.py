@@ -8,7 +8,7 @@ REVIEW_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:requiremen
 RUN_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/runs$")
 START_RUN_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/runs/[^/]+/start$")
 RECOVERY_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:requirements/[^/]+/clarifications|extractions/[^/]+/retry)$")
-SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:sources|test-imports|generate-tests)$")
+SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:sources|documents|test-imports|generate-tests|test-exports|test-specifications/[^/]+/edits)$")
 
 
 class SourceBodyLimit:
@@ -22,7 +22,7 @@ class SourceBodyLimit:
         run = RUN_PATH.fullmatch(scope["path"]) or START_RUN_PATH.fullmatch(scope["path"])
         if not review and not run and not SOURCE_PATH.fullmatch(scope["path"]):
             return await self.app(scope, receive, send)
-        maximum = MAX_REVIEW_BODY_BYTES if review or run else MAX_SOURCE_BODY_BYTES
+        maximum = (3 * 1024 * 1024 if scope["path"].endswith("/documents") else 32768 if RUN_PATH.fullmatch(scope["path"]) else MAX_REVIEW_BODY_BYTES if review or run else MAX_SOURCE_BODY_BYTES)
         code = "RUN_REQUEST_SIZE_LIMIT" if run else "REVIEW_SIZE_LIMIT" if review else "SOURCE_SIZE_LIMIT"
         error_message = "Run request exceeds supported size" if run else "Review request exceeds supported size" if review else "Source exceeds supported size"
         lengths = [value for key, value in scope["headers"] if key.lower() == b"content-length"]

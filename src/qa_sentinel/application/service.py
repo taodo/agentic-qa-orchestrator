@@ -249,16 +249,39 @@ class QASentinelApplication:
             uow.commit()
             return result
 
+    def upload_campaign_document(self, project_id, campaign_id, *, name, content):
+        from qa_sentinel.agents.documents import parse_document
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        # Validate ownership before parsing untrusted data; no external work in a transaction.
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+        try:
+            source = parse_document(project_id, campaign_id, name=name, content=content)
+        except SourceTooLarge:
+            raise ApplicationError(Code.SOURCE_SIZE_LIMIT) from None
+        except ValueError:
+            raise ApplicationError(Code.DOCUMENT_INVALID) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
+            self._campaign(uow, project_id, campaign_id)
+            existing = uow.campaign_content.source_by_content(source)
+            if existing is not None: return record_view(existing, CampaignSourceView)
+            uow.campaign_content.add_source(source)
+            uow.commit()
+            return record_view(source, CampaignSourceView)
+
     def get_campaign_source(self, project_id, campaign_id, source_id) -> CampaignSourceDetail:
         project_id, campaign_id, source_id = map(identifier, (project_id, campaign_id, source_id))
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             return record_view(self._source(uow, project_id, campaign_id, source_id), CampaignSourceDetail)
 
-    def list_campaign_sources(self, project_id, campaign_id, *, limit=50) -> CollectionPage[CampaignSourceView]:
+    def list_campaign_sources(self, project_id, campaign_id, *, limit=50, purpose=None) -> CollectionPage[CampaignSourceView]:
         project_id, campaign_id, limit = identifier(project_id), identifier(campaign_id), list_limit(limit)
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._campaign(uow, project_id, campaign_id)
-            rows = uow.campaign_content.sources(campaign_id, limit)
+            if purpose not in (None, "SPECIFICATION", "CLARIFICATION", "TEST_REVIEW"):
+                raise ApplicationError(Code.INVALID_INPUT)
+            rows = uow.campaign_content.sources(campaign_id, limit, purpose)
             latest = uow.campaign_content.latest_attempts([r["id"] for r in rows[:limit]])
             targets = uow.campaign_content.clarification_targets([r["id"] for r in rows[:limit]])
             outputs = action_outputs(uow.session, latest.values())
@@ -302,6 +325,12 @@ class QASentinelApplication:
                     return uow.campaign_reviews.state(record, kind)
                 if kind == "REQUIREMENT" and not uow.campaign_content.is_current(record.id):
                     raise ReviewError("REVIEW_NOT_REVIEWABLE")
+                if kind == "TEST_SPECIFICATION":
+                    from sqlalchemy import select
+                    from qa_sentinel.persistence.models import TestSpecificationRow
+                    from qa_sentinel.persistence.preparation_current import current_test
+                    if uow.session.scalar(select(TestSpecificationRow.id).where(TestSpecificationRow.id==str(record.id),current_test())) is None:
+                        raise ReviewError("REVIEW_NOT_REVIEWABLE")
                 if kind == "TEST_SPECIFICATION" and any(not uow.campaign_content.is_current(id) for id in record.requirement_ids):
                     raise ReviewError("REVIEW_NOT_REVIEWABLE")
                 result = uow.campaign_reviews.approve(record, kind, command)
@@ -346,12 +375,132 @@ class QASentinelApplication:
             campaign = self._campaign(uow, project_id, campaign_id)
             return assess_readiness(campaign, uow.campaign_reviews.readiness_counts(project_id, campaign_id))
 
-    def create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None) -> QARun:
+    def get_test_edit_evidence(self, project_id, campaign_id, test_id):
+        from sqlalchemy import select
+        from qa_sentinel.persistence.models import TestEditRow
+        from .product_v2 import TestEditEvidence
+        project_id,campaign_id,test_id = map(identifier,(project_id,campaign_id,test_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._review_object(uow,project_id,campaign_id,test_id,"TEST_SPECIFICATION")
+            row = uow.session.scalar(select(TestEditRow).where(TestEditRow.project_id==str(project_id),
+                TestEditRow.campaign_id==str(campaign_id),TestEditRow.test_id==str(test_id)))
+            return None if row is None else TestEditEvidence.model_validate({name:getattr(row,name) for name in TestEditEvidence.model_fields})
+
+    def export_campaign_tests(self, project_id, campaign_id, *, test_specification_ids, format):
+        from sqlalchemy import select
+        from qa_sentinel.persistence.models import CampaignRequirementRow, TestSpecificationRow
+        from qa_sentinel.persistence.campaign_content import requirement_from
+        from qa_sentinel.persistence.preparation_current import current_test
+        from .test_export import export_tests
+        project_id,campaign_id = map(identifier,(project_id,campaign_id))
+        ids = tuple(identifier(id) for id in test_specification_ids)
+        if not 1 <= len(ids) <= 200 or len(set(ids)) != len(ids): raise ApplicationError(Code.INVALID_INPUT)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            rows = list(uow.session.scalars(select(TestSpecificationRow).where(TestSpecificationRow.project_id == str(project_id),
+                TestSpecificationRow.campaign_id == str(campaign_id),TestSpecificationRow.id.in_([str(id) for id in ids]),current_test()).order_by(TestSpecificationRow.id).limit(201)))
+            if len(rows) != len(ids): raise ApplicationError(Code.INVALID_INPUT)
+            tests = uow.test_specifications._specs(rows)
+            needed = {id for t in tests for id in t.requirement_ids}
+            requirements = [requirement_from(row) for row in uow.session.scalars(select(CampaignRequirementRow).where(
+                CampaignRequirementRow.project_id == str(project_id),CampaignRequirementRow.campaign_id == str(campaign_id),
+                CampaignRequirementRow.id.in_([str(id) for id in needed])).limit(4001))]
+        try: return export_tests(tests,requirements,format)
+        except ValueError: raise ApplicationError(Code.INVALID_INPUT) from None
+
+    def edit_campaign_test(self, project_id, campaign_id, test_id, *, design, previous_hash, reviewer_label, note):
+        import json
+        from uuid import uuid4
+        from sqlalchemy import select
+        from qa_sentinel.domain.test_specification import TestDesign, CampaignTestSpecification, TestProvenance
+        from qa_sentinel.domain.campaign_review import content_hash
+        from qa_sentinel.persistence.preparation_current import current_test
+        from qa_sentinel.persistence.models import TestSpecificationRow, TestRequirementLinkRow, TestEditRow
+        from qa_sentinel.persistence.campaign_content import row_values
+        project_id,campaign_id,test_id = map(identifier,(project_id,campaign_id,test_id))
+        try:
+            design = TestDesign.model_validate(design)
+            assertion = ApprovalCommand(reviewer_label=reviewer_label,note=note)
+            if not assertion.note: raise ValueError()
+        except (ValueError,TypeError): raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write":True})
+            old = self._review_object(uow,project_id,campaign_id,test_id,"TEST_SPECIFICATION")
+            current = uow.session.scalar(select(TestSpecificationRow.id).where(TestSpecificationRow.id==str(test_id),current_test()))
+            if current is None or previous_hash != content_hash(old) or design.key != old.key or old.unresolved_requirement_refs:
+                raise ApplicationError(Code.REVIEW_CONFLICT)
+            prior_edit = uow.session.scalar(select(TestEditRow).where(TestEditRow.test_id==str(test_id)))
+            version = 2 if prior_edit is None else prior_edit.version+1
+            if version > 10: raise ApplicationError(Code.REVIEW_CONFLICT)
+            # Human evidence is separate from PRD evidence. No source citation is invented.
+            try:
+                facts = ingest(project_id,campaign_id,name="Human test review: "+old.key,source_type="TEXT",
+                    content="Human-provided test design information\n"+assertion.note+"\n"+json.dumps(design.model_dump(mode="json"),ensure_ascii=False))
+            except SourceTooLarge: raise ApplicationError(Code.SOURCE_SIZE_LIMIT) from None
+            if facts.status != "INGESTED": raise ApplicationError(Code.INVALID_INPUT)
+            facts = type(facts).model_validate({**facts.model_dump(),"purpose":"TEST_REVIEW"})
+            existing = uow.campaign_content.source_by_content(facts)
+            if existing is None: uow.campaign_content.add_source(facts)
+            else: facts = existing
+            edit_id,new_id = uuid4(),uuid4()
+            try:
+                new = CampaignTestSpecification(**design.model_dump(),id=new_id,project_id=project_id,campaign_id=campaign_id,
+                    logical_key="HUMAN-"+str(new_id),requirement_ids=old.requirement_ids,unresolved_requirement_refs=old.unresolved_requirement_refs,
+                    provenance=TestProvenance(origin="HUMAN_EDIT",record_id=edit_id,content_hash=facts.content_hash,contract_version="test-human-v1"),
+                    review_status="NEEDS_CLARIFICATION" if design.information_markers else "READY_FOR_REVIEW")
+            except ValidationError: raise ApplicationError(Code.INVALID_INPUT) from None
+            values = row_values(new);ids=values.pop("requirement_ids")
+            uow.session.add(TestSpecificationRow(**values,import_id=None,generation_id=None))
+            for id in ids: uow.session.add(TestRequirementLinkRow(test_spec_id=str(new_id),requirement_id=id,project_id=str(project_id),campaign_id=str(campaign_id)))
+            uow.session.add(TestEditRow(id=str(edit_id),project_id=str(project_id),campaign_id=str(campaign_id),test_id=str(new_id),previous_id=str(test_id),
+                source_id=str(facts.id),version=version,reviewer_label=assertion.reviewer_label,note=assertion.note,previous_hash=previous_hash,created_at=new.created_at))
+            uow.commit()
+            return TestSpecificationView.model_validate(new.model_dump())
+
+    def list_execution_candidates(self, project_id, campaign_id, *, limit=50, after_id=UUID(int=0)):
+        from sqlalchemy import select
+        from qa_sentinel.persistence.models import CampaignRequirementRow, RequirementReviewRow, TestSpecificationReviewRow
+        from qa_sentinel.persistence.campaign_content import requirement_from
+        from qa_sentinel.persistence.preparation_current import current_requirement
+        from qa_sentinel.domain.qa_run import validate_approval
+        from qa_sentinel.domain.campaign_review import ApprovalEvidence, content_hash
+        from .product_v2 import ExecutionCandidate
+        project_id,campaign_id,limit,after_id = identifier(project_id),identifier(campaign_id),list_limit(limit),identifier(after_id)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            tests = uow.qa_runs.candidates(project_id,campaign_id,limit,after_id)
+            selected = tests[:limit]
+            ids = {id for test in selected for id in test.requirement_ids}
+            requirements = {r.id:r for r in (requirement_from(row) for row in uow.session.scalars(select(CampaignRequirementRow).where(
+                CampaignRequirementRow.project_id == str(project_id),CampaignRequirementRow.campaign_id == str(campaign_id),
+                CampaignRequirementRow.id.in_([str(id) for id in ids]),current_requirement()).limit(limit*20+1)))}
+            def receipts(table, ids, kind):
+                return {row.object_id: ApprovalEvidence.model_validate({"object_kind":kind,
+                    **{name:getattr(row,name) for name in ApprovalEvidence.model_fields if name != "object_kind"}})
+                    for row in uow.session.scalars(select(table).where(table.project_id == str(project_id),table.campaign_id == str(campaign_id),table.object_id.in_([str(id) for id in ids])).limit(len(ids)+1))}
+            req_receipts = receipts(RequirementReviewRow,ids,"REQUIREMENT")
+            test_receipts = receipts(TestSpecificationReviewRow,[test.id for test in selected],"TEST_SPECIFICATION")
+            items = []
+            for test in selected:
+                reason = None
+                try:
+                    validate_approval(test,test_receipts.get(str(test.id)),"TEST_SPECIFICATION")
+                    if test.unresolved_requirement_refs or not test.requirement_ids or not test.required_evidence or test.overall_expected_result is None or any(s.expected is None for s in test.steps): raise ValueError()
+                    for id in test.requirement_ids:
+                        requirement = requirements[id]
+                        validate_approval(requirement,req_receipts.get(str(id)),"REQUIREMENT")
+                        if not requirement.acceptance_criteria: raise ValueError()
+                except (ValueError,AttributeError,KeyError):
+                    reason = "Approval, supported expected behavior and current approved source Requirements are required."
+                items.append(ExecutionCandidate(test=test,content_hash=content_hash(test),eligible=reason is None,reason=reason))
+            return CollectionPage[ExecutionCandidate](items=items,total_returned=len(items),truncated=len(tests)>limit)
+
+    def create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None, test_specification_ids=None) -> QARun:
         project_id, campaign_id = map(identifier, (project_id, campaign_id))
         try:
-            command = CreateQARun(idempotency_key=idempotency_key, note=note)
+            command = CreateQARun(idempotency_key=idempotency_key, note=note, test_specification_ids=test_specification_ids)
         except ValidationError as error:
-            code = Code.INVALID_IDEMPOTENCY_KEY if any(e["loc"][0] == "idempotency_key" for e in error.errors()) else Code.INVALID_INPUT
+            code = Code.INVALID_IDEMPOTENCY_KEY if any(e["loc"] and e["loc"][0] == "idempotency_key" for e in error.errors()) else Code.INVALID_INPUT
             raise ApplicationError(code) from None
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             # Reserve before any preparation read: one consistent, atomic SQLite
@@ -362,21 +511,30 @@ class QASentinelApplication:
             if existing is not None:
                 if existing.note != command.note:
                     raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
+                if command.test_specification_ids is not None:
+                    original = uow.qa_runs.all_entries(existing, "tests")
+                    if existing.snapshot_version != "qa-run-selection-v2" or {t.content.id for t in original} != set(command.test_specification_ids):
+                        raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
+                elif existing.snapshot_version != "qa-run-snapshot-v1":
+                    raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
                 return existing  # Replay original intent, even if preparation changed.
             readiness = assess_readiness(campaign, uow.campaign_reviews.readiness_counts(project_id, campaign_id))
-            if readiness.status != "READY":
+            if command.test_specification_ids is None and readiness.status != "READY":
                 raise ApplicationError(Code.CAMPAIGN_NOT_READY_FOR_RUN)
             try:
-                requirements, tests = uow.qa_runs.approved_content(project_id, campaign_id)
+                requirements, tests = (uow.qa_runs.approved_content(project_id, campaign_id) if command.test_specification_ids is None
+                    else uow.qa_runs.selection_content(project_id, campaign_id, command.test_specification_ids))
                 # Validate full approval versions, not only SQL readiness counts.
-                reqs = [(r, uow.campaign_reviews.evidence(r, "REQUIREMENT")) for r in requirements]
-                specs = [(t, uow.campaign_reviews.evidence(t, "TEST_SPECIFICATION")) for t in tests]
+                reqs = uow.campaign_reviews.evidence_batch(requirements, "REQUIREMENT")
+                specs = uow.campaign_reviews.evidence_batch(tests, "TEST_SPECIFICATION")
                 prepared = prepare_run(campaign, readiness, command, uow.qa_runs.next_number(campaign_id), reqs, specs)
                 uow.qa_runs.add(prepared)
             except SnapshotSizeError:
                 raise ApplicationError(Code.RUN_SNAPSHOT_SIZE_LIMIT) from None
             except ReviewError:
                 raise ApplicationError(Code.REVIEW_EVIDENCE_INVALID) from None
+            except ValueError:
+                raise ApplicationError(Code.RUN_SELECTION_INVALID) from None
             uow.commit()
             return prepared.run
 
@@ -533,6 +691,7 @@ class QASentinelApplication:
             except (ValueError,SourceTooLarge):
                 raise ApplicationError(Code.CLARIFICATION_INVALID) from None
             if combined.status != "INGESTED": raise ApplicationError(Code.CLARIFICATION_INVALID)
+            combined = type(combined).model_validate({**combined.model_dump(),"purpose":"CLARIFICATION"})
             source = uow.campaign_content.source_by_content(combined)
             if source is None:
                 source = combined

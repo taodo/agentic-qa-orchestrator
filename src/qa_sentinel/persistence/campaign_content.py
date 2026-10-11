@@ -36,7 +36,9 @@ class CampaignContentRepository:
     def source_by_content(self, source):
         row = self.session.scalar(select(CampaignSourceRow).where(
             CampaignSourceRow.campaign_id == str(source.campaign_id), CampaignSourceRow.source_type == source.source_type.value,
-            CampaignSourceRow.content_hash == source.content_hash, CampaignSourceRow.normalization_version == source.normalization_version))
+            CampaignSourceRow.content_hash == source.content_hash, CampaignSourceRow.normalization_version == source.normalization_version,
+            CampaignSourceRow.purpose == source.purpose,
+            CampaignSourceRow.raw_hash == source.raw_hash if source.document is not None else True))
         return None if row is None else source_from(row)
 
     def add_source(self, source):
@@ -104,9 +106,10 @@ class CampaignContentRepository:
         if type(limit) is not int or not 1 <= limit <= 200: raise ValueError("Invalid content list limit")
         return limit + 1
 
-    def sources(self, campaign_id, limit):
+    def sources(self, campaign_id, limit, purpose=None):
         columns = [c for c in CampaignSourceRow.__table__.c if c.name != "normalized_text"]
-        return list(self.session.execute(select(*columns).where(CampaignSourceRow.campaign_id == str(campaign_id))
+        return list(self.session.execute(select(*columns).where(CampaignSourceRow.campaign_id == str(campaign_id),
+                CampaignSourceRow.purpose == purpose if purpose is not None else True)
             .order_by(func.qa_utc_microseconds(CampaignSourceRow.created_at).desc(), CampaignSourceRow.id)
             .limit(self._limit(limit))).mappings())
 

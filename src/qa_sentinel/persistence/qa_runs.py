@@ -53,6 +53,30 @@ class QARunRepository:
         return ([requirement_from(r) for r in records[0]],
                 TestSpecificationRepository(self.session)._specs(records[1]))
 
+    def candidates(self, project_id, campaign_id, limit, after_id):
+        rows = list(self.session.scalars(select(TestSpecificationRow).where(
+            TestSpecificationRow.project_id == str(project_id),TestSpecificationRow.campaign_id == str(campaign_id),
+            TestSpecificationRow.id > str(after_id), current_test()).order_by(TestSpecificationRow.id).limit(limit+1)))
+        return TestSpecificationRepository(self.session)._specs(rows)
+
+    def selection_content(self, project_id, campaign_id, ids):
+        rows = list(self.session.scalars(select(TestSpecificationRow).where(
+            TestSpecificationRow.project_id == str(project_id), TestSpecificationRow.campaign_id == str(campaign_id),
+            TestSpecificationRow.id.in_([str(id) for id in ids]), current_test()).order_by(TestSpecificationRow.id).limit(501)))
+        if len(rows) != len(ids): raise ValueError("RUN_SELECTION_INVALID")
+        tests = TestSpecificationRepository(self.session)._specs(rows)
+        needed = {id for test in tests for id in test.requirement_ids}
+        if not needed or len(needed) > MAX_SNAPSHOT_RECORDS: raise SnapshotSizeError()
+        req_rows = list(self.session.scalars(select(CampaignRequirementRow).where(
+            CampaignRequirementRow.project_id == str(project_id), CampaignRequirementRow.campaign_id == str(campaign_id),
+            CampaignRequirementRow.id.in_([str(id) for id in needed]), current_requirement()).order_by(CampaignRequirementRow.id).limit(MAX_SNAPSHOT_RECORDS+1)))
+        if len(req_rows) != len(needed): raise ValueError("RUN_SELECTION_INVALID")
+        reqs = [requirement_from(r) for r in req_rows]
+        if any(r.review_status != "APPROVED" or r.information_markers or not r.acceptance_criteria for r in reqs): raise ValueError("RUN_SELECTION_INVALID")
+        if any(t.review_status != "APPROVED" or t.information_markers or t.unresolved_requirement_refs or not t.requirement_ids or not t.required_evidence or t.overall_expected_result is None or any(step.expected is None for step in t.steps) for t in tests):
+            raise ValueError("RUN_SELECTION_INVALID")
+        return reqs, tests
+
     def add(self, prepared):
         prepared = PreparedQARun.model_validate(prepared.model_dump())
         run = prepared.run

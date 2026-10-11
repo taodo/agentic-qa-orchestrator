@@ -29,6 +29,19 @@ class CampaignReviewRepository:
             raise ReviewError("REVIEW_EVIDENCE_INVALID")
         return evidence
 
+    def evidence_batch(self, records, kind):
+        _, table = self._types(kind)
+        rows = list(self.session.scalars(select(table).where(table.object_id.in_([str(r.id) for r in records])).limit(len(records)+1)))
+        evidence = {row.object_id: ApprovalEvidence.model_validate({"object_kind": kind,
+            **{name:getattr(row,name) for name in ApprovalEvidence.model_fields if name != "object_kind"}}) for row in rows}
+        result = []
+        for record in records:
+            item = evidence.get(str(record.id))
+            if item is None or (item.project_id,item.campaign_id) != (record.project_id,record.campaign_id) or item.content_hash != content_hash(record) or record.review_status != "APPROVED":
+                raise ReviewError("REVIEW_EVIDENCE_INVALID")
+            result.append((record,item))
+        return result
+
     def state(self, record, kind):
         return ReviewState(project_id=record.project_id, campaign_id=record.campaign_id, object_id=record.id,
             object_kind=kind, review_status=record.review_status, evidence=self.evidence(record, kind))

@@ -1,5 +1,6 @@
 """Separate bounded content ingestion and explicit requirement extraction routes."""
 from uuid import UUID
+from typing import Literal
 from fastapi import APIRouter
 from qa_sentinel.application import (CampaignSourceView, CampaignSourceDetail, CampaignRequirementView,
     ExtractionView, CampaignModelUsage, CollectionPage, ClarificationView, RequirementHistoryEntry)
@@ -16,8 +17,8 @@ def ingest_source(project_id: UUID, campaign_id: UUID, body: IngestSourceRequest
 
 
 @router.get("/sources", response_model=CollectionPage[CampaignSourceView])
-def list_sources(project_id: UUID, campaign_id: UUID, application: Application, limit: CollectionLimit = 50):
-    return application.list_campaign_sources(project_id, campaign_id, limit=limit)
+def list_sources(project_id: UUID, campaign_id: UUID, application: Application, limit: CollectionLimit = 50, purpose: Literal["SPECIFICATION", "CLARIFICATION", "TEST_REVIEW"] | None = None):
+    return application.list_campaign_sources(project_id, campaign_id, limit=limit, purpose=purpose)
 
 
 @router.get("/sources/{source_id}", response_model=CampaignSourceDetail)
@@ -64,3 +65,19 @@ def clarify_requirement(project_id:UUID,campaign_id:UUID,requirement_id:UUID,bod
 @router.get("/requirements/{requirement_id}/history", response_model=CollectionPage[RequirementHistoryEntry])
 def requirement_history(project_id:UUID,campaign_id:UUID,requirement_id:UUID,application:Application):
     return application.get_requirement_history(project_id,campaign_id,requirement_id)
+
+
+from pydantic import BaseModel, ConfigDict, Field
+import base64
+from qa_sentinel.application import ApplicationError, ApplicationErrorCode
+
+class UploadDocumentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(min_length=1,max_length=200,strict=True)
+    content_base64: str = Field(max_length=2796204,strict=True)
+
+@router.post("/documents", response_model=CampaignSourceView,status_code=201)
+def upload_document(project_id:UUID,campaign_id:UUID,body:UploadDocumentRequest,application:Application):
+    try: content = base64.b64decode(body.content_base64,validate=True)
+    except ValueError: raise ApplicationError(ApplicationErrorCode.DOCUMENT_INVALID) from None
+    return application.upload_campaign_document(project_id,campaign_id,name=body.name,content=content)

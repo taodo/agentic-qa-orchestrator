@@ -139,3 +139,18 @@ def test_canonicalization_does_not_bypass_total_output_bound():
     assert len(model_output.model_dump_json().encode("utf-8")) < MAX_OUTPUT_BYTES
     with pytest.raises(ValueError,match="EXTRACTION_INVALID_OUTPUT"):
         validate_output(value,model_output)
+
+
+def test_revision_context_does_not_offer_historical_identity_as_active_citation():
+    from qa_sentinel.domain.campaign_content import CampaignRequirement
+    from qa_sentinel.domain.test_specification import TestReviewStatus
+    old=source('Original supported behavior')
+    requirement=CampaignRequirement(**validate_output(old,output(old)).requirements[0].model_dump(),project_id=old.project_id,campaign_id=old.campaign_id,
+        extraction_id=uuid4(),logical_key='OLD-REQ',review_status='READY_FOR_REVIEW')
+    combined=source('Original supported behavior\n\nClarification facts:\nUnsupported cities return an error.')
+    request=RequirementExtractor(None,ModelSettings(model='test-model')).prepare_revision(combined,requirement,4)
+    data=json.loads(request.user_input)
+    assert 'source_references' not in data['revision_target']
+    assert data['source_id']==str(combined.id) and data['source_hash']==combined.content_hash
+    assert data['clarification_first_fact_line']==4
+    assert 'not any' in request.system_instructions

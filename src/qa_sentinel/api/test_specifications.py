@@ -1,5 +1,10 @@
 """Explicit deterministic import and reasoning-only test design routes."""
 from uuid import UUID
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field
+from qa_sentinel.application.product_v2 import ExecutionCandidate, TestEditEvidence
+from qa_sentinel.domain.test_specification import TestDesign
+from qa_sentinel.domain.campaign_content import Hash
 from fastapi import APIRouter
 from qa_sentinel.application import TestImportView,TestImportDetail,TestSpecificationView,TestGenerationView,CollectionPage
 from .models import ImportTestsRequest,GenerateTestsRequest
@@ -39,3 +44,43 @@ def list_specifications(project_id:UUID,campaign_id:UUID,application:Application
 @router.get('/test-specifications/{test_spec_id}',response_model=TestSpecificationView)
 def get_specification(project_id:UUID,campaign_id:UUID,test_spec_id:UUID,application:Application):
     return application.get_campaign_test_specification(project_id,campaign_id,test_spec_id)
+
+
+
+@router.get('/execution-candidates',response_model=CollectionPage[ExecutionCandidate])
+def execution_candidates(project_id:UUID,campaign_id:UUID,application:Application,limit:CollectionLimit=50,after_id:UUID=UUID(int=0)):
+    return application.list_execution_candidates(project_id,campaign_id,limit=limit,after_id=after_id)
+
+
+
+class EditTestRequest(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    design: TestDesign
+    previous_hash: Hash
+    reviewer_label: str=Field(min_length=1,max_length=64,strict=True)
+    note: str=Field(min_length=1,max_length=1000,strict=True)
+
+@router.post('/test-specifications/{test_spec_id}/edits',response_model=TestSpecificationView,status_code=201)
+def edit_test(project_id:UUID,campaign_id:UUID,test_spec_id:UUID,body:EditTestRequest,application:Application):
+    return application.edit_campaign_test(project_id,campaign_id,test_spec_id,**body.model_dump())
+
+
+class ExportTestRequest(BaseModel):
+    model_config=ConfigDict(extra="forbid")
+    test_specification_ids: tuple[UUID,...]=Field(min_length=1,max_length=200)
+    format: Literal["CSV","XLSX"]
+
+class TestExport(BaseModel):
+    filename: str
+    media_type: str
+    content_base64: str
+    count: int
+
+@router.post('/test-exports',response_model=TestExport)
+def export_test_design(project_id:UUID,campaign_id:UUID,body:ExportTestRequest,application:Application):
+    return application.export_campaign_tests(project_id,campaign_id,**body.model_dump())
+
+
+@router.get('/test-specifications/{test_spec_id}/edit-evidence',response_model=TestEditEvidence | None)
+def edit_evidence(project_id:UUID,campaign_id:UUID,test_spec_id:UUID,application:Application):
+    return application.get_test_edit_evidence(project_id,campaign_id,test_spec_id)
