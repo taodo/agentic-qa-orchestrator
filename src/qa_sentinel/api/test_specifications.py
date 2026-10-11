@@ -1,7 +1,7 @@
 """Explicit deterministic import and reasoning-only test design routes."""
 from uuid import UUID
 from typing import Literal
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, AfterValidator
 from qa_sentinel.application.product_v2 import ExecutionCandidate, TestEditEvidence
 from qa_sentinel.domain.test_specification import TestDesign
 from qa_sentinel.domain.campaign_content import Hash
@@ -84,3 +84,41 @@ def export_test_design(project_id:UUID,campaign_id:UUID,body:ExportTestRequest,a
 @router.get('/test-specifications/{test_spec_id}/edit-evidence',response_model=TestEditEvidence | None)
 def edit_evidence(project_id:UUID,campaign_id:UUID,test_spec_id:UUID,application:Application):
     return application.get_test_edit_evidence(project_id,campaign_id,test_spec_id)
+
+
+from typing import Annotated
+from fastapi import Query
+from qa_sentinel.application.test_design import DesignSelection, SelectionSummary, DesignPage, ApprovalResult
+
+
+def allowed_page_size(value):
+    if value not in (10,20,50,100):
+        raise ValueError("Allowed page sizes: 10, 20, 50, 100")
+    return value
+
+
+@router.get('/test-design', response_model=DesignPage)
+def test_design(project_id: UUID, campaign_id: UUID, application: Application,
+                search: Annotated[str, Query(max_length=200)] = "",
+                status: Literal["ALL", "READY", "NEEDS_INFO", "DRAFT", "APPROVED"] = "ALL",
+                page: Annotated[int, Query(ge=1, le=1_000_000)] = 1,
+                page_size: Annotated[int, Query(), AfterValidator(allowed_page_size)] = 10):
+    return application.get_test_design_page(project_id, campaign_id, search=search, status=status, page=page, page_size=page_size)
+
+
+@router.post('/test-design/selection', response_model=SelectionSummary)
+def selection_summary(project_id: UUID, campaign_id: UUID, body: DesignSelection, application: Application):
+    return application.test_design_selection(project_id, campaign_id, selection=body)
+
+
+class ApproveDesignSelection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    selection: DesignSelection
+    fingerprint: Hash
+    reviewer_label: str = Field(min_length=1, max_length=64, strict=True)
+    note: str | None = Field(default=None, max_length=1000, strict=True)
+
+
+@router.post('/test-design/approval', response_model=ApprovalResult)
+def approve_design_selection(project_id: UUID, campaign_id: UUID, body: ApproveDesignSelection, application: Application):
+    return application.test_design_selection(project_id, campaign_id, **body.model_dump())

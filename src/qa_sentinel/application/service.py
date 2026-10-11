@@ -386,6 +386,65 @@ class QASentinelApplication:
                 TestEditRow.campaign_id==str(campaign_id),TestEditRow.test_id==str(test_id)))
             return None if row is None else TestEditEvidence.model_validate({name:getattr(row,name) for name in TestEditEvidence.model_fields})
 
+    def get_test_design_page(self, project_id, campaign_id, *, search="", status="ALL", page=1, page_size=10):
+        from .test_design import DesignCriteria, design_page
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        try: criteria = DesignCriteria(search=search, status=status)
+        except ValidationError: raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._campaign(uow, project_id, campaign_id)
+            return design_page(uow, project_id, campaign_id, criteria, page, page_size)
+
+    def test_design_selection(self, project_id, campaign_id, *, selection, fingerprint=None, reviewer_label=None, note=None):
+        from .test_design import DesignSelection, summarize, records, approvable
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        try: selection = DesignSelection.model_validate(selection)
+        except ValidationError: raise ApplicationError(Code.INVALID_INPUT) from None
+        command = None if fingerprint is None else self._approval_command(reviewer_label, note, "APPROVE")
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            if command is not None:
+                uow.session.connection(execution_options={"qa_job_write": True})
+            self._campaign(uow, project_id, campaign_id)
+            summary = summarize(uow, project_id, campaign_id, selection)
+            if command is None:
+                return summary
+            if summary.fingerprint != fingerprint:
+                raise ApplicationError(Code.REVIEW_CONFLICT)
+            # No receipts are written until every selected identity/hash/status has
+            # been revalidated under the writer reservation. Ineligible is explicit.
+            approved = 0
+            try:
+                for test in records(uow, project_id, campaign_id, selection):
+                    if approvable(test):
+                        uow.campaign_reviews.approve(test, "TEST_SPECIFICATION", command)
+                        approved += 1
+            except ReviewError as error:
+                raise ApplicationError(Code(str(error))) from None
+            uow.commit()
+            return dict(matched=summary.matched, approved=approved, skipped=summary.matched-approved)
+
+    def export_qa_run(self, project_id, campaign_id, run_id, *, format):
+        from sqlalchemy import select, func
+        from qa_sentinel.persistence.models import QARunEvidenceRow
+        from .test_export import export_rows
+        project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            run = self._qa_run(uow, project_id, campaign_id, run_id)
+            tests = uow.qa_runs.all_entries(run, "tests")  # existing 1,000 snapshot cap
+            counts = dict(uow.session.execute(select(QARunEvidenceRow.run_test_id, func.count()).where(
+                QARunEvidenceRow.project_id == str(project_id), QARunEvidenceRow.campaign_id == str(campaign_id),
+                QARunEvidenceRow.run_id == str(run_id)).group_by(QARunEvidenceRow.run_test_id).limit(1001)).all())
+            rows = [("Run ID", "Run number", "Test snapshot ID", "Test Case ID", "Test title", "Execution status", "QA result", "Priority",
+                     "Requirement IDs", "Evidence count", "Run created", "Run started", "Run completed", "Run execution status", "Run QA outcome")]
+            for t in tests:
+                rows.append((run.id, run.run_number, t.id, t.original_test_specification_id, t.content.title,
+                    t.execution_status, t.qa_result, t.content.priority, "; ".join(map(str, t.content.requirement_ids)),
+                    counts.get(str(t.id), 0), run.created_at.isoformat(),
+                    run.started_at.isoformat() if run.started_at else "", run.completed_at.isoformat() if run.completed_at else "",
+                    run.execution_status, run.qa_outcome))
+        try: return export_rows(rows, format, f"run-{run.run_number}-results", len(tests))
+        except ValueError: raise ApplicationError(Code.INVALID_INPUT) from None
+
     def export_campaign_tests(self, project_id, campaign_id, *, test_specification_ids, format):
         from sqlalchemy import select
         from qa_sentinel.persistence.models import CampaignRequirementRow, TestSpecificationRow

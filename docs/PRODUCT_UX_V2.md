@@ -50,8 +50,27 @@ The backend still validates completeness, current versions and traceability.
 Only READY_FOR_REVIEW tests can receive a fresh explicit human approval receipt;
 whole-Campaign approval is not required to approve unrelated ready cases.
 
-Test Design pages contain 50 current tests. Search/filter/select-all apply only to
-that page. Edits preserve the test key and requirement links, validate the full
+Test Design uses server-side numbered pages: default 10 rows; only 10/20/50/100
+are accepted. Literal key/title search and design-status filters apply to the full
+current scoped set; changing criteria/size resets to page 1. The backend clamps
+out-of-range pages; numbered controls stay bounded. No route navigation or bulk
+browser fetch is needed.
+
+Select page records only that page (at most 100 IDs and displayed hash/status
+preconditions). Select all N matching tests uses a filter descriptor and backend
+fingerprint, not a browser ID list; it survives page navigation and resets on
+criteria/size changes. Clear matching selection before choosing individual rows.
+Approval is a clear disabled/enabled button with the eligible count. Ineligible
+matches are explicitly skipped; returned approved/skipped counts are authoritative.
+The server uses existing human approval validation, scans at most 10,000 matches
+in 100-record keyset batches, reserves the existing writer and rechecks the entire
+identity/hash/status fingerprint before any receipt write. A changed set/version
+(including a new match or superseded Requirement) rejects with REVIEW_CONFLICT;
+there is no automatic retry. Narrow criteria if over the cap. No selection table,
+AI approval or generic bulk-action framework is introduced.
+
+Noninteractive row areas and Enter/Space disclose Review/Edit. Checkboxes, links,
+buttons, forms and nested disclosures keep their own behavior. Edits preserve the test key and requirement links, validate the full
 structured design and source freshness hash, and create a new immutable human
 version with its own facts source and review receipt. The old version is superseded
 for current preparation but remains available for historical Runs and audit.
@@ -93,7 +112,14 @@ No unselected test results are created. Legacy requests without selection retain
 hashes, historical results and evidence remain readable.
 
 Execution is **SYNTHETIC only** in these Campaign Runs. No real API/browser/target
-execution is introduced. Results preserve Task 4.1 authoritative totals, closed
+execution is introduced. Run detail offers explicit CSV/XLSX export of at most 1,000 persisted snapshot
+results / 4 MiB. Titles, priorities, original Requirement/Test IDs come only from
+sealed Run content; execution/QA labels and Run timestamps are persisted. Actual
+evidence row counts are batched; raw evidence/provider metadata are not exported.
+Per-test timestamps are not captured and are not fabricated. CSV formula defense
+and literal XLSX cells reuse the Test Design writer. Run/project/Campaign scope
+is validated. Exports never consult mutable Test Design facts or invoke providers.
+Results preserve Task 4.1 authoritative totals, closed
 evidence variants, lazy bounded evidence detail, and historical missing-evidence
 notices. Individual FAIL records evidence and continues remaining tests; system
 FAILED remains separate. Snapshot hashes and readiness internals sit in Audit
@@ -106,6 +132,10 @@ New Project/Campaign-scoped endpoints under `/api/v1`:
 - GET `execution-candidates?limit=50&after_id=<UUID>`: keyset page, at most 200.
 - POST `test-specifications/{id}/edits`: structured human version with previous hash.
 - GET `test-specifications/{id}/edit-evidence`: lazy immutable human receipt.
+- GET `test-design?search=...&status=ALL&page=1&page_size=10`: full-set filtering, count and bounded numbered page.
+- POST `test-design/selection`: criteria and optional page IDs/expected_versions → fingerprint/matched/eligible only.
+- POST `test-design/approval`: explicit reviewer label + descriptor/fingerprint → matched/approved/skipped; atomic conflict rejection.
+- GET `runs/{run_id}/export?format=CSV|XLSX`: scoped persisted Run result export.
 - POST `test-exports`: selected IDs and CSV/XLSX format, literal bounded output.
 - POST `runs`: optional `test_specification_ids` (1–500 unique IDs); legacy shape remains valid.
 
@@ -141,3 +171,11 @@ only ready cases; inspect CSV/XLSX in a spreadsheet; select across pages; run th
 synthetic selection with unrelated unresolved cases; inspect FAIL plus later PASS
 and synthetic evidence; reopen older Runs; use Audit and Project Settings. Manual
 browser, real-document/provider and StayFinder verification are not claimed.
+
+
+Manual refinement review remains required: verify 10/20/50/100 sizes, numbered
+navigation, row/keyboard expansion and interactive children, Select page vs all
+matching, eligible approval states and mixed/stale selections; download CSV and
+XLSX and inspect historical titles/IDs, COMPLETED + FAIL, timestamps and evidence
+counts. Document visual/layout limitation is unchanged. No live browser validation
+is claimed for this refinement.

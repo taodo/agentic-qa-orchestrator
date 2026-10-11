@@ -1,3 +1,4 @@
+import { exportRun, saveExport } from '../api/productV2';
 import { useCallback, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useCampaign } from './CampaignDetailPage';
@@ -59,10 +60,12 @@ function RunDetail({runId}:{runId:string}) {
   const tests = {...results,data:results.data?.tests};
   const reqs = useResource(useCallback(() => listRunRequirements(p,c,runId,reqPosition),[p,c,runId,reqPosition]));
   const action = usePreparationAction<QARun>();
+  const exporting = usePreparationAction<Awaited<ReturnType<typeof exportRun>>>();
   async function refresh() { await results.reload(); }
   return <><Link to={`${base}/runs`}>← Runs</Link><SectionHeader title="QA Run detail" /><SyntheticNotice />
     <p>This Run uses the immutable preparation snapshot captured when the Run was created. Later Campaign changes do not alter this Run.</p>
     <button disabled={run.loading || action.busy} onClick={() => void refresh()}>Refresh Run and results</button>
+    <div className="actions">{(['CSV','XLSX'] as const).map(format=><button key={format} disabled={!run.data||run.data.execution_status==='RUNNING'||exporting.busy||exporting.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void exporting.run(()=>exportRun(p,c,runId,format),async result=>{saveExport(result);})}>Export {format}</button>)}</div>{exporting.error && <ErrorState error={exporting.error}/>}
     {action.error && <ErrorState error={action.error} />}
     {run.loading ? <LoadingState>Loading Run…</LoadingState> : run.error ? <ErrorState error={run.error} retry={() => void refresh()} /> : run.data && <section className="panel run-summary"><h3>RUN-{String(run.data.run_number).padStart(3,'0')}</h3><p className="mono muted technical-id">{run.data.id}</p><RunSummary run={run.data} />
       {results.data && <dl className="metadata" aria-label="Run result totals">{Object.entries({Total:results.data.summary.total,Completed:results.data.summary.completed,Passed:results.data.summary.passed,Failed:results.data.summary.failed,Skipped:results.data.summary.skipped,'Not evaluated':results.data.summary.not_evaluated,Remaining:results.data.summary.remaining}).map(([label,count])=><div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}</dl>}

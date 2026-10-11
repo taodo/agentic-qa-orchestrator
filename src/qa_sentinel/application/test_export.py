@@ -19,6 +19,10 @@ def export_tests(tests, requirements, format):
             '\n'.join(t.preconditions),'\n'.join(f'{s.index}. {s.action}\nExpected: {s.expected or "Not specified"}' for s in t.steps),
             t.overall_expected_result or 'Not specified','Not separately captured',t.review_status,
             '\n'.join(m.description for m in t.information_markers)))
+    return export_rows(rows, format, 'test-design', len(tests))
+
+
+def export_rows(rows, format, filename, count):
     if sum(sum(len(str(cell).encode('utf-8')) for cell in row) for row in rows) > MAX_EXPORT_BYTES: raise ValueError('EXPORT_LIMIT')
     if format == 'CSV':
         out=StringIO(newline='');writer=csv.writer(out)
@@ -45,4 +49,4 @@ def export_tests(tests, requirements, format):
         raw=stream.getvalue();mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     else:raise ValueError('EXPORT_FORMAT_INVALID')
     if len(raw) > MAX_EXPORT_BYTES: raise ValueError('EXPORT_LIMIT')
-    return {'filename':'test-design.'+format.lower(),'media_type':mime,'content_base64':base64.b64encode(raw).decode('ascii'),'count':len(tests)}
+    return {'filename':filename+'.'+format.lower(),'media_type':mime,'content_base64':base64.b64encode(raw).decode('ascii'),'count':count}

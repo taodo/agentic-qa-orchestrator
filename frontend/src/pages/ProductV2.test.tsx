@@ -12,6 +12,7 @@ const run={id:'run-v2',project_id:project.id,campaign_id:campaign.id,run_number:
 function routes(extra:(url:string,options?:RequestInit)=>Response|Promise<Response>|undefined=()=>undefined){vi.mocked(fetch).mockImplementation(async(input,options)=>{
   const url=String(input),special=extra(url,options);if(special)return special;
   if(url===api)return response(campaign);if(url===api+'/readiness')return response(readiness);
+  if(url.includes('/test-design?'))return response({items:[{...good,approvable:true},{...blocked,approvable:false}],total:2,page:1,page_size:10,total_pages:1});
   if(url.includes('/execution-candidates?'))return response(page([good,blocked]));
   if(url===api+'/requirements?limit=50')return response(page([requirement]));
   if(url===api+'/sources?limit=50&purpose=SPECIFICATION')return response(page([]));
@@ -61,7 +62,8 @@ it('retains selection across bounded pages and creates exactly that synthetic Ru
   const second={...good,test:{...specification,id:'test-second',key:'SECOND',title:'Second case'}};
   const pending=deferred<Response>();let submitted:Record<string,unknown>|undefined;
   routes((url,options)=>{
-    if(url.includes('/execution-candidates?'))return response(page(url.includes('after_id=test-b')?[second]:[good,blocked],!url.includes('after_id=test-b')));
+    if(url.includes('/test-design?'))return response({items:[{...good,approvable:true},{...blocked,approvable:false}],total:2,page:1,page_size:10,total_pages:1});
+  if(url.includes('/execution-candidates?'))return response(page(url.includes('after_id=test-b')?[second]:[good,blocked],!url.includes('after_id=test-b')));
     if(url===api+'/runs' && options?.method==='POST'){submitted=JSON.parse(options.body as string);return pending.promise;}
     if(url===api+'/runs/run-v2/start')return response({...run,execution_status:'COMPLETED',qa_outcome:'FAIL'});
     if(url.includes('/runs/run-v2/results'))return response({run,summary:{total:2,completed:0,passed:0,failed:0,skipped:0,not_evaluated:2,remaining:2},tests:page([])});
@@ -106,7 +108,8 @@ it('opens Project Settings as a read-only host snapshot',async()=>{
 it('edits missing information only through explicit new human test versions',async()=>{
   let body:Record<string,unknown>|undefined;
   routes((url,options)=>{
-    if(url.includes('/execution-candidates?'))return response(page([{...blocked,test:{...blockedSpecification,requirement_ids:[requirement.id],unresolved_requirement_refs:[],information_markers:[{kind:'MISSING_INFORMATION',description:'Currency behavior is unspecified.'}]}}]));
+    if(url.includes('/test-design?'))return response({items:[{...blocked,approvable:false,test:{...blockedSpecification,requirement_ids:[requirement.id],unresolved_requirement_refs:[],information_markers:[{kind:'MISSING_INFORMATION',description:'Currency behavior is unspecified.'}]}}],total:2,page:1,page_size:10,total_pages:1});
+  if(url.includes('/execution-candidates?'))return response(page([{...blocked,test:{...blockedSpecification,requirement_ids:[requirement.id],unresolved_requirement_refs:[],information_markers:[{kind:'MISSING_INFORMATION',description:'Currency behavior is unspecified.'}]}}]));
     if(url.endsWith('/test-specifications/test-b/edits')){body=JSON.parse(options!.body as string);return response({...blockedSpecification,id:'replacement',review_status:'READY_FOR_REVIEW'});}
     return undefined;
   });open('test-design');await screen.findByRole('heading',{name:blockedSpecification.title});
@@ -131,4 +134,103 @@ it('exports the explicit current-page selection through the scoped export contra
   routes((url,options)=>{if(url.endsWith('/test-exports')){body=JSON.parse(options!.body as string);return response({filename:'test-design.xlsx',media_type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',content_base64:btoa('inert fixture'),count:1});}return undefined;});
   open('test-design');fireEvent.click(await screen.findByRole('checkbox',{name:'Select PAY'}));fireEvent.click(screen.getByRole('button',{name:'Export XLSX'}));
   await screen.findByText('Exported 1 selected cases as XLSX.');expect(body).toEqual({test_specification_ids:['test-a'],format:'XLSX'});expect(click).toHaveBeenCalledOnce();expect(writes()).toHaveLength(1);click.mockRestore();
+});
+
+
+it('uses a disabled approval button until eligible page selection; mixed selection stays explicit',async()=>{
+  routes();open('test-design');await screen.findByRole('heading',{name:specification.title});
+  expect(screen.getByRole('button',{name:'Approve selected (0)'})).toBeDisabled();
+  fireEvent.click(screen.getByRole('button',{name:'Select page (2)'}));
+  expect(screen.getByRole('button',{name:'Approve selected (1)'})).toBeEnabled();
+  expect(screen.getByText('Selected: 2 · 1 eligible for approval')).toBeInTheDocument();
+  expect(writes()).toHaveLength(0);
+  fireEvent.click(screen.getByRole('button',{name:'Clear selection'}));
+  expect(screen.getByRole('button',{name:'Approve selected (0)'})).toBeDisabled();
+});
+
+it('expands a whole row with click/keyboard without checkbox or child interaction toggles',async()=>{
+  routes();open('test-design');const row=(await screen.findByRole('heading',{name:specification.title})).closest('tr')!;
+  expect(row).toHaveAttribute('aria-expanded','false');
+  fireEvent.click(within(row).getByRole('heading'));expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(within(row).getByRole('checkbox'));expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(within(row).getByRole('button',{name:'Edit / provide facts'}));expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.change(within(row).getByLabelText('Title'),{target:{value:'Edited title'}});expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(within(row).getByLabelText('Priority'));expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(within(row).getByLabelText('Overall expected result'));expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.keyDown(row,{key:'Enter'});expect(row).toHaveAttribute('aria-expanded','false');
+  fireEvent.keyDown(row,{key:' '});expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(within(row).getByText('Supporting source findings'));expect(row).toHaveAttribute('aria-expanded','true');
+  fireEvent.click(within(row).getByRole('link'));expect(row).toHaveAttribute('aria-expanded','true');
+});
+
+it('requests bounded server pages, numbers and sizes while preserving search/filter',async()=>{
+  routes(url=>{if(url.includes('/test-design?')){const q=new URL(url,'http://local').searchParams;return response({items:[{...good,approvable:true}],total:247,page:Number(q.get('page')),page_size:Number(q.get('page_size')),total_pages:Math.ceil(247/Number(q.get('page_size')))});}return undefined;});
+  open('test-design');await screen.findByRole('heading',{name:specification.title});
+  const nav=screen.getByRole('navigation',{name:'Test Design pages'});
+  expect(within(nav).getByRole('button',{name:'1'})).toHaveAttribute('aria-current','page');
+  expect(within(nav).getAllByRole('button').length).toBeLessThan(9);
+  fireEvent.click(within(nav).getByRole('button',{name:'Next page'}));await screen.findByText(/Page 2 of 25/);
+  fireEvent.change(screen.getByLabelText('Search tests'),{target:{value:'booking'}});await screen.findByText(/Page 1 of 25/);
+  fireEvent.change(screen.getByLabelText('Design status'),{target:{value:'READY'}});
+  fireEvent.change(screen.getByLabelText('Rows per page'),{target:{value:'100'}});await screen.findByText(/Page 1 of 3/);
+  const calls=vi.mocked(fetch).mock.calls.map(([url])=>String(url)).filter(url=>url.includes('/test-design?'));
+  expect(calls.at(-1)).toContain('search=booking');expect(calls.at(-1)).toContain('status=READY');expect(calls.at(-1)).toContain('page_size=100');
+  expect(writes()).toHaveLength(0);
+});
+
+it('selects all matching using a descriptor and pins approval to its backend fingerprint',async()=>{
+  let selection:unknown,approval:Record<string,unknown>|undefined;
+  routes((url,options)=>{
+    if(url.includes('/test-design?'))return response({items:[{...good,approvable:true}],total:247,page:1,page_size:10,total_pages:25});
+    if(url.endsWith('/test-design/selection')){selection=JSON.parse(options!.body as string);return response({fingerprint:'f'.repeat(64),matched:247,eligible:240});}
+    if(url.endsWith('/test-design/approval')){approval=JSON.parse(options!.body as string);return response({matched:247,approved:240,skipped:7});}return undefined;
+  });open('test-design');await screen.findByRole('heading',{name:specification.title});
+  fireEvent.click(screen.getByRole('button',{name:'Select all 247 matching tests'}));
+  expect(await screen.findByRole('button',{name:'Approve selected (240)'})).toBeEnabled();
+  expect(selection).toEqual({criteria:{search:'',status:'ALL'}});
+  fireEvent.change(screen.getByLabelText('Reviewer label'),{target:{value:'human'}});
+  fireEvent.click(screen.getByRole('button',{name:'Approve selected (240)'}));
+  await screen.findByText('Approved 240; skipped 7 ineligible tests.');
+  expect(approval).toEqual({selection,fingerprint:'f'.repeat(64),reviewer_label:'human'});
+  expect(writes()).toHaveLength(2);expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('/test-specifications/'))).toBe(false);
+});
+
+it('discards delayed matching selection on navigation',async()=>{
+  const pending=deferred<Response>();routes(url=>url.endsWith('/test-design/selection')?pending.promise:undefined);
+  const view=open('test-design');await screen.findByRole('heading',{name:specification.title});
+  fireEvent.click(screen.getByRole('button',{name:'Select all 2 matching tests'}));view.unmount();
+  await act(async()=>{pending.resolve(response({fingerprint:'f'.repeat(64),matched:2,eligible:2}));});
+  expect(writes()).toHaveLength(1);
+});
+
+it('downloads persisted Run exports only on explicit action, with no mutable test reads',async()=>{
+  const click=vi.spyOn(HTMLAnchorElement.prototype,'click').mockImplementation(()=>{});
+  Object.defineProperty(URL,'createObjectURL',{configurable:true,value:vi.fn(()=> 'blob:run')});
+  Object.defineProperty(URL,'revokeObjectURL',{configurable:true,value:vi.fn()});
+  routes(url=>{
+    if(url.includes('/runs/run-v2/results'))return response({run:{...run,execution_status:'COMPLETED',qa_outcome:'FAIL'},summary:{total:2,completed:2,passed:1,failed:1,skipped:0,not_evaluated:0,remaining:0},tests:page([])});
+    if(url.includes('/runs/run-v2/requirements'))return response(page([]));
+    if(url.includes('/runs/run-v2/export?'))return response({filename:'run-results.csv',media_type:'text/csv',content_base64:btoa('Run,FAIL'),count:2});return undefined;
+  });open('runs/run-v2');await screen.findByText('RUN-001');
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('/export?'))).toBe(false);
+  fireEvent.click(screen.getByRole('button',{name:'Export CSV'}));await waitFor(()=>expect(click).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button',{name:'Export XLSX'}));await waitFor(()=>expect(click).toHaveBeenCalledTimes(2));
+  expect(writes()).toHaveLength(0);expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('/test-specifications'))).toBe(false);
+  click.mockRestore();
+});
+
+
+it('pins explicit page approval to displayed versions and never retries a stale conflict',async()=>{
+  let chosen:Record<string,unknown>|undefined;
+  routes((url,options)=>{
+    if(url.endsWith('/test-design/selection')){chosen=JSON.parse(options!.body as string);return response({fingerprint:'c'.repeat(64),matched:2,eligible:1});}
+    if(url.endsWith('/test-design/approval'))return response({error:{code:'REVIEW_CONFLICT',message:'Selection changed; select again.'}},409);
+    return undefined;
+  });open('test-design');await screen.findByRole('heading',{name:specification.title});
+  fireEvent.click(screen.getByRole('button',{name:'Select page (2)'}));
+  fireEvent.change(screen.getByLabelText('Reviewer label'),{target:{value:'human'}});
+  fireEvent.click(screen.getByRole('button',{name:'Approve selected (1)'}));
+  await screen.findByText(/Selection changed; select again/);
+  expect(chosen).toEqual({criteria:{search:'',status:'ALL'},ids:[specification.id,blockedSpecification.id],expected_versions:{[specification.id]:`${good.content_hash}:${specification.review_status}`,[blockedSpecification.id]:`${blocked.content_hash}:${blockedSpecification.review_status}`}});
+  expect(writes()).toHaveLength(2);
 });

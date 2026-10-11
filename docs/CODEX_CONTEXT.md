@@ -49,6 +49,12 @@ create `qa-run-selection-v2`, validating all selected approvals and supporting
 approved current Requirements without global readiness. Legacy absent selection
 retains v1/global READY behavior. Real global readiness is captured in both;
 V2 does not fabricate READY. Task 4.1 result/evidence executor semantics are unchanged.
+Test Design uses scoped server pages (10/20/50/100), literal key/title search and
+backend-clamped numbered pages. Filter selection is fingerprinted, bounded to
+10,000 matches in 100-record batches, and atomically revalidated before explicit
+human approval; no browser ID fan-out or selection persistence. Run result CSV/XLSX
+uses only existing persisted snapshots/results and batched evidence counts, at most
+1,000 rows/4 MiB, with the existing literal spreadsheet writer.
 Migration 0012 is additive; downgrade refuses audit loss. Local validation and
 non-migrating runtime opening require 0012 (the configured operator DB, not the
 checkout default). Revision/head agreement has a regression guard. API, host authentication,

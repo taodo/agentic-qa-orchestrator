@@ -59,3 +59,12 @@ def get_results(project_id: UUID, campaign_id: UUID, run_id: UUID, application: 
 def get_evidence(project_id: UUID, campaign_id: UUID, run_id: UUID, test_id: UUID, application: Application,
                  limit: CollectionLimit = 50, after_sequence: Annotated[int, Query(ge=0, le=MAX_TEST_EVIDENCE)] = 0):
     return application.list_qa_run_test_evidence(project_id, campaign_id, run_id, test_id, limit=limit, after_sequence=after_sequence)
+
+
+from typing import Literal
+from .test_specifications import TestExport
+
+
+@router.get("/{run_id}/export", response_model=TestExport)
+def export_run(project_id: UUID, campaign_id: UUID, run_id: UUID, application: Application, format: Literal["CSV", "XLSX"]):
+    return application.export_qa_run(project_id, campaign_id, run_id, format=format)
