@@ -24,31 +24,31 @@ function open(suffix='') {
 }
 
 describe('workspace navigation and hierarchy', () => {
-  it('uses loaded Campaign context, Preparation/Execution groups and no extra requests', async () => {
+  it('uses loaded workspace context, product stages and no extra requests', async () => {
     routes();open();
     const sidebar=await screen.findByRole('complementary',{name:'Workspace navigation'});
     const nav=await within(sidebar).findByRole('navigation',{name:'Campaign preparation'});
-    expect(within(nav).getByText('PREPARATION')).toBeInTheDocument();
-    expect(within(nav).getByText('EXECUTION')).toBeInTheDocument();
-    expect(within(nav).getAllByRole('link')).toHaveLength(6);
+    expect(within(nav).getByRole('link',{name:'Specification'})).toBeInTheDocument();
+    expect(within(nav).getByRole('link',{name:'Execution'})).toBeInTheDocument();
+    expect(within(nav).getAllByRole('link')).toHaveLength(7);
     expect(within(nav).getByRole('link',{name:'Overview'})).toHaveAttribute('aria-current','page');
     expect(within(sidebar).getByText(campaign.name)).toBeInTheDocument();
-    await screen.findByText('Not ready');expect(fetch).toHaveBeenCalledTimes(2);
+    await screen.findByText('130 current tests');expect(fetch).toHaveBeenCalledTimes(2);
     expect(within(sidebar).queryByText(/Reports|Dashboard|Playwright/)).not.toBeInTheDocument();
   });
   it('retains one navigation set and changes active route through ordinary links', async () => {
-    routes();open('/requirements');
+    routes();open('/audit');
     const nav=await screen.findByRole('navigation',{name:'Campaign preparation'});
-    expect(within(nav).getByRole('link',{name:'Requirements'})).toHaveAttribute('aria-current','page');
-    fireEvent.click(within(nav).getByRole('link',{name:'Traceability'}));
+    expect(within(nav).getByRole('link',{name:'Advanced / Audit'})).toHaveAttribute('aria-current','page');
+    fireEvent.click(screen.getByRole('link',{name:'Traceability'}));
     await screen.findByRole('table');
-    expect(within(nav).getByRole('link',{name:'Traceability'})).toHaveAttribute('aria-current','page');
-    expect(within(nav).getByRole('link',{name:'Requirements'})).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByRole('link',{name:'Advanced / Audit'})).not.toHaveAttribute('aria-current');
+    expect(within(nav).queryByRole('link',{name:'Traceability'})).not.toBeInTheDocument();
     expect(screen.getAllByRole('navigation',{name:'Campaign preparation'})).toHaveLength(1);
     expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method)).toBe(true);
   });
   it('clears Campaign context after leaving and preserves skip-to-content target', async () => {
-    routes();open();await screen.findByText('Not ready');
+    routes();open();await screen.findByText('130 current tests');
     fireEvent.click(screen.getByRole('link',{name:'Leave Campaign'}));
     await screen.findByRole('heading',{name:'Projects',level:1});
     expect(screen.queryByRole('navigation',{name:'Campaign preparation'})).not.toBeInTheDocument();
@@ -99,7 +99,7 @@ describe('read-only preparation guidance', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
   it('offers only navigation to Runs when backend says READY, without execution claims', async () => {
-    routes({[api+'/readiness']:{...readiness,status:'READY',blocker_codes:[]}});open();
+    routes({[api+'/readiness']:{...readiness,status:'READY',blocker_codes:[]}});open('/readiness');
     const next=await screen.findByRole('region',{name:'Next preparation action'});
     expect(within(next).getByRole('link',{name:'Open Runs'})).toHaveAttribute('href',base+'/runs');
     expect(next).toHaveTextContent('explicitly synthetic');

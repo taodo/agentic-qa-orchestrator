@@ -166,7 +166,7 @@ def test_fallback_never_masks_api_assets_or_traversal(config, path):
         assert "Built frontend" not in response.text and "OUTSIDE_SECRET" not in response.text
 
 
-@pytest.mark.parametrize("suffix", ["", "/requirements?requirement_id=revised-v2", "/test-specifications?test_spec_id=test-a", "/traceability", "/readiness", "/runs", "/runs/run-a", "/requirements/"])
+@pytest.mark.parametrize("suffix", ["", "/requirements?requirement_id=revised-v2", "/test-specifications?test_spec_id=test-a", "/traceability", "/readiness", "/runs", "/runs/run-a", "/requirements/", "/specification", "/test-design", "/execution", "/results", "/audit"])
 @pytest.mark.parametrize("mode", ["demo", "local"])
 def test_campaign_spa_deep_links(config, tmp_path, monkeypatch, suffix, mode):
     value = config
@@ -353,3 +353,12 @@ def test_host_dependency_direction():
                 assert not (node.level and node.module is None and any(alias.name == "host" for alias in node.names)), path
             elif isinstance(node, ast.Import):
                 assert all(not alias.name.startswith("qa_sentinel.host") for alias in node.names), path
+
+
+
+def test_product_project_settings_deep_link_is_narrow(config):
+    with TestClient(create_host_app(config)) as client:
+        assert client.get('/projects/project-a/settings').status_code == 200
+        assert client.head('/projects/project-a/settings').status_code == 200
+        assert client.get('/projects/project-a/settings/unknown').status_code == 404
+        assert client.get('/api/v1/projects/project-a/settings').status_code == 404

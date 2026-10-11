@@ -31,6 +31,27 @@ The existing platform already contains:
 
 Do not assume every historical capability is part of the future product direction. In particular, source mutation/self-repair is legacy/experimental infrastructure, not a feature to expand unless a future task explicitly reintroduces it.
 
+## Product UX V2 current extension
+
+Primary UI: Specification → Test Design → Execution → Results, plus Overview,
+Project Settings and Advanced / Audit. QACampaign remains the aggregate; legacy
+routes remain supported. Read [Product UX V2](PRODUCT_UX_V2.md) for the bounded API
+and schema map before extending these areas.
+
+`agents/documents.py` handles inert TXT/MD/DOCX/PDF uploads with parser limits and
+truthful page/paragraph text provenance; PDF uses pypdf, not OCR/vision. Source
+purpose distinguishes specification, clarification and human test review facts.
+Human test edits create immutable successor versions/receipts, preserve links,
+supersede current versions, require new approval and leave old Run snapshots intact.
+
+`execution-candidates` batches current eligibility reads. Explicit 1–500 test IDs
+create `qa-run-selection-v2`, validating all selected approvals and supporting
+approved current Requirements without global readiness. Legacy absent selection
+retains v1/global READY behavior. Real global readiness is captured in both;
+V2 does not fabricate READY. Task 4.1 result/evidence executor semantics are unchanged.
+Migration 0012 is additive; downgrade refuses audit loss. API, host authentication,
+repository read/target interpreter and tool boundaries remain unchanged.
+
 ## Phase 2 complete: accepted preparation boundary
 
 Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources,
@@ -38,7 +59,7 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
-Campaign executor exists. Migration head is 0011; see
+Campaign executor exists. Migration head is 0012; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11
@@ -47,7 +68,7 @@ Task 3.1 established Project → Campaign navigation and bounded preparation vie
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
 strict CSV/Markdown test import, generation from 1–20 explicitly selected
 Requirements, and Requirement/Test approval with operator-asserted reviewer labels.
-Review evidence loads only on request. PDF/XLSX remain unsupported. Task 3.5 adds bounded clarification recovery
+Review evidence loads only on request. Legacy text ingestion still reports PDF_UNSUPPORTED; V2 document upload supports PDF/DOCX text extraction. XLSX import remains unsupported; V2 CSV/XLSX export is supported. Task 3.5 adds bounded clarification recovery
 without a generic Requirement editor. Ingestion never invokes extraction automatically; no write or
 model action runs on mount, polls, or automatically retries. Shared same-origin
 session/CSRF/error transport remains unchanged; route changes discard late action

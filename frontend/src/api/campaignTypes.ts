@@ -24,8 +24,8 @@ export interface CampaignTestSpecification {
   steps: { index: number; action: string; expected: string | null }[];
   overall_expected_result: string | null; required_evidence: string[];
   information_markers: TestMarker[]; requirement_ids: UUID[]; unresolved_requirement_refs: string[];
-  provenance: { origin: 'IMPORT' | 'AI_GENERATED'; record_id: UUID; content_hash: string;
-    contract_version: 'test-import-v1' | 'test-specs-v1'; start_line: number | null; end_line: number | null };
+  provenance: { origin: 'IMPORT' | 'AI_GENERATED' | 'HUMAN_EDIT'; record_id: UUID; content_hash: string;
+    contract_version: 'test-import-v1' | 'test-specs-v1' | 'test-human-v1'; start_line: number | null; end_line: number | null };
   review_status: ReviewStatus; created_at: Timestamp; updated_at: Timestamp;
 }
 export interface RequirementTrace {
@@ -50,7 +50,9 @@ export interface CampaignReadiness {
 }
 
 export interface CampaignSource {
-  id: UUID; project_id: UUID; campaign_id: UUID; source_type: 'TEXT' | 'MARKDOWN' | 'PDF'; name: string;
+  id: UUID; project_id: UUID; campaign_id: UUID; source_type: 'TEXT' | 'MARKDOWN' | 'PDF' | 'DOCX'; name: string;
+  purpose?: 'SPECIFICATION' | 'CLARIFICATION' | 'TEST_REVIEW';
+  document?: {parser:string;coordinates?:{kind:'PAGE'|'PARAGRAPH';index:number;start_line:number;end_line:number}[];limitations:string[]} | null;
   content_hash: string; raw_hash: string; normalization_version: string; original_bytes: number;
   normalized_chars: number; line_count: number; status: 'INGESTED' | 'REJECTED'; error_code: string | null; created_at: Timestamp; latest_extraction?: RequirementExtraction | null; clarification_requirement_id?: string | null;
 }

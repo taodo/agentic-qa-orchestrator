@@ -20,7 +20,16 @@ and continue remaining eligible tests. It must not become execution
 FAILED, which is reserved for execution-system failure. Preparation APPROVED/READY
 never means PASS.
 
-## Eligibility and immutable content
+## Product UX V2 selection
+
+[Product UX V2](PRODUCT_UX_V2.md) extends creation with optional unique
+`test_specification_ids` (1–500). This freezes only the eligible selected tests and
+their approved current supporting Requirements into `qa-run-selection-v2`.
+Whole-Campaign readiness remains an honest captured assessment, not the selection
+gate. Requests without IDs retain the v1 behavior described below. Task 4.1
+execution, evidence and QA outcome semantics remain unchanged.
+
+## Legacy v1 eligibility and immutable content
 
 Creation uses accepted `assess_readiness` and SQL readiness counts, requiring READY.
 It then loads **all** approved Requirements and Test Specifications, validates full

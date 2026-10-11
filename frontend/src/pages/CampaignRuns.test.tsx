@@ -57,10 +57,10 @@ function routes(override?: (url: string, options?: RequestInit) => Response | Pr
 }
 const posts = () => vi.mocked(fetch).mock.calls.filter(([,options]) => options?.method === 'POST');
 describe('Campaign Runs', () => {
-  it('adds Runs navigation, bounded listing and synthetic labeling', async () => {
+  it('preserves legacy Runs listing behind Results navigation, bounded listing and synthetic labeling', async () => {
     routes(url => url === api+'/runs?limit=50' ? response(page([run],true)) : undefined); open();
     expect(await screen.findByRole('link',{name:'RUN-001'})).toBeInTheDocument();
-    expect(within(screen.getByRole('navigation',{name:'Campaign preparation'})).getByRole('link',{name:'Runs'})).toHaveAttribute('aria-current','page');
+    expect(within(screen.getByRole('navigation',{name:'Campaign preparation'})).getByRole('link',{name:'Results'})).toHaveAttribute('href',base+'/results');
     expect(screen.getByText('No external target is tested in this mode.')).toBeInTheDocument();
     expect(screen.getByText(/Additional records/)).toBeInTheDocument(); expect(screen.getByText('NOT_EVALUATED')).toBeInTheDocument();
     expect(posts()).toHaveLength(0); expect(fetch).toHaveBeenCalledTimes(3);
@@ -103,7 +103,7 @@ describe('immutable Run detail and synthetic Start', () => {
       if (done && url === api+'/runs/run-a/tests?limit=50&after_position=0') return response(page(results));
     }); open('/runs/run-a'); const start = await screen.findByRole('button',{name:'Start Synthetic Run'});
     expect(screen.getByText(/This Run uses the immutable preparation snapshot/)).toBeInTheDocument();
-    expect(await screen.findByText('Frozen Requirement')).toBeInTheDocument(); expect(screen.getByText('Captured Campaign: Frozen Campaign')).toBeInTheDocument();
+    expect(await screen.findByText('Frozen Requirement')).toBeInTheDocument(); expect(screen.getByText('Captured workspace: Frozen Campaign')).toBeInTheDocument();
     fireEvent.click(start); fireEvent.click(start);
     expect(await screen.findByRole('button',{name:'Running synthetic execution…'})).toBeDisabled(); expect(posts()).toHaveLength(1);
     done = true; await act(async () => pending.resolve(response(completed)));

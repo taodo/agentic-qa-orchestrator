@@ -24,15 +24,15 @@ export function CampaignForm({ projectId, onCreated }: { projectId: string; onCr
     } catch (failure) { if (active.current) setError(publicError(failure)); }
     finally { gate.current = false; if (active.current) setBusy(false); }
   }
-  return <section className="panel"><h2>Create Campaign</h2><p className="hint">Group requirements and test cases for one QA initiative. Creation starts preparation; it does not run tests.</p>
+  return <section className="panel"><h2>Create QA workspace</h2><p className="hint">Group requirements and test cases for one QA initiative. Creation starts preparation; it does not run tests.</p>
     <form onSubmit={submit}><fieldset disabled={busy}>
-      <label htmlFor="campaign-name">Campaign name <span className="muted">required</span></label>
+      <label htmlFor="campaign-name">Workspace name <span className="muted">required</span></label>
       <input id="campaign-name" name="name" required maxLength={200} aria-describedby="campaign-name-hint" />
       <p id="campaign-name-hint" className="hint">1–200 characters.</p>
       <label htmlFor="campaign-objective">Objective <span className="muted">optional</span></label>
       <textarea id="campaign-objective" name="objective" rows={4} maxLength={4000} aria-describedby="campaign-objective-hint" />
-      <p id="campaign-objective-hint" className="hint">What should this campaign verify? Up to 4,000 characters.</p>
-      <button type="submit">{busy ? 'Creating Campaign…' : 'Create Campaign'}</button>
+      <p id="campaign-objective-hint" className="hint">What should this workspace verify? Up to 4,000 characters.</p>
+      <button type="submit">{busy ? 'Creating workspace…' : 'Create QA workspace'}</button>
     </fieldset>{error && <ErrorState error={error} />}<p role="status">{feedback}</p></form>
   </section>;
 }

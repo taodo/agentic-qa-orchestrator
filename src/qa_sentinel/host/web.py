@@ -20,8 +20,8 @@ class FrontendFiles(StaticFiles):
     # Keep aligned with the explicit browser routes in frontend/src/app/App.tsx.
     UI_ROUTE = re.compile(
         r"/(?:operations|projects(?:/[A-Za-z0-9_-]+"
-        r"(?:/campaigns/[A-Za-z0-9_-]+"
-        r"(?:/(?:requirements|test-specifications|traceability|readiness|runs(?:/[A-Za-z0-9_-]+)?))?"
+        r"(?:/settings|/campaigns/[A-Za-z0-9_-]+"
+        r"(?:/(?:requirements|test-specifications|traceability|readiness|specification|test-design|execution|results|audit|runs(?:/[A-Za-z0-9_-]+)?))?"
         r")?)?|tasks/[A-Za-z0-9_-]+)/?$"
     )
     ASSET_SUFFIXES = {".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".woff", ".woff2", ".txt"}
