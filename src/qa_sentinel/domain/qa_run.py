@@ -51,6 +51,13 @@ class QAResult(StrEnum):
 class CreateQARun(Frozen):
     idempotency_key: IdempotencyKey
     note: RunNote | None = None
+    test_specification_ids: tuple[UUID, ...] | None = Field(default=None,min_length=1,max_length=500)
+
+    @model_validator(mode="after")
+    def unique_selection(self):
+        if self.test_specification_ids and len(set(self.test_specification_ids)) != len(self.test_specification_ids):
+            raise ValueError("Duplicate selection")
+        return self
 
 
 class CampaignSnapshot(Frozen):
@@ -58,7 +65,7 @@ class CampaignSnapshot(Frozen):
     project_id: UUID
     name: CampaignName
     objective: CampaignObjective | None
-    status: Literal["APPROVED"]
+    status: Literal["DRAFT", "READY_FOR_REVIEW", "APPROVED"]
 
 
 class QARun(Frozen):
@@ -68,7 +75,7 @@ class QARun(Frozen):
     run_number: int = Field(ge=1, strict=True)
     idempotency_key: IdempotencyKey
     note: RunNote | None = None
-    snapshot_version: Literal["qa-run-snapshot-v1"] = SNAPSHOT_VERSION
+    snapshot_version: Literal["qa-run-snapshot-v1", "qa-run-selection-v2"] = SNAPSHOT_VERSION
     snapshot_hash: Hash
     campaign_snapshot: CampaignSnapshot
     readiness_at_creation: Readiness
@@ -96,13 +103,14 @@ class QARun(Frozen):
                 raise ValueError("Invalid normal completion")
         if ((self.campaign_snapshot.project_id, self.campaign_snapshot.id) != (self.project_id, self.campaign_id)
                 or (self.readiness_at_creation.project_id, self.readiness_at_creation.campaign_id) != (self.project_id, self.campaign_id)
-                or self.readiness_at_creation.status != "READY" or self.readiness_at_creation.blocker_codes):
+                or (self.snapshot_version == "qa-run-snapshot-v1" and (self.campaign_snapshot.status != "APPROVED"
+                    or self.readiness_at_creation.status != "READY" or self.readiness_at_creation.blocker_codes))):
             raise ValueError("Run requires its own READY preparation snapshot")
         return self
 
 
 def validate_approval(content, approval, kind):
-    if (content.review_status != "APPROVED" or content.information_markers
+    if (approval is None or content.review_status != "APPROVED" or content.information_markers
             or (approval.object_id, approval.project_id, approval.campaign_id, approval.object_kind)
             != (content.id, content.project_id, content.campaign_id, kind)
             or approval.content_hash != content_hash(content)):
@@ -151,14 +159,14 @@ def canonical_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def snapshot_fingerprint(campaign, requirements, tests):
+def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION):
     # Run identities, caller intent, wall-clock snapshot/approval timestamps and live
     # readiness counts are excluded. Accepted approval hashes are retained as stable
     # content-version identities (including their original immutable creation time).
     def facts(entry):
         return {"position": entry.position, "content": entry.content.model_dump(mode="json", exclude={"created_at", "updated_at"}),
                 "approved_content_hash": entry.approval.content_hash}
-    return sha256(canonical_json({"version": SNAPSHOT_VERSION, "campaign": campaign.model_dump(mode="json"),
+    return sha256(canonical_json({"version": version, "campaign": campaign.model_dump(mode="json"),
         "requirements": [facts(r) for r in requirements], "tests": [facts(t) for t in tests]})).hexdigest()
 
 
@@ -173,7 +181,7 @@ class PreparedQARun(Frozen):
         if (run.requirement_count, run.test_count) != (len(self.requirements), len(self.tests)):
             raise ValueError("Incomplete Run snapshot")
         ready = run.readiness_at_creation
-        if (ready.approved_requirements, ready.total_requirements, ready.approved_test_specifications) != (len(self.requirements), len(self.requirements), len(self.tests)):
+        if run.snapshot_version == "qa-run-snapshot-v1" and (ready.approved_requirements, ready.total_requirements, ready.approved_test_specifications) != (len(self.requirements), len(self.requirements), len(self.tests)):
             raise ValueError("Snapshot does not match readiness selection")
         for entries in (self.requirements, self.tests):
             if [e.position for e in entries] != list(range(1, len(entries) + 1)) or len({e.id for e in entries}) != len(entries):
@@ -194,7 +202,7 @@ class PreparedQARun(Frozen):
             covered.update(test.content.requirement_ids)
         if covered != set(ids):
             raise ValueError("Snapshot coverage incomplete")
-        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests):
+        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version):
             raise ValueError("Snapshot fingerprint inconsistent")
         if len(canonical_json(self.model_dump(mode="json"))) > MAX_SNAPSHOT_BYTES:
             raise SnapshotSizeError()
@@ -216,7 +224,8 @@ def prepare_run(campaign, readiness, command, run_number, requirements, tests):
         original_test_specification_id=record.id, position=i, content=record, approval=approval,
         linked_requirement_snapshot_ids=tuple(ids[id] for id in record.requirement_ids))
         for i, (record, approval) in enumerate(sorted(tests, key=lambda pair: (pair[0].logical_key, str(pair[0].id))), 1))
+    version = "qa-run-selection-v2" if command.test_specification_ids is not None else SNAPSHOT_VERSION
     run = QARun(id=run_id, project_id=campaign.project_id, campaign_id=campaign.id, run_number=run_number,
-        **command.model_dump(), campaign_snapshot=campaign_snapshot, readiness_at_creation=readiness,
-        requirement_count=len(reqs), test_count=len(specs), snapshot_hash=snapshot_fingerprint(campaign_snapshot, reqs, specs))
+        **command.model_dump(exclude={"test_specification_ids"}), snapshot_version=version, campaign_snapshot=campaign_snapshot, readiness_at_creation=readiness,
+        requirement_count=len(reqs), test_count=len(specs), snapshot_hash=snapshot_fingerprint(campaign_snapshot, reqs, specs, version))
     return PreparedQARun(run=run, requirements=reqs, tests=specs)

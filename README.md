@@ -2,13 +2,24 @@
 
 **Agentic QA Orchestrator** is a QA platform for preparing requirements, test specifications, human review and coverage within Project-owned QA Campaigns.
 
-The browser now starts with **Projects → Campaigns**. Open a Project, create a Campaign with a name and optional objective, then inspect Overview, Requirements, Test Specifications, Traceability and Readiness through direct links. These preparation views use saved backend records, explicit preparation commands and read-only readiness assessments. An empty Campaign stays empty; the browser does not invent demonstration requirements or tests.
+The primary browser journey is **Specification → Test Design → Execution → Results**.
+Open a Project and create a QA workspace (the existing QACampaign internally).
+Upload PDF/DOCX/Markdown/text, explicitly analyze supported behavior, review findings
+and generate test cases. Review, add information and approve selected ready tests;
+export CSV/XLSX; select approved eligible tests for an immutable synthetic Run;
+inspect outcomes and truthful evidence. Unresolved tests do not block unrelated
+approved eligible tests. Images/layouts are not analyzed; no OCR or vision is added.
 
-The product journey is PRD / Existing Tests → Requirements → Test Specifications → Human Review → Traceability / Readiness → QA Run → Evidence / Analysis / Reporting.
+[Product UX V2](docs/PRODUCT_UX_V2.md) documents formats, bounds, human-version
+provenance, explicit approvals, selected Run eligibility, Audit and migration 0012.
+Apply migrations explicitly to the backed-up operator database before using V2;
+startup never auto-migrates. Existing preparation and legacy Task routes remain
+available under Advanced / Audit and Legacy workflows.
 
-Phase 2 preparation APIs are implemented. Task 3.2 adds explicit browser preparation actions: paste TEXT/Markdown specifications, ingest sources, extract Requirements, import strict CSV/Markdown test cases, generate Test Specifications from 1–20 selected Requirements, and record human approval. Ingestion never starts extraction; model work is explicit and requires trusted local configuration. PDF/XLSX are unsupported. Task 3.5 adds [explicit failed-extraction retry and grounded clarification recovery](docs/PREPARATION_RECOVERY.md), with preserved history, new Requirement identities and renewed review of replacement tests. Contextual Campaign submission/approval keeps preparation separate from readiness. Campaign preparation `APPROVED` and derived readiness `READY` are separate. Neither indicates that tests have executed or passed. Bounded lists disclose omitted records; summary totals come from readiness aggregates.
-
-Legacy Task workflows remain available under **Legacy workflows** within a Project, with Operations in secondary navigation. Their runtime and evidence boundaries remain unchanged. Protected public demo modes are deterministic synthetic demonstrations; trusted real-local execution remains local operator infrastructure. Tasks 3.3–3.4 add [immutable QA Run snapshots and Campaign Runs UX](docs/QA_RUNS.md). READY preparation can be frozen into a Run, then explicitly started using a deterministic synthetic fixture. Assertion FAIL continues to later tests; execution status and QA outcome remain separate. No external target is tested in this mode. Synthetic execution validates lifecycle/orchestration UX, not target correctness. Real API execution is Phase 5; real browser/Playwright execution is Phase 6. QA reporting remains future work.
+Campaign Runs remain deterministic **synthetic demonstrations**, with no external
+target tested. Individual test FAIL continues remaining tests; execution FAILED
+means a system failure. Trusted real-local Task/runtime infrastructure remains
+separate. [QA Runs](docs/QA_RUNS.md) records the original compatible lifecycle.
 
 The project started as **QA Sentinel**. Source mutation and repair are historical infrastructure, not the product's primary journey.
 

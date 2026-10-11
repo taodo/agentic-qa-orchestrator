@@ -264,7 +264,7 @@ def test_api_create_read_replay_error_bounds_and_no_execution_endpoint(ready):
         assert client.patch(prefix + "/" + run["id"], json={"qa_outcome": "PASS"}).status_code == 405
         assert client.post(prefix, json={}).json()["error"]["code"] == "INVALID_IDEMPOTENCY_KEY"
         assert client.post(prefix, json={"idempotency_key": "new", "execution_status": "RUNNING"}).status_code == 422
-        assert client.post(prefix, content=b"x"*8193).json()["error"]["code"] == "RUN_REQUEST_SIZE_LIMIT"
+        assert client.post(prefix, content=b"x"*32769).json()["error"]["code"] == "RUN_REQUEST_SIZE_LIMIT"
 
 
 def test_create_and_reads_have_no_model_executor_or_legacy_side_effects(ready, monkeypatch):

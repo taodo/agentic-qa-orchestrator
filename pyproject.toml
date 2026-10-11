@@ -7,7 +7,7 @@ name = "qa-sentinel"
 version = "0.1.0"
 description = "QA Sentinel structured domain contracts"
 requires-python = ">=3.12"
-dependencies = ["pydantic>=2,<3", "SQLAlchemy>=2,<3", "Alembic>=1,<2", "openai>=2.54,<3", "fastapi>=0.135.2,<0.136", "uvicorn>=0.41,<0.42"]
+dependencies = ["pydantic>=2,<3", "SQLAlchemy>=2,<3", "Alembic>=1,<2", "openai>=2.54,<3", "fastapi>=0.135.2,<0.136", "uvicorn>=0.41,<0.42", "pypdf>=6.20,<7"]
 
 [project.scripts]
 qa-sentinel = "qa_sentinel.host.cli:main"
@@ -20,7 +20,7 @@ where = ["src"]
 
 [tool.setuptools.data-files]
 "share/qa-sentinel/alembic" = ["alembic/env.py", "alembic/script.py.mako"]
-"share/qa-sentinel/alembic/versions" = ["alembic/versions/0001_initial.py", "alembic/versions/0002_projects.py", "alembic/versions/0003_execution_jobs.py", "alembic/versions/0004_qa_campaigns.py", "alembic/versions/0005_campaign_requirements.py", "alembic/versions/0006_test_specifications.py", "alembic/versions/0007_campaign_review.py", "alembic/versions/0008_qa_runs.py", "alembic/versions/0009_qa_run_lifecycle.py", "alembic/versions/0010_preparation_recovery.py"]
+"share/qa-sentinel/alembic/versions" = ["alembic/versions/0001_initial.py", "alembic/versions/0002_projects.py", "alembic/versions/0003_execution_jobs.py", "alembic/versions/0004_qa_campaigns.py", "alembic/versions/0005_campaign_requirements.py", "alembic/versions/0006_test_specifications.py", "alembic/versions/0007_campaign_review.py", "alembic/versions/0008_qa_runs.py", "alembic/versions/0009_qa_run_lifecycle.py", "alembic/versions/0010_preparation_recovery.py", "alembic/versions/0011_qa_run_evidence.py", "alembic/versions/0012_product_ux_v2.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

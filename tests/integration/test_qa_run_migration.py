@@ -29,7 +29,7 @@ def test_0008_roundtrip_preserves_all_preparation_and_legacy_data(ready, bundle,
     command.upgrade(config, "head")
     command.check(config)
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0011"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
     command.downgrade(config, "0007")
     assert snapshot() == before and not NEW & set(inspect(engine).get_table_names())
@@ -48,7 +48,7 @@ def test_downgrade_refuses_to_erase_historical_run(ready):
     assert app.get_qa_run(p.id, c.id, run.id) == run
     assert app.list_qa_run_tests(p.id, c.id, run.id) == tests
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0011"
         assert not connection.exec_driver_sql("PRAGMA foreign_key_check").all()
 
 
@@ -108,9 +108,9 @@ def test_0009_downgrade_preserves_execution_evidence_by_refusing(ready):
     run = create(ready)
     finished = app.start_qa_run(p.id, c.id, run.id)
     tests = app.list_qa_run_tests(p.id, c.id, run.id)
-    with pytest.raises(RuntimeError, match="cannot erase execution lifecycle evidence"):
+    with pytest.raises(RuntimeError, match="cannot erase .*evidence"):
         command.downgrade(config, "0008")
     assert app.get_qa_run(p.id, c.id, run.id) == finished
     assert app.list_qa_run_tests(p.id, c.id, run.id) == tests
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0010"
+        assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0011"

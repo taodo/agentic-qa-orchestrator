@@ -13,3 +13,24 @@ export interface RunTest {
   id: string; run_id: string; original_test_specification_id: string; position: number; content: CampaignTestSpecification; approval: ApprovalEvidence;
   linked_requirement_snapshot_ids: string[]; execution_status: 'NOT_STARTED' | 'RUNNING' | 'COMPLETED' | 'BLOCKED'; qa_result: 'NOT_EVALUATED' | 'PASS' | 'FAIL' | 'SKIP';
 }
+
+// Closed wire payload variants; generic presentation uses only the server projection.
+export type RunEvidencePayload = {variant:'synthetic-observation-v1';strategy:'synthetic-position-v1';position:number;outcome:'PASS'|'FAIL'|'SKIP'};
+export interface EvidencePresentation {
+  variant:string;display_label:string;details:{label:string;value:string}[];
+}
+export interface RunEvidence {
+  id:string;project_id:string;campaign_id:string;run_id:string;run_test_id:string;
+  sequence:number;recorded_at:string;schema_version:'qa-run-evidence-v1';
+  kind:'EXECUTION_OBSERVATION';source:string;summary:string;
+  payload:RunEvidencePayload;
+  presentation:EvidencePresentation;
+}
+export interface RunTestResult extends RunTest {
+  evidence_count:number;evidence:import('./types').CollectionPage<RunEvidence>;
+}
+export interface RunResults {
+  run:QARun;
+  summary:{total:number;completed:number;passed:number;failed:number;skipped:number;not_evaluated:number;remaining:number};
+  tests:import('./types').CollectionPage<RunTestResult>;
+}

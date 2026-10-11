@@ -66,8 +66,11 @@ synthetic Run with mixed results. Do not invoke a real provider for visual revie
   retains the safe code/known usage and never redirects or retries. Verify optional
   name failure does not disable valid coverage or approved UUID-only selection.
 - Readiness: satisfied checks, blockers, next link and full server aggregates.
-- Runs/detail: run number, execution versus QA outcome, timestamps, snapshot
-  identity, pagination, explicit Start Synthetic Run and synthetic per-test labels.
+- Runs/detail: run number, separate execution/QA outcome, global persisted result
+  counts and bounded Test Results table. Expand readable SYNTHETIC evidence, distinguish
+  collected records from required-evidence descriptions, and inspect historical
+  zero-evidence/FAILED-PARTIAL cases. Snapshot context, explicit Start and pagination
+  remain. See [Run Results](QA_RUN_RESULTS.md).
 - Widths: approximately 1366, 1440 and 1920 pixels, plus a narrow 390-pixel window.
   Check long IDs/text and absence of ordinary horizontal page overflow.
 - Keyboard: Tab through navigation/forms/disclosures, visible focus, activate Skip

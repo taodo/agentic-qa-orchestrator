@@ -24,8 +24,8 @@ export function useCampaign() { return useOutletContext<CampaignContext>(); }
 export function CampaignDetailPage({ projectId, campaignId }: { projectId: string; campaignId: string }) {
   const campaign = useResource(useCallback(() => getCampaign(projectId, campaignId), [projectId, campaignId]));
   const base = campaignPath(projectId, campaignId);
-  return <><PageHeader title={campaign.data?.name || 'QA Campaign'} eyebrow="QA Campaign / Workspace"
-    breadcrumb={<Link className="muted" to={`/projects/${encodeURIComponent(projectId)}`}>← Project Campaigns</Link>} />
+  return <><PageHeader title={campaign.data?.name || 'QA workspace'} eyebrow="Project / QA workspace"
+    breadcrumb={<Link className="muted" to={`/projects/${encodeURIComponent(projectId)}`}>← Project workspaces</Link>} />
     {campaign.loading ? <LoadingState>Loading Campaign…</LoadingState> : campaign.error ? <>
       {campaign.error.status === 404 && <h2>Campaign not found</h2>}
       <ErrorState error={campaign.error} retry={() => void campaign.reload()} /></> : campaign.data && <CampaignWorkspace initial={campaign.data} projectId={projectId} campaignId={campaignId} base={base} />}

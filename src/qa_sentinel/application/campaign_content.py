@@ -1,15 +1,21 @@
 """Detached content/extraction read models using Phase 1 token semantics."""
 from datetime import datetime
 from uuid import UUID
+from pydantic import Field
 from typing import Literal
 from qa_sentinel.domain.campaign_content import (SourceType, IngestionStatus, ParseError,
-    CampaignRequirement, ExtractionStatus, extraction_retryable, Clarification)
+    CampaignRequirement, ExtractionStatus, extraction_retryable, Clarification, DocumentProvenance, DocumentCoordinate)
 from qa_sentinel.models.base import ContextSelection
 from .test_specifications import TestGenerationView,generation_view
 from qa_sentinel.domain.test_specification import TestGeneration
 from .models import View
 from .ai_action_results import ActionOutput
 from .model_usage import UsageTotals, UsageGroup, totals, safe_metadata
+
+
+class DocumentSummary(DocumentProvenance):
+    # Full coordinates are persisted and available only from explicit source detail.
+    coordinates: tuple[DocumentCoordinate, ...] = Field(default=(), exclude=True, max_length=4096)
 
 
 class CampaignSourceView(View):
@@ -21,6 +27,8 @@ class CampaignSourceView(View):
     content_hash: str
     raw_hash: str
     normalization_version: str
+    purpose: Literal["SPECIFICATION", "CLARIFICATION", "TEST_REVIEW"] = "SPECIFICATION"
+    document: DocumentSummary | None = None
     original_bytes: int
     normalized_chars: int
     line_count: int
@@ -32,6 +40,7 @@ class CampaignSourceView(View):
 
 
 class CampaignSourceDetail(CampaignSourceView):
+    document: DocumentProvenance | None = None
     normalized_text: str | None
 
 

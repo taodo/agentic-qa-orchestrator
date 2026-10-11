@@ -303,3 +303,10 @@ details[open] > summary { margin-bottom: 16px; color: var(--text); }
 .preparation-row { cursor: pointer; }
 .preparation-row.is-expanded { background: var(--surface-raised); }
 .preparation-row summary { cursor: pointer; }
+
+/* V2 document drop and test facts reuse the workspace typography and panels. */
+.upload-zone { border: 2px dashed var(--border, #cbd5e1); }
+.upload-zone input[type="file"] { max-width: 100%; }
+.campaign-table form { min-width: min(28rem, 65vw); }
+.campaign-table form textarea { width: 100%; }
+.campaign-table details { max-width: 40rem; }

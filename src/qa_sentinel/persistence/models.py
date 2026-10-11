@@ -1,7 +1,7 @@
 """SQLAlchemy storage only; no domain or workflow behavior."""
 from datetime import datetime
 from typing import Any
-from sqlalchemy import String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, ForeignKeyConstraint, text
+from sqlalchemy import event, DDL, String, Text, Integer, Boolean, JSON, ForeignKey, CheckConstraint, UniqueConstraint, Index, ForeignKeyConstraint, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from .types import ISODateTime
 
@@ -72,10 +72,10 @@ class CampaignSourceRow(Base):
     __table_args__ = (
         ForeignKeyConstraint(["campaign_id", "project_id"], ["qa_campaigns.id", "qa_campaigns.project_id"], name="fk_campaign_sources_owner", deferrable=True, initially="DEFERRED"),
         UniqueConstraint("id", "campaign_id", "project_id", name="uq_campaign_sources_owner"),
-        UniqueConstraint("campaign_id", "source_type", "content_hash", "normalization_version", name="uq_campaign_sources_content"),
-        CheckConstraint("source_type IN ('TEXT','MARKDOWN','PDF')", name="ck_campaign_sources_type"),
+        UniqueConstraint("campaign_id", "source_type", "content_hash", "normalization_version", "purpose", "raw_hash", name="uq_campaign_sources_content"),
+        CheckConstraint("source_type IN ('TEXT','MARKDOWN','PDF','DOCX')", name="ck_campaign_sources_type"),
         CheckConstraint("(status='INGESTED' AND normalized_text IS NOT NULL AND error_code IS NULL AND line_count>=1) OR (status='REJECTED' AND normalized_text IS NULL AND error_code IS NOT NULL AND line_count=0 AND normalized_chars=0)", name="ck_campaign_sources_ingestion"),
-        CheckConstraint("original_bytes BETWEEN 0 AND 65536 AND normalized_chars BETWEEN 0 AND 65536 AND line_count BETWEEN 0 AND 4096", name="ck_campaign_sources_bounds"),
+        CheckConstraint("original_bytes BETWEEN 0 AND 2097152 AND normalized_chars BETWEEN 0 AND 65536 AND line_count BETWEEN 0 AND 4096", name="ck_campaign_sources_bounds"),
         Index("ix_campaign_sources_campaign", "campaign_id", "created_at", "id"),
     )
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
@@ -86,6 +86,8 @@ class CampaignSourceRow(Base):
     content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     raw_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     normalization_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(32),nullable=False,server_default="SPECIFICATION")
+    document: Mapped[Any | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     original_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
     normalized_chars: Mapped[int] = mapped_column(Integer, nullable=False)
     line_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -384,7 +386,7 @@ class TestSpecificationRow(Base):
         UniqueConstraint('campaign_id','logical_key',name='uq_test_specifications_key'),
         UniqueConstraint('import_id','key',name='uq_test_specifications_import_key'),
         UniqueConstraint('generation_id','key',name='uq_test_specifications_generation_key'),
-        CheckConstraint('(import_id IS NOT NULL AND generation_id IS NULL) OR (generation_id IS NOT NULL AND import_id IS NULL)',name='ck_test_specifications_origin'),
+        CheckConstraint("(import_id IS NOT NULL AND generation_id IS NULL) OR (generation_id IS NOT NULL AND import_id IS NULL) OR (generation_id IS NULL AND import_id IS NULL AND json_extract(provenance, '$.origin') = 'HUMAN_EDIT')",name='ck_test_specifications_origin'),
         CheckConstraint("review_status IN ('DRAFT','NEEDS_CLARIFICATION','READY_FOR_REVIEW','APPROVED')",name='ck_test_specifications_review'),
         Index('ix_test_specifications_campaign','campaign_id','created_at','id'),
     )
@@ -467,7 +469,7 @@ class QARunRow(Base):
         UniqueConstraint("campaign_id", "idempotency_key", name="uq_qa_runs_idempotency"),
         CheckConstraint("run_number >= 1 AND requirement_count BETWEEN 1 AND 1000 AND test_count BETWEEN 1 AND 1000", name="ck_qa_runs_counts"),
         CheckConstraint("length(idempotency_key) BETWEEN 1 AND 128 AND length(snapshot_hash)=64 AND (note IS NULL OR length(note) BETWEEN 1 AND 1000)", name="ck_qa_runs_bounds"),
-        CheckConstraint("snapshot_version='qa-run-snapshot-v1'", name="ck_qa_runs_version"),
+        CheckConstraint("snapshot_version IN ('qa-run-snapshot-v1','qa-run-selection-v2')", name="ck_qa_runs_version"),
         CheckConstraint("execution_error_code IS NULL OR execution_error_code='RUN_EXECUTION_FAILED'", name="ck_qa_runs_error"),
         CheckConstraint("execution_status IN ('CREATED','QUEUED','RUNNING','COMPLETED','STOPPED','FAILED')", name="ck_qa_runs_execution"),
         CheckConstraint("qa_outcome IN ('NOT_EVALUATED','PASS','FAIL','PARTIAL')", name="ck_qa_runs_outcome"),
@@ -515,6 +517,7 @@ class QARunTestRow(Base):
     __table_args__ = (
         ForeignKeyConstraint(["run_id", "campaign_id", "project_id"], ["qa_runs.id", "qa_runs.campaign_id", "qa_runs.project_id"], name="fk_qa_run_tests_owner", deferrable=True, initially="DEFERRED"),
         UniqueConstraint("run_id", "original_test_specification_id", name="uq_qa_run_tests_original"),
+        UniqueConstraint("id", "run_id", "campaign_id", "project_id", name="uq_qa_run_tests_owner"),
         UniqueConstraint("run_id", "position", name="uq_qa_run_tests_order"),
         CheckConstraint("position BETWEEN 1 AND 1000", name="ck_qa_run_tests_position"),
         CheckConstraint("execution_status IN ('NOT_STARTED','RUNNING','COMPLETED','BLOCKED')", name="ck_qa_run_tests_execution"),
@@ -570,3 +573,64 @@ class RequirementRevisionRow(Base):
     supersedes_id: Mapped[str] = mapped_column(String(36), nullable=False)
     clarification_id: Mapped[str] = mapped_column(String(36), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class QARunEvidenceRow(Base):
+    __tablename__ = "qa_run_evidence"
+    __table_args__ = (
+        ForeignKeyConstraint(["run_test_id", "run_id", "campaign_id", "project_id"],
+            ["qa_run_tests.id", "qa_run_tests.run_id", "qa_run_tests.campaign_id", "qa_run_tests.project_id"],
+            name="fk_qa_run_evidence_owner", deferrable=True, initially="DEFERRED"),
+        UniqueConstraint("run_test_id", "sequence", name="uq_qa_run_evidence_order"),
+        CheckConstraint("sequence BETWEEN 1 AND 20", name="ck_qa_run_evidence_order"),
+        CheckConstraint("schema_version='qa-run-evidence-v1' AND kind='EXECUTION_OBSERVATION' AND length(source) BETWEEN 1 AND 64", name="ck_qa_run_evidence_contract"),
+        CheckConstraint("length(summary) BETWEEN 1 AND 512 AND length(CAST(payload AS BLOB)) <= 2048", name="ck_qa_run_evidence_bounds"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_test_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    sequence: Mapped[int] = mapped_column(Integer, nullable=False)
+    recorded_at: Mapped[str] = mapped_column(Text, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(64), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    payload: Mapped[Any] = mapped_column(JSON, nullable=False)
+
+
+# SQLite accepted evidence is append-only, including direct ORM update/delete.
+for _action in ("UPDATE", "DELETE"):
+    event.listen(QARunEvidenceRow.__table__, "after_create", DDL(
+        f"CREATE TRIGGER qa_run_evidence_no_{_action.lower()} BEFORE {_action} ON qa_run_evidence "
+        "BEGIN SELECT RAISE(ABORT, 'Run evidence is immutable'); END"))
+
+
+class TestEditRow(Base):
+    __tablename__ = "campaign_test_edits"
+    __table_args__ = (
+        ForeignKeyConstraint(["test_id","campaign_id","project_id"],["campaign_test_specifications.id","campaign_test_specifications.campaign_id","campaign_test_specifications.project_id"],name="fk_test_edit_new",deferrable=True,initially="DEFERRED"),
+        ForeignKeyConstraint(["previous_id","campaign_id","project_id"],["campaign_test_specifications.id","campaign_test_specifications.campaign_id","campaign_test_specifications.project_id"],name="fk_test_edit_previous",deferrable=True,initially="DEFERRED"),
+        ForeignKeyConstraint(["source_id","campaign_id","project_id"],["campaign_sources.id","campaign_sources.campaign_id","campaign_sources.project_id"],name="fk_test_edit_source",deferrable=True,initially="DEFERRED"),
+        UniqueConstraint("previous_id",name="uq_test_edit_previous"),
+        UniqueConstraint("test_id",name="uq_test_edit_new"),
+        CheckConstraint("version BETWEEN 2 AND 10 AND test_id != previous_id",name="ck_test_edit_version"),
+    )
+    id: Mapped[str] = mapped_column(String(36),primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36),nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36),nullable=False)
+    test_id: Mapped[str] = mapped_column(String(36),nullable=False)
+    previous_id: Mapped[str] = mapped_column(String(36),nullable=False)
+    source_id: Mapped[str] = mapped_column(String(36),nullable=False)
+    version: Mapped[int] = mapped_column(Integer,nullable=False)
+    reviewer_label: Mapped[str] = mapped_column(String(128),nullable=False)
+    note: Mapped[str] = mapped_column(Text,nullable=False)
+    previous_hash: Mapped[str] = mapped_column(String(64),nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(),nullable=False)
+
+
+for _action in ("UPDATE", "DELETE"):
+    event.listen(TestEditRow.__table__, "after_create", DDL(
+        f"CREATE TRIGGER test_edits_no_{_action.lower()} BEFORE {_action} ON campaign_test_edits "
+        "BEGIN SELECT RAISE(ABORT, 'Test review evidence is immutable'); END"))

@@ -17,9 +17,9 @@ function ProjectCampaigns({ projectId }: { projectId: string }) {
   const campaigns = useResource(useCallback(() => listCampaigns(projectId), [projectId]));
   const navigate = useNavigate();
   return <div className="content-grid"><section className="panel" aria-labelledby="campaign-list-heading">
-    <div className="panel-heading"><h2 id="campaign-list-heading">QA Campaigns</h2><button disabled={campaigns.loading} onClick={() => void campaigns.reload()}>Refresh Campaigns</button></div>
+    <div className="panel-heading"><h2 id="campaign-list-heading">QA workspaces</h2><button disabled={campaigns.loading} onClick={() => void campaigns.reload()}>Refresh workspaces</button></div>
     {campaigns.loading ? <LoadingState>Loading Campaigns…</LoadingState> : campaigns.error ? <ErrorState error={campaigns.error} retry={() => void campaigns.reload()} /> : campaigns.data && <>
-      {!campaigns.data.items.length ? <EmptyState>No Campaigns yet. Create a Campaign to prepare requirements, test cases, review and coverage for a QA initiative.</EmptyState>
+      {!campaigns.data.items.length ? <EmptyState>No QA workspaces yet. Create a workspace for Specification → Test Design → Execution → Results.</EmptyState>
         : <ul className="record-list">{campaigns.data.items.map(campaign => <li key={campaign.id}><div>
           <Link className="record-title" to={campaignPath(projectId, campaign.id)}>{campaign.name}</Link>
           <p className="prose muted">{campaign.objective || 'No objective provided.'}</p><p className="muted">Updated <DateTime value={campaign.updated_at} /></p>
@@ -43,7 +43,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
   const project = useResource(useCallback(() => getProject(projectId), [projectId]));
   useWorkspaceContext(projectId);
   const [legacyOpen, setLegacyOpen] = useState(false);
-  return <><PageHeader title={project.data?.name || 'Project'} eyebrow="Project / QA Campaigns" breadcrumb={<Link to="/projects" className="muted">← Projects</Link>} />
+  return <><PageHeader title={project.data?.name || 'Project'} eyebrow="Project / QA workspaces" breadcrumb={<Link to="/projects" className="muted">← Projects</Link>} />
     {project.loading ? <LoadingState>Loading Project…</LoadingState> : project.error ? <ErrorState error={project.error} retry={() => void project.reload()} /> : project.data && <>
       <section className="panel project-summary"><p className="mono">{project.data.key}</p><p className="prose">{project.data.description || 'No description provided.'}</p>
         <dl className="metadata"><div><dt>Created</dt><dd><DateTime value={project.data.created_at} /></dd></div><div><dt>Updated</dt><dd><DateTime value={project.data.updated_at} /></dd></div></dl></section>
@@ -53,5 +53,16 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
         <div id="legacy-project-workflows" hidden={!legacyOpen}>{legacyOpen && <LegacyTasks projectId={projectId} />}</div>
       </section>
     </>}
+  </>;
+}
+
+
+export function ProjectSettingsPage({ projectId }: { projectId: string }) {
+  const project = useResource(useCallback(() => getProject(projectId), [projectId]));
+  useWorkspaceContext(projectId);
+  return <><PageHeader title="Project Settings" eyebrow="Project / Host configuration" breadcrumb={<Link to={`/projects/${projectId}`}>Back to Project workspaces</Link>} />
+    {project.loading ? <LoadingState>Loading Project…</LoadingState> : project.error ? <ErrorState error={project.error} /> : project.data && <section className="panel"><h2>{project.data.name}</h2><p>{project.data.description}</p><p>Project key: {project.data.key}</p></section>}
+    <p>Trusted runtime configuration is managed by the local operator outside Project persistence. Credentials and workspace paths are never editable here.</p>
+    <RuntimeReadiness projectId={projectId} />
   </>;
 }

@@ -147,7 +147,7 @@ def test_restart_migrates_to_head_preserves_operator_data_and_demo_identity(conf
         assert len(projects) == 2 and [p for p in projects if p["key"] == "demo-calculator"][0]["id"] == project["id"]
         assert client.get(f"/api/v1/tasks/{created['id']}").json()["title"] == "Keep task"
         with app.state.host_composition.engine.connect() as connection:
-            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0010"
+            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0012"
 
 
 @pytest.mark.parametrize("path", ["/", "/projects", "/projects/project-a", "/tasks/task-a?view=artifacts", "/index.html"])
@@ -164,6 +164,39 @@ def test_fallback_never_masks_api_assets_or_traversal(config, path):
         response = client.get(path)
         assert response.status_code == 404, (path, response.text)
         assert "Built frontend" not in response.text and "OUTSIDE_SECRET" not in response.text
+
+
+@pytest.mark.parametrize("suffix", ["", "/requirements?requirement_id=revised-v2", "/test-specifications?test_spec_id=test-a", "/traceability", "/readiness", "/runs", "/runs/run-a", "/requirements/", "/specification", "/test-design", "/execution", "/results", "/audit"])
+@pytest.mark.parametrize("mode", ["demo", "local"])
+def test_campaign_spa_deep_links(config, tmp_path, monkeypatch, suffix, mode):
+    value = config
+    if mode == "local":
+        value = local(config, tmp_path)
+        seed(config, "real-project")
+        monkeypatch.setenv("OPENAI_API_KEY", "SYNTHETIC_LOCAL_KEY")
+    with TestClient(create_host_app(value)) as client:
+        path = "/projects/project-a/campaigns/campaign-a" + suffix
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        assert response.text == (config.frontend_dist / "index.html").read_text()
+        assert client.head(path).status_code == 200
+
+
+@pytest.mark.parametrize("path", [
+    "/projects/project-a/campaigns", "/projects/project-a/campaigns/campaign-a/unknown",
+    "/projects/project-a/campaigns/campaign-a/requirements/extra",
+    "/projects/project-a/campaigns/campaign-a/runs/run-a/extra",
+    "/projects/project-a/campaigns/campaign-a/api/v1/missing",
+    "/api/projects/project-a/campaigns/campaign-a/requirements",
+    "/api/v1/projects/project-a/campaigns/campaign-a/unknown",
+])
+def test_campaign_fallback_remains_narrow(config, path):
+    with TestClient(create_host_app(config)) as client:
+        response = client.get(path)
+        assert response.status_code == 404
+        assert response.json() == {"error": {"code": "HTTP_ERROR", "message": "Route not found"}}
+        assert "Built frontend" not in response.text
 
 
 def test_assets_api_health_schema_and_no_cors(config):
@@ -320,3 +353,12 @@ def test_host_dependency_direction():
                 assert not (node.level and node.module is None and any(alias.name == "host" for alias in node.names)), path
             elif isinstance(node, ast.Import):
                 assert all(not alias.name.startswith("qa_sentinel.host") for alias in node.names), path
+
+
+
+def test_product_project_settings_deep_link_is_narrow(config):
+    with TestClient(create_host_app(config)) as client:
+        assert client.get('/projects/project-a/settings').status_code == 200
+        assert client.head('/projects/project-a/settings').status_code == 200
+        assert client.get('/projects/project-a/settings/unknown').status_code == 404
+        assert client.get('/api/v1/projects/project-a/settings').status_code == 404

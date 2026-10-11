@@ -31,6 +31,35 @@ The existing platform already contains:
 
 Do not assume every historical capability is part of the future product direction. In particular, source mutation/self-repair is legacy/experimental infrastructure, not a feature to expand unless a future task explicitly reintroduces it.
 
+## Product UX V2 current extension
+
+Primary UI: Specification → Test Design → Execution → Results, plus Overview,
+Project Settings and Advanced / Audit. QACampaign remains the aggregate; legacy
+routes remain supported. Read [Product UX V2](PRODUCT_UX_V2.md) for the bounded API
+and schema map before extending these areas.
+
+`agents/documents.py` handles inert TXT/MD/DOCX/PDF uploads with parser limits and
+truthful page/paragraph text provenance; PDF uses pypdf, not OCR/vision. Source
+purpose distinguishes specification, clarification and human test review facts.
+Human test edits create immutable successor versions/receipts, preserve links,
+supersede current versions, require new approval and leave old Run snapshots intact.
+
+`execution-candidates` batches current eligibility reads. Explicit 1–500 test IDs
+create `qa-run-selection-v2`, validating all selected approvals and supporting
+approved current Requirements without global readiness. Legacy absent selection
+retains v1/global READY behavior. Real global readiness is captured in both;
+V2 does not fabricate READY. Task 4.1 result/evidence executor semantics are unchanged.
+Test Design uses scoped server pages (10/20/50/100), literal key/title search and
+backend-clamped numbered pages. Filter selection is fingerprinted, bounded to
+10,000 matches in 100-record batches, and atomically revalidated before explicit
+human approval; no browser ID fan-out or selection persistence. Run result CSV/XLSX
+uses only existing persisted snapshots/results and batched evidence counts, at most
+1,000 rows/4 MiB, with the existing literal spreadsheet writer.
+Migration 0012 is additive; downgrade refuses audit loss. Local validation and
+non-migrating runtime opening require 0012 (the configured operator DB, not the
+checkout default). Revision/head agreement has a regression guard. API, host authentication,
+repository read/target interpreter and tool boundaries remain unchanged.
+
 ## Phase 2 complete: accepted preparation boundary
 
 Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources,
@@ -38,7 +67,7 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
-Campaign executor exists. Migration head is 0010; see
+Campaign executor exists. Migration head is 0012; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11
@@ -47,7 +76,7 @@ Task 3.1 established Project → Campaign navigation and bounded preparation vie
 Task 3.2 adds explicit browser source ingestion (pasted TEXT/Markdown), extraction,
 strict CSV/Markdown test import, generation from 1–20 explicitly selected
 Requirements, and Requirement/Test approval with operator-asserted reviewer labels.
-Review evidence loads only on request. PDF/XLSX remain unsupported. Task 3.5 adds bounded clarification recovery
+Review evidence loads only on request. Legacy text ingestion still reports PDF_UNSUPPORTED; V2 document upload supports PDF/DOCX text extraction. XLSX import remains unsupported; V2 CSV/XLSX export is supported. Task 3.5 adds bounded clarification recovery
 without a generic Requirement editor. Ingestion never invokes extraction automatically; no write or
 model action runs on mount, polls, or automatically retries. Shared same-origin
 session/CSRF/error transport remains unchanged; route changes discard late action
@@ -99,7 +128,7 @@ content/approval/links/positions never update. Only CREATED starts; concurrent a
 terminal starts reject. No models, network, browser, subprocess, target filesystem,
 legacy Task/job evidence, retry/resume, Stop or crash replay. Frontend uses explicit
 intent keys, bounded snapshot pages, shared CSRF and stale-completion guards, with
-clear synthetic warnings. Phase 4 evidence/reporting remains future work.
+clear synthetic warnings. Task 4.1 adds the evidence/results boundary below; reporting remains future work.
 
 Task 3.5 adds explicit extraction retry (three attempts/source), independent usage
 and durable history, plus inert operator clarification sources and separate AI
@@ -135,6 +164,22 @@ Model citations select source identity/ranges only; backend reconstructs exact L
 excerpts and validates canonical citations before new persistence writes. Existing
 citations/history remain readable; no migration, extra model call, automatic retry
 or review/readiness/Run change. See [citation grounding](REQUIREMENTS.md).
+
+## Current Phase 4 increment: Task 4.1
+
+Run Tests now own bounded immutable executor-neutral evidence envelopes. The
+closed discriminated payload boundary delegates source/result/snapshot validation
+and bounded presentation to a reviewed variant policy registry. Synthetic is the
+only admitted variant; generic result/persistence/UI code assumes no Synthetic fields.
+Read APIs project authoritative labels/details without storing presentation metadata.
+The current synthetic path emits typed synthetic observations and persists each result
+and evidence atomically before continuing, including FAIL. Migration 0011 preserves
+old Runs and refuses evidence-destructive downgrade. New scoped read-only Results
+and explicit evidence routes provide full persisted aggregates and bounded batched
+previews without N+1/provider/tool work. Run Detail is a table-first Results view
+with strong SYNTHETIC labeling, immutable snapshot context and separate execution/
+QA outcomes. No real executor, analysis, defect/report, retry/resume or preparation/
+model/token change. See [Run Results and evidence](QA_RUN_RESULTS.md).
 
 ## Product direction
 

@@ -1,10 +1,11 @@
 """Immutable Run snapshots with narrow lifecycle updates in reserved transactions."""
+from qa_sentinel.domain.qa_run_evidence import QARunEvidence, TestExecutionResult, MAX_TEST_EVIDENCE
 from .preparation_current import current_requirement,current_test
 from sqlalchemy import select, func, update
 from qa_sentinel.domain.qa_run_lifecycle import start_run, start_test, finish_test, finish_run, RunLifecycleError
 from qa_sentinel.domain.qa_run import (QARun, QARunRequirement, QARunTest, PreparedQARun,
     MAX_SNAPSHOT_RECORDS, SnapshotSizeError)
-from .models import (QARunRow, QARunRequirementRow, QARunTestRow,
+from .models import (QARunRow, QARunRequirementRow, QARunTestRow, QARunEvidenceRow,
     CampaignRequirementRow, TestSpecificationRow)
 from .campaign_content import requirement_from, row_values
 from .test_specifications import TestSpecificationRepository
@@ -51,6 +52,30 @@ class QARunRepository:
             records.append(rows)
         return ([requirement_from(r) for r in records[0]],
                 TestSpecificationRepository(self.session)._specs(records[1]))
+
+    def candidates(self, project_id, campaign_id, limit, after_id):
+        rows = list(self.session.scalars(select(TestSpecificationRow).where(
+            TestSpecificationRow.project_id == str(project_id),TestSpecificationRow.campaign_id == str(campaign_id),
+            TestSpecificationRow.id > str(after_id), current_test()).order_by(TestSpecificationRow.id).limit(limit+1)))
+        return TestSpecificationRepository(self.session)._specs(rows)
+
+    def selection_content(self, project_id, campaign_id, ids):
+        rows = list(self.session.scalars(select(TestSpecificationRow).where(
+            TestSpecificationRow.project_id == str(project_id), TestSpecificationRow.campaign_id == str(campaign_id),
+            TestSpecificationRow.id.in_([str(id) for id in ids]), current_test()).order_by(TestSpecificationRow.id).limit(501)))
+        if len(rows) != len(ids): raise ValueError("RUN_SELECTION_INVALID")
+        tests = TestSpecificationRepository(self.session)._specs(rows)
+        needed = {id for test in tests for id in test.requirement_ids}
+        if not needed or len(needed) > MAX_SNAPSHOT_RECORDS: raise SnapshotSizeError()
+        req_rows = list(self.session.scalars(select(CampaignRequirementRow).where(
+            CampaignRequirementRow.project_id == str(project_id), CampaignRequirementRow.campaign_id == str(campaign_id),
+            CampaignRequirementRow.id.in_([str(id) for id in needed]), current_requirement()).order_by(CampaignRequirementRow.id).limit(MAX_SNAPSHOT_RECORDS+1)))
+        if len(req_rows) != len(needed): raise ValueError("RUN_SELECTION_INVALID")
+        reqs = [requirement_from(r) for r in req_rows]
+        if any(r.review_status != "APPROVED" or r.information_markers or not r.acceptance_criteria for r in reqs): raise ValueError("RUN_SELECTION_INVALID")
+        if any(t.review_status != "APPROVED" or t.information_markers or t.unresolved_requirement_refs or not t.requirement_ids or not t.required_evidence or t.overall_expected_result is None or any(step.expected is None for step in t.steps) for t in tests):
+            raise ValueError("RUN_SELECTION_INVALID")
+        return reqs, tests
 
     def add(self, prepared):
         prepared = PreparedQARun.model_validate(prepared.model_dump())
@@ -133,4 +158,49 @@ class QARunRepository:
         return self._save_test_state(run, test, start_test(test))
 
     def complete_test(self, run, test, result):
-        return self._save_test_state(run, test, finish_test(test, result))
+        result = TestExecutionResult.model_validate(result.model_dump())
+        for draft in result.evidence:
+            draft.validate_snapshot(test)
+        completed = self._save_test_state(run, test, finish_test(test, result.qa_result))
+        for sequence, draft in enumerate(result.evidence, 1):
+            evidence = QARunEvidence(**draft.model_dump(), project_id=run.project_id,
+                campaign_id=run.campaign_id, run_id=run.id, run_test_id=test.id, sequence=sequence)
+            self.session.add(QARunEvidenceRow(**evidence.model_dump(mode="json")))
+        self.session.flush()  # Same transaction as COMPLETED/result; any failure rolls both back.
+        return completed
+
+
+    def result_counts(self, run):
+        rows = self.session.execute(select(QARunTestRow.execution_status, QARunTestRow.qa_result,
+            func.count()).where(QARunTestRow.project_id == str(run.project_id),
+            QARunTestRow.campaign_id == str(run.campaign_id), QARunTestRow.run_id == str(run.id))
+            .group_by(QARunTestRow.execution_status, QARunTestRow.qa_result))
+        counts = dict(total=0, completed=0, passed=0, failed=0, skipped=0, not_evaluated=0, remaining=0)
+        for execution, outcome, count in rows:
+            counts["total"] += count
+            counts["completed" if execution == "COMPLETED" else "remaining"] += count
+            category = {"PASS":"passed", "FAIL":"failed", "SKIP":"skipped", "NOT_EVALUATED":"not_evaluated"}[outcome]
+            counts[category] += count
+        return counts
+
+    def evidence_preview(self, run, test_ids, limit):
+        if not test_ids:
+            return {}
+        table = QARunEvidenceRow
+        owner = (table.project_id == str(run.project_id), table.campaign_id == str(run.campaign_id), table.run_id == str(run.id))
+        ranked = (select(table, func.row_number().over(partition_by=table.run_test_id,
+            order_by=table.sequence).label("rank"), func.count().over(partition_by=table.run_test_id).label("count"))
+            .where(*owner, table.run_test_id.in_([str(id) for id in test_ids])).subquery())
+        records = self.session.execute(select(ranked).where(ranked.c.rank <= limit).order_by(ranked.c.run_test_id, ranked.c.sequence)).mappings()
+        grouped = {}
+        for row in records:
+            count, evidence = grouped.setdefault(row["run_test_id"], (row["count"], []))
+            evidence.append(QARunEvidence.model_validate({name: row[name] for name in QARunEvidence.model_fields}))
+        return grouped
+
+    def evidence(self, run, test_id, limit, after_sequence):
+        table = QARunEvidenceRow
+        return [from_row(row, QARunEvidence) for row in self.session.scalars(select(table).where(
+            table.project_id == str(run.project_id), table.campaign_id == str(run.campaign_id),
+            table.run_id == str(run.id), table.run_test_id == str(test_id), table.sequence > after_sequence)
+            .order_by(table.sequence).limit(min(limit + 1, MAX_TEST_EVIDENCE + 1)))]

@@ -43,7 +43,7 @@ def test_downgrade_cannot_silently_delete_approval_evidence(review):
     assert app.get_campaign_requirement_review(p.id, c.id, req.id) == receipt
     assert app.get_campaign_readiness(p.id, c.id).status == 'READY'
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0010'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0011'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 

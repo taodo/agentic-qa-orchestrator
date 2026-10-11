@@ -141,10 +141,10 @@ class TestGeneration(Frozen):
         return self
 
 class TestProvenance(Frozen):
-    origin:Literal['IMPORT','AI_GENERATED']
+    origin:Literal['IMPORT','AI_GENERATED','HUMAN_EDIT']
     record_id:UUID
     content_hash:Hash
-    contract_version:Literal['test-import-v1','test-specs-v1']
+    contract_version:Literal['test-import-v1','test-specs-v1','test-human-v1']
     start_line:int | None=Field(default=None,ge=1,le=4096,strict=True)
     end_line:int | None=Field(default=None,ge=1,le=4096,strict=True)
 
@@ -153,7 +153,7 @@ class TestProvenance(Frozen):
         if self.origin=='IMPORT':
             if self.contract_version!='test-import-v1' or self.start_line is None or self.end_line is None or self.start_line>self.end_line:
                 raise ValueError('Import provenance requires ordered line locations')
-        elif self.contract_version!='test-specs-v1' or self.start_line is not None or self.end_line is not None:
+        elif self.contract_version != ('test-human-v1' if self.origin=='HUMAN_EDIT' else 'test-specs-v1') or self.start_line is not None or self.end_line is not None:
             raise ValueError('Generation provenance cannot claim imported locations')
         return self
 

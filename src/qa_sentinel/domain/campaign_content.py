@@ -22,6 +22,7 @@ class SourceType(StrEnum):
     TEXT = "TEXT"
     MARKDOWN = "MARKDOWN"
     PDF = "PDF"
+    DOCX = "DOCX"
 
 
 class IngestionStatus(StrEnum):
@@ -31,10 +32,31 @@ class IngestionStatus(StrEnum):
 
 class ParseError(StrEnum):
     PDF_UNSUPPORTED = "PDF_UNSUPPORTED"
+    DOCUMENT_INVALID = "DOCUMENT_INVALID"
+    DOCUMENT_LIMIT = "DOCUMENT_LIMIT"
+    DOCUMENT_NO_TEXT = "DOCUMENT_NO_TEXT"
     INVALID_UTF8 = "INVALID_UTF8"
     BINARY_TEXT = "BINARY_TEXT"
     EMPTY_TEXT = "EMPTY_TEXT"
     SOURCE_LINE_LIMIT = "SOURCE_LINE_LIMIT"
+
+
+class DocumentCoordinate(Frozen):
+    kind: Literal["PAGE", "PARAGRAPH"]
+    index: int = Field(ge=1, le=4096, strict=True)
+    start_line: Line
+    end_line: Line
+
+    @model_validator(mode="after")
+    def ordered(self):
+        if self.end_line < self.start_line: raise ValueError("Invalid document coordinate")
+        return self
+
+
+class DocumentProvenance(Frozen):
+    parser: Literal["pypdf-text-v1", "docx-xml-v1", "utf8-text-v1"]
+    coordinates: tuple[DocumentCoordinate, ...] = Field(max_length=4096)
+    limitations: tuple[Literal["IMAGES_NOT_ANALYZED", "LAYOUT_NOT_ANALYZED", "NON_BODY_CONTENT_NOT_ANALYZED"], ...] = Field(max_length=3)
 
 
 class CampaignSource(Frozen):
@@ -46,7 +68,9 @@ class CampaignSource(Frozen):
     content_hash: Hash
     raw_hash: Hash
     normalization_version: Literal["utf8-nfc-lf-v1"] = "utf8-nfc-lf-v1"
-    original_bytes: int = Field(ge=0, le=65536, strict=True)
+    purpose: Literal["SPECIFICATION", "CLARIFICATION", "TEST_REVIEW"] = "SPECIFICATION"
+    document: DocumentProvenance | None = None
+    original_bytes: int = Field(ge=0, le=2097152, strict=True)
     normalized_chars: int = Field(ge=0, le=65536, strict=True)
     line_count: int = Field(ge=0, le=4096, strict=True)
     status: IngestionStatus
@@ -58,8 +82,12 @@ class CampaignSource(Frozen):
     def valid_snapshot(self):
         from hashlib import sha256
         if self.status == IngestionStatus.INGESTED:
-            if self.source_type == SourceType.PDF or self.normalized_text is None or self.error_code is not None or not self.normalized_text.strip():
+            if self.normalized_text is None or self.error_code is not None or not self.normalized_text.strip():
                 raise ValueError("Invalid ingested snapshot")
+            if self.source_type in {SourceType.PDF, SourceType.DOCX} and self.document is None:
+                raise ValueError("Document provenance required")
+            if self.document and any(c.end_line > self.line_count for c in self.document.coordinates):
+                raise ValueError("Document coordinate outside text")
             if self.normalized_chars != len(self.normalized_text) or self.line_count != len(self.normalized_text.split("\n")):
                 raise ValueError("Source location metadata mismatch")
             if sha256(self.normalized_text.encode("utf-8")).hexdigest() != self.content_hash:
