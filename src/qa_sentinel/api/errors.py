@@ -7,6 +7,7 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.TARGET_NOT_FOUND: (404, "Target not found in the requested Project"),
     Code.DOCUMENT_INVALID: (422, "Document format or contents are unsupported, malformed, empty or unsafe"),
     Code.RUN_SELECTION_INVALID: (409, "Select only current approved tests with valid approved source Requirements"),
     Code.EXTRACTION_ATTEMPT_NOT_FOUND: (404, "Extraction attempt not found in this Campaign"),

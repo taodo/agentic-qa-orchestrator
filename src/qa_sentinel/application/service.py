@@ -165,14 +165,72 @@ class QASentinelApplication:
             raise ApplicationError(Code.PROJECT_CAMPAIGN_MISMATCH)
         return campaign
 
-    def create_campaign(self, project_id, *, name, objective=None) -> QACampaignView:
+    def _target(self, uow, project_id, target_id):
+        self._project(uow, project_id)
+        target = uow.targets.get(project_id, target_id)
+        if target is None: raise ApplicationError(Code.TARGET_NOT_FOUND)
+        return target
+
+    def create_target(self, project_id, **values):
+        from qa_sentinel.domain.target import TargetUnderTest
+        project_id = identifier(project_id)
+        try: target = TargetUnderTest(project_id=project_id, **values)
+        except ValidationError: raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._project(uow, project_id)
+            uow.targets.add(target); uow.commit()
+            return target
+
+    def list_targets(self, project_id, *, limit=50):
+        from qa_sentinel.domain.target import TargetUnderTest
+        project_id, limit = identifier(project_id), list_limit(limit)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            self._project(uow, project_id)
+            return page(uow.targets.list(project_id, limit), limit, TargetUnderTest)
+
+    def get_target(self, project_id, target_id):
+        project_id, target_id = map(identifier, (project_id, target_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            return self._target(uow, project_id, target_id)
+
+    def update_target(self, project_id, target_id, **changes):
+        from qa_sentinel.domain.target import UpdateTarget
+        project_id, target_id = map(identifier, (project_id, target_id))
+        try: command = UpdateTarget.model_validate(changes)
+        except ValidationError: raise ApplicationError(Code.INVALID_INPUT) from None
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
+            target = self._target(uow, project_id, target_id).update(command)
+            uow.targets.save(target); uow.commit()
+            return target
+
+    def get_campaign_target(self, project_id, campaign_id):
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            campaign = self._campaign(uow, project_id, campaign_id)
+            return None if campaign.target_id is None else self._target(uow, project_id, campaign.target_id)
+
+    def associate_campaign_target(self, project_id, campaign_id, *, target_id):
+        project_id, campaign_id = map(identifier, (project_id, campaign_id))
+        target_id = None if target_id is None else identifier(target_id)
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            uow.session.connection(execution_options={"qa_job_write": True})
+            campaign = self._campaign(uow, project_id, campaign_id)
+            if target_id is not None: self._target(uow, project_id, target_id)
+            campaign = campaign.associate_target(target_id)
+            uow.targets.associate(campaign, target_id)
+            uow.campaigns.save_metadata(campaign); uow.commit()
+            return record_view(campaign, QACampaignView)
+
+    def create_campaign(self, project_id, *, name, objective=None, target_id=None) -> QACampaignView:
         project_id = identifier(project_id)
         try:
-            campaign = QACampaign(project_id=project_id, name=name, objective=objective)
+            campaign = QACampaign(project_id=project_id, name=name, objective=objective, target_id=target_id)
         except ValidationError:
             raise ApplicationError(Code.INVALID_INPUT) from None
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             self._project(uow, project_id)
+            if campaign.target_id is not None: self._target(uow, project_id, campaign.target_id)
             uow.campaigns.add(campaign)
             result = record_view(campaign, QACampaignView)
             uow.commit()
@@ -586,7 +644,9 @@ class QASentinelApplication:
                 # Validate full approval versions, not only SQL readiness counts.
                 reqs = uow.campaign_reviews.evidence_batch(requirements, "REQUIREMENT")
                 specs = uow.campaign_reviews.evidence_batch(tests, "TEST_SPECIFICATION")
-                prepared = prepare_run(campaign, readiness, command, uow.qa_runs.next_number(campaign_id), reqs, specs)
+                from qa_sentinel.domain.target import TargetSnapshot
+                target_snapshot = None if campaign.target_id is None else TargetSnapshot.capture(self._target(uow, project_id, campaign.target_id))
+                prepared = prepare_run(campaign, readiness, command, uow.qa_runs.next_number(campaign_id), reqs, specs, target_snapshot)
                 uow.qa_runs.add(prepared)
             except SnapshotSizeError:
                 raise ApplicationError(Code.RUN_SNAPSHOT_SIZE_LIMIT) from None

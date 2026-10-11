@@ -6,7 +6,7 @@ export type CoverageStatus = 'COVERED' | 'PARTIAL' | 'NOT_COVERED';
 export type ReadinessStatus = 'READY' | 'NOT_READY';
 export interface CampaignView {
   id: UUID; project_id: UUID; name: string; objective: string | null;
-  status: PreparationStatus; created_at: Timestamp; updated_at: Timestamp;
+  status: PreparationStatus; created_at: Timestamp; updated_at: Timestamp; target_id?: UUID | null;
 }
 export interface InformationMarker { kind: 'AMBIGUITY' | 'MISSING_INFORMATION'; description: string }
 export interface TestMarker { kind: InformationMarker['kind'] | 'UNRESOLVED_REQUIREMENT' | 'MISSING_TRACEABILITY'; description: string }

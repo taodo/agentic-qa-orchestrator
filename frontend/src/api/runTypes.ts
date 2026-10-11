@@ -2,6 +2,7 @@ import type { CampaignReadiness, CampaignRequirement, CampaignTestSpecification,
 export type RunStatus = 'CREATED' | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export type RunOutcome = 'NOT_EVALUATED' | 'PASS' | 'FAIL' | 'PARTIAL';
 export interface QARun {
+  target_snapshot?: import('./targets').TargetSnapshot | null;
   id: string; project_id: string; campaign_id: string; run_number: number; idempotency_key: string; note: string | null;
   snapshot_version: string; snapshot_hash: string; requirement_count: number; test_count: number;
   campaign_snapshot: { id: string; project_id: string; name: string; objective: string | null; status: 'APPROVED' };

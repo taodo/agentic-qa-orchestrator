@@ -195,8 +195,9 @@ def test_0011_upgrade_reopen_empty_downgrade_and_evidence_guard(ready):
     historical=create(ready)
     before=entries(ready,historical)
     command.downgrade(config,'0010')
-    assert app.get_qa_run(p.id,c.id,historical.id)==historical
+    # Current ORM/read paths require 0013; compare the historical row after upgrade.
     command.upgrade(config,'head');command.check(config)
+    assert app.get_qa_run(p.id,c.id,historical.id)==historical
     engine.dispose()
     assert entries(ready,historical)==before
     assert result_view(ready,historical).summary.remaining==1
@@ -207,7 +208,7 @@ def test_0011_upgrade_reopen_empty_downgrade_and_evidence_guard(ready):
     with pytest.raises(RuntimeError,match='cannot erase persisted Run evidence'):command.downgrade(config,'0010')
     assert result_view(ready,historical)==saved
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0012'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0013'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 
@@ -226,7 +227,9 @@ def test_historical_completed_0010_run_gets_no_fabricated_evidence(ready):
         uow.qa_runs._save_test_state(running,test,finish_test(test,'FAIL'))
         historical=uow.qa_runs.finish(running)
         uow.commit()
-    before=entries(ready,historical)
+    # At 0010, inspect existing test rows directly, not current Run/Campaign joins.
+    with UnitOfWork(factory) as uow:
+        before=tuple(uow.qa_runs.all_entries(historical,"tests"))
     command.upgrade(config,'head');command.check(config)
     url=str(engine.url);engine.dispose()
     reopened=create_engine(url)

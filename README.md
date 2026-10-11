@@ -3,7 +3,8 @@
 **Agentic QA Orchestrator** is a QA platform for preparing requirements, test specifications, human review and coverage within Project-owned QA Campaigns.
 
 The primary browser journey is **Specification → Test Design → Execution → Results**.
-Open a Project and create a QA workspace (the existing QACampaign internally).
+Open a Project configure a [WEB Target Under Test](docs/TARGET_UNDER_TEST.md), then create a QA
+workspace (the existing QACampaign internally) and explicitly select its Target.
 Upload PDF/DOCX/Markdown/text, explicitly analyze supported behavior, review findings
 and generate test cases. Review, add information and approve selected ready tests;
 export CSV/XLSX; select approved eligible tests for an immutable synthetic Run;
@@ -11,7 +12,7 @@ inspect outcomes and truthful evidence. Unresolved tests do not block unrelated
 approved eligible tests. Images/layouts are not analyzed; no OCR or vision is added.
 
 [Product UX V2](docs/PRODUCT_UX_V2.md) documents formats, bounds, human-version
-provenance, explicit approvals, selected Run eligibility, Audit and migration 0012.
+provenance, explicit approvals, selected Run eligibility, Audit and migrations 0012/0013.
 Apply migrations explicitly to the backed-up operator database before using V2;
 startup never auto-migrates. Existing preparation and legacy Task routes remain
 available under Advanced / Audit and Legacy workflows.

@@ -11,18 +11,24 @@ RECOVERY_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:requirem
 SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:sources|documents|test-imports|generate-tests|test-exports|test-design/(?:selection|approval)|test-specifications/[^/]+/edits)$")
 
 
+TARGET_PATH = re.compile(r"^/api/v1/projects/[^/]+/(?:targets(?:/[^/]+)?|campaigns(?:/[^/]+/target)?)$")
+
+
 class SourceBodyLimit:
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["method"] != "POST":
+        if scope["type"] != "http" or scope["method"] not in ("POST", "PATCH", "PUT"):
+            return await self.app(scope, receive, send)
+        target = TARGET_PATH.fullmatch(scope["path"])
+        if scope["method"] != "POST" and not target:
             return await self.app(scope, receive, send)
         review = REVIEW_PATH.fullmatch(scope["path"]) or RECOVERY_PATH.fullmatch(scope["path"])
         run = RUN_PATH.fullmatch(scope["path"]) or START_RUN_PATH.fullmatch(scope["path"])
-        if not review and not run and not SOURCE_PATH.fullmatch(scope["path"]):
+        if not target and not review and not run and not SOURCE_PATH.fullmatch(scope["path"]):
             return await self.app(scope, receive, send)
-        maximum = (3 * 1024 * 1024 if scope["path"].endswith("/documents") else 32768 if RUN_PATH.fullmatch(scope["path"]) or "/test-design/" in scope["path"] else MAX_REVIEW_BODY_BYTES if review or run else MAX_SOURCE_BODY_BYTES)
+        maximum = ((32768 if scope["path"].endswith("/campaigns") else 8192) if target else 3 * 1024 * 1024 if scope["path"].endswith("/documents") else 32768 if RUN_PATH.fullmatch(scope["path"]) or "/test-design/" in scope["path"] else MAX_REVIEW_BODY_BYTES if review or run else MAX_SOURCE_BODY_BYTES)
         code = "RUN_REQUEST_SIZE_LIMIT" if run else "REVIEW_SIZE_LIMIT" if review else "SOURCE_SIZE_LIMIT"
         error_message = "Run request exceeds supported size" if run else "Review request exceeds supported size" if review else "Source exceeds supported size"
         lengths = [value for key, value in scope["headers"] if key.lower() == b"content-length"]

@@ -56,9 +56,27 @@ human approval; no browser ID fan-out or selection persistence. Run result CSV/X
 uses only existing persisted snapshots/results and batched evidence counts, at most
 1,000 rows/4 MiB, with the existing literal spreadsheet writer.
 Migration 0012 is additive; downgrade refuses audit loss. Local validation and
-non-migrating runtime opening require 0012 (the configured operator DB, not the
+non-migrating runtime opening now require 0013 (the configured operator DB, not the
 checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
+
+## Target Under Test foundation
+
+**Target != Workspace != Executor.** Project-owned WEB Targets hold only typed
+name/environment/base-URL configuration. A Project has multiple Targets; each
+Campaign explicitly selects zero or one. There is no implicit default or workspace
+conversion. Project Settings configures Targets; Overview displays the selection.
+Source-code repository access is optional for black-box Target execution.
+
+Run creation freezes a hash-covered `web-target-snapshot-v1` with identity, name,
+environment and URL; Results uses that snapshot, never the mutable Target. Legacy
+Campaigns/Runs keep honest absent values and their original snapshot hashes.
+Current executor remains SYNTHETIC: no URL is visited, checked or resolved.
+Migration 0013 adds Target/association tables and a nullable Run snapshot without
+rewriting legacy Campaigns. Used Target/history data prevents downgrade. Local
+start/validation requires 0013 and never auto-migrates. No dependencies added.
+API/ANDROID/IOS and browser/API/mobile executors are planned, not implemented.
+See [Target contracts and URL policy](TARGET_UNDER_TEST.md).
 
 ## Phase 2 complete: accepted preparation boundary
 
@@ -67,7 +85,7 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
-Campaign executor exists. Migration head is 0012; see
+Campaign executor exists. Migration head is 0013; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11

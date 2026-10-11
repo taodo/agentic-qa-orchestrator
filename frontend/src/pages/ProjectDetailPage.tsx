@@ -1,3 +1,4 @@
+import { TargetManager } from '../components/Targets';
 import { useCallback, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getProject, listProjectTasks } from '../api/projects';
@@ -47,6 +48,7 @@ export function ProjectDetailPage({ projectId }: { projectId: string }) {
     {project.loading ? <LoadingState>Loading Project…</LoadingState> : project.error ? <ErrorState error={project.error} retry={() => void project.reload()} /> : project.data && <>
       <section className="panel project-summary"><p className="mono">{project.data.key}</p><p className="prose">{project.data.description || 'No description provided.'}</p>
         <dl className="metadata"><div><dt>Created</dt><dd><DateTime value={project.data.created_at} /></dd></div><div><dt>Updated</dt><dd><DateTime value={project.data.updated_at} /></dd></div></dl></section>
+      <p><Link to={`/projects/${encodeURIComponent(projectId)}/settings`}>Configure Target Under Test</Link> before creating a workspace, or associate a Target explicitly later in Overview.</p>
       <ProjectCampaigns projectId={projectId} />
       <section className="legacy-section"><button className="legacy-toggle" aria-expanded={legacyOpen} aria-controls="legacy-project-workflows" onClick={() => setLegacyOpen(value => !value)}>Legacy workflows</button>
         <p className="hint">Historical Task execution and runtime configuration. Campaign preparation stays separate.</p>
@@ -62,6 +64,8 @@ export function ProjectSettingsPage({ projectId }: { projectId: string }) {
   useWorkspaceContext(projectId);
   return <><PageHeader title="Project Settings" eyebrow="Project / Host configuration" breadcrumb={<Link to={`/projects/${projectId}`}>Back to Project workspaces</Link>} />
     {project.loading ? <LoadingState>Loading Project…</LoadingState> : project.error ? <ErrorState error={project.error} /> : project.data && <section className="panel"><h2>{project.data.name}</h2><p>{project.data.description}</p><p>Project key: {project.data.key}</p></section>}
+    <TargetManager projectId={projectId}/>
+    <h2>Optional repository/workspace runtime</h2><p>These engineering capabilities are separate from Target Under Test; configuring a WEB Target does not require them.</p>
     <p>Trusted runtime configuration is managed by the local operator outside Project persistence. Credentials and workspace paths are never editable here.</p>
     <RuntimeReadiness projectId={projectId} />
   </>;

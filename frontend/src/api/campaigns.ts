@@ -6,7 +6,7 @@ import type { CampaignView, CampaignRequirement, CampaignTestSpecification, Camp
 export const campaignPath = (projectId: string, campaignId?: string) =>
   `/projects/${encodeURIComponent(projectId)}/campaigns${campaignId === undefined ? '' : '/' + encodeURIComponent(campaignId)}`;
 export const listCampaigns = (projectId: string) => request<CollectionPage<CampaignView>>(`${campaignPath(projectId)}?limit=50`);
-export const createCampaign = (projectId: string, body: { name: string; objective?: string }) =>
+export const createCampaign = (projectId: string, body: { name: string; objective?: string; target_id?:string }) =>
   request<CampaignView>(campaignPath(projectId), { method: 'POST', body: JSON.stringify(body) });
 export const getCampaign = (projectId: string, campaignId: string) => request<CampaignView>(campaignPath(projectId, campaignId));
 export const listRequirements = (projectId: string, campaignId: string) => request<CollectionPage<CampaignRequirement>>(`${campaignPath(projectId, campaignId)}/requirements?limit=50`);

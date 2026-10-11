@@ -10,14 +10,14 @@ from qa_sentinel.persistence.database import create_engine, create_session_facto
 from .config import HostError, canonical_path
 
 # Local admission must match the schema used by the current ORM/repositories.
-CURRENT_REVISION = "0012"
+CURRENT_REVISION = "0013"
 
 
 def migration_directory() -> Path:
     checkout = Path(__file__).resolve().parents[3] / "alembic"
     installed = Path(sysconfig.get_path("data")) / "share" / "qa-sentinel" / "alembic"
     for path in (checkout, installed):
-        if (path / "env.py").is_file() and (path / "versions" / "0012_product_ux_v2.py").is_file():
+        if (path / "env.py").is_file() and (path / "versions" / "0013_target_under_test.py").is_file():
             return path
     raise HostError("HOST_MIGRATIONS_MISSING")
 

@@ -44,6 +44,7 @@ class HealthView(RequestModel):
 
 
 class CreateCampaignRequest(RequestModel):
+    target_id: UUID | None = None
     name: StrictStr
     objective: StrictStr | None = None
 

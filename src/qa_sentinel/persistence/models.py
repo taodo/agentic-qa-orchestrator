@@ -49,6 +49,36 @@ class ProjectRow(Base):
     updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
 
 
+class TargetRow(Base):
+    __tablename__ = "targets_under_test"
+    __table_args__ = (
+        UniqueConstraint("id", "project_id", name="uq_targets_owner"),
+        CheckConstraint("type='WEB'", name="ck_targets_type"),
+        CheckConstraint("environment IN ('LOCAL','DEVELOPMENT','STAGING','PRODUCTION','OTHER')", name="ck_targets_environment"),
+        CheckConstraint("length(trim(name)) BETWEEN 1 AND 200 AND length(configuration) <= 4096", name="ck_targets_bounds"),
+        Index("ix_targets_project_id", "project_id", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), ForeignKey("projects.id", name="fk_targets_project", deferrable=True, initially="DEFERRED"), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    configuration: Mapped[Any] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+
+
+class CampaignTargetRow(Base):
+    __tablename__ = "campaign_targets"
+    __table_args__ = (
+        ForeignKeyConstraint(["campaign_id", "project_id"], ["qa_campaigns.id", "qa_campaigns.project_id"], name="fk_campaign_target_campaign", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["target_id", "project_id"], ["targets_under_test.id", "targets_under_test.project_id"], name="fk_campaign_target_target", deferrable=True, initially="DEFERRED"),
+    )
+    campaign_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(36), nullable=False)
+
+
 class QACampaignRow(Base):
     __tablename__ = "qa_campaigns"
     __table_args__ = (
@@ -482,6 +512,7 @@ class QARunRow(Base):
     note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     snapshot_version: Mapped[str] = mapped_column(String(32), nullable=False)
     snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_snapshot: Mapped[Any | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     campaign_snapshot: Mapped[Any] = mapped_column(JSON, nullable=False)
     readiness_at_creation: Mapped[Any] = mapped_column(JSON, nullable=False)
     requirement_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -634,3 +665,10 @@ for _action in ("UPDATE", "DELETE"):
     event.listen(TestEditRow.__table__, "after_create", DDL(
         f"CREATE TRIGGER test_edits_no_{_action.lower()} BEFORE {_action} ON campaign_test_edits "
         "BEGIN SELECT RAISE(ABORT, 'Test review evidence is immutable'); END"))
+
+
+# The target captured at creation cannot be refreshed from mutable Target state.
+event.listen(QARunRow.__table__, "after_create", DDL(
+    "CREATE TRIGGER qa_run_target_no_update BEFORE UPDATE OF target_snapshot ON qa_runs "
+    "WHEN NEW.target_snapshot IS NOT OLD.target_snapshot "
+    "BEGIN SELECT RAISE(ABORT, 'Run target snapshot is immutable'); END"))

@@ -1,3 +1,4 @@
+import { CampaignTarget } from '../components/Targets';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCampaign, CampaignReadinessPage } from './CampaignDetailPage';
@@ -204,7 +205,7 @@ export function ResultsPage() {
 }
 export function ProductOverviewPage() {
   const {base,readiness}=useCampaign();const value=readiness.data;
-  return <><SectionHeader title="Overview"/><p>Specification → Test Design → Execution → Results</p><div className="content-grid">{[['Specification','Upload and analyze supported behavior','specification'],['Test Design','Review, clarify and approve selected cases','test-design'],['Execution','Run an immutable eligible selection','execution'],['Results','Inspect outcomes and evidence','results']].map(([title,description,path])=><section className="panel" key={path}><h3><Link to={base+'/'+path}>{title}</Link></h3><p>{description}</p></section>)}</div>
+  return <><SectionHeader title="Overview"/><CampaignTarget/><p>Specification → Test Design → Execution → Results</p><div className="content-grid">{[['Specification','Upload and analyze supported behavior','specification'],['Test Design','Review, clarify and approve selected cases','test-design'],['Execution','Run an immutable eligible selection','execution'],['Results','Inspect outcomes and evidence','results']].map(([title,description,path])=><section className="panel" key={path}><h3><Link to={base+'/'+path}>{title}</Link></h3><p>{description}</p></section>)}</div>
     {readiness.loading?<LoadingState>Loading workspace counts…</LoadingState>:readiness.error?<ErrorState error={readiness.error}/>:value && <dl className="metadata"><div><dt>Test Design</dt><dd>{value.total_test_specifications} current tests</dd></div><div><dt>Approved tests</dt><dd>{value.approved_test_specifications}</dd></div><div><dt>Source findings needing information</dt><dd>{value.clarification_requirements}</dd></div></dl>}
     <p className="hint">Whole-workspace readiness is available in Audit; it does not control a selected Run's eligibility.</p></>;
 }

@@ -31,6 +31,7 @@ class QACampaign(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     project_id: UUID
     name: CampaignName
+    target_id: UUID | None = None
     objective: CampaignObjective | None = None
     status: CampaignPreparationStatus = CampaignPreparationStatus.DRAFT
     created_at: AwareDatetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -42,6 +43,10 @@ class QACampaign(BaseModel):
         if not changes:
             return self
         return QACampaign.model_validate({**self.model_dump(), **changes,
+            "updated_at": datetime.now(timezone.utc)})
+
+    def associate_target(self, target_id):
+        return QACampaign.model_validate({**self.model_dump(), "target_id": target_id,
             "updated_at": datetime.now(timezone.utc)})
 
     def transition(self, target: CampaignPreparationStatus):
