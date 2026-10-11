@@ -49,7 +49,9 @@ create `qa-run-selection-v2`, validating all selected approvals and supporting
 approved current Requirements without global readiness. Legacy absent selection
 retains v1/global READY behavior. Real global readiness is captured in both;
 V2 does not fabricate READY. Task 4.1 result/evidence executor semantics are unchanged.
-Migration 0012 is additive; downgrade refuses audit loss. API, host authentication,
+Migration 0012 is additive; downgrade refuses audit loss. Local validation and
+non-migrating runtime opening require 0012 (the configured operator DB, not the
+checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
 
 ## Phase 2 complete: accepted preparation boundary

@@ -120,6 +120,15 @@ configuration documented in [Hosting](HOSTING.md#database-and-migration-lifetime
 then explicitly `upgrade head` for that database before restart. Never assume the
 repository default database is the operator database. Local start does not migrate.
 
+Local validation/runtime admission requires revision 0012; older 0011 is not V2
+ready. An `alembic current` against the checkout's default `qa-sentinel.db` says
+nothing about the separate database configured in local JSON. Verify `current`
+using the private migration configuration for that exact operator database.
+Admission checks the bounded revision marker, not every physical schema object;
+a manually stamped/corrupt database still needs explicit schema investigation.
+The regression guard also checks that the required runtime revision matches the
+available migration head, including installed migration-bundle discovery.
+
 ## Validation and manual review
 
 Automated coverage is offline and scoped to the changed components. No external
