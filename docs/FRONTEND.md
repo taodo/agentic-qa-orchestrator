@@ -1,3 +1,15 @@
+# Campaign Runs UX (Task 3.4)
+
+Campaign navigation includes Runs: bounded list, READY-only explicit Create and
+immutable Run detail with Requirement/Test snapshot pages. Start Synthetic Run
+runs synchronously, prevents pending duplicates and refreshes Run/results on
+settlement. Execution status and QA outcome remain separate; COMPLETED + FAIL
+is expected. All results are explicitly synthetic: no external target is tested.
+Create retry retains the same intent key/note, new intent allocates a fresh key;
+there is no automatic mutation retry. Existing CSRF, safe errors and stale-navigation
+guards apply. No editable outcomes, polling, Stop/resume or fake evidence.
+[Complete Run contracts, fixture and limitations](QA_RUNS.md).
+
 # Frontend operator dashboard (Tasks 14–24)
 
 ## Operations monitoring (Task 24)
@@ -376,3 +388,12 @@ unchanged. Sign-in recovery requires fresh history/state inspection, and sign-ou
 does not cancel backend work. Narrow topbars wrap, keeping logout accessible.
 Production CSP allows existing same-origin bundles/styles and blocks external
 script assets. [Hosted access](HOSTED_ACCESS.md) documents expiry and trust limits.
+
+## Task 3.5 recovery UX
+
+[Preparation recovery](PREPARATION_RECOVERY.md) supersedes the original single-attempt
+and unsupported-clarification limitations: explicit bounded retry history, inert
+addendum evidence and separate revision into new Requirement identities. Current
+readiness/coverage/new Run selection exclude superseded Requirements and their
+dependent Tests. Historical content/approvals remain audit evidence. No automatic
+retry, approval transfer, executor or auth change.

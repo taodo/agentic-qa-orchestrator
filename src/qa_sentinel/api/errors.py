@@ -7,8 +7,48 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.TARGET_NOT_FOUND: (404, "Target not found in the requested Project"),
+    Code.DOCUMENT_INVALID: (422, "Document format or contents are unsupported, malformed, empty or unsafe"),
+    Code.RUN_SELECTION_INVALID: (409, "Select only current approved tests with valid approved source Requirements"),
+    Code.EXTRACTION_ATTEMPT_NOT_FOUND: (404, "Extraction attempt not found in this Campaign"),
+    Code.EXTRACTION_RETRY_NOT_ALLOWED: (409, "Extraction is not eligible for another retry"),
+    Code.EXTRACTION_RETRY_CONFLICT: (409, "Retry attempt already started; inspect its history"),
+    Code.CLARIFICATION_INVALID: (422, "Clarification must contain bounded valid text"),
+    Code.REQUIREMENT_REVISION_CONFLICT: (409, "Requirement revision is stale, conflicting or unavailable"),
+    Code.RUN_INVALID_STATE: (409, "QA Run lifecycle does not permit this action"),
+    Code.RUN_EXECUTION_FAILED: (409, "Synthetic execution could not complete"),
+    Code.CAMPAIGN_NOT_READY_FOR_RUN: (409, "Campaign preparation is not READY for a QA Run"),
+    Code.RUN_NOT_FOUND: (404, "QA Run not found in the requested Campaign"),
+    Code.RUN_CAMPAIGN_MISMATCH: (409, "QA Run does not belong to the requested Campaign"),
+    Code.INVALID_IDEMPOTENCY_KEY: (422, "Invalid Run idempotency key"),
+    Code.RUN_IDEMPOTENCY_CONFLICT: (409, "Run idempotency key conflicts with the original request intent"),
+    Code.RUN_SNAPSHOT_SIZE_LIMIT: (413, "Complete Run snapshot exceeds supported bounds"),
+    Code.RUN_REQUEST_SIZE_LIMIT: (413, "Run request exceeds supported size"),
+    Code.REVIEW_SIZE_LIMIT: (413, "Review request exceeds supported size"),
+    Code.REVIEW_NOT_REVIEWABLE: (409, "Object is not ready for explicit approval"),
+    Code.REVIEW_CONFLICT: (409, "Approval intent conflicts with the immutable review evidence"),
+    Code.REVIEW_EVIDENCE_INVALID: (409, "Review evidence does not match immutable content"),
+    Code.CAMPAIGN_TEST_CHILD_NOT_FOUND: (404, "Campaign test record not found"),
+    Code.CAMPAIGN_TEST_CHILD_MISMATCH: (409, "Test record does not belong to the requested Campaign"),
+    Code.GENERATION_NOT_CONFIGURED: (409, "Test generation is not configured"),
+    Code.GENERATION_REQUIREMENT_NOT_APPROVED: (409, "Approve all selected current Requirements before generating tests"),
+    Code.GENERATION_CONTEXT_LIMIT: (422, "Selected Requirements exceed the generation context limit"),
+    Code.GENERATION_RECONCILIATION_REQUIRED: (409, "Unresolved generation requires explicit reconciliation"),
+    Code.CAMPAIGN_SOURCE_NOT_FOUND: (404, "Campaign source not found"),
+    Code.CAMPAIGN_SOURCE_MISMATCH: (409, "Source does not belong to the requested Campaign"),
+    Code.CAMPAIGN_REQUIREMENT_NOT_FOUND: (404, "Campaign requirement not found"),
+    Code.CAMPAIGN_REQUIREMENT_MISMATCH: (409, "Requirement does not belong to the requested Campaign"),
+    Code.SOURCE_SIZE_LIMIT: (413, "Source exceeds supported size"),
+    Code.SOURCE_NOT_INGESTED: (409, "Source is not ingested"),
+    Code.EXTRACTION_NOT_CONFIGURED: (409, "Requirement extraction is not configured"),
+    Code.EXTRACTION_CONTEXT_LIMIT: (422, "Complete source exceeds the extraction context limit"),
+    Code.EXTRACTION_RECONCILIATION_REQUIRED: (409, "Unresolved extraction requires explicit reconciliation"),
+
     Code.PROJECT_NOT_FOUND: (404, "Project not found"),
     Code.TASK_NOT_FOUND: (404, "Task not found"),
+    Code.CAMPAIGN_NOT_FOUND: (404, "Campaign not found"),
+    Code.PROJECT_CAMPAIGN_MISMATCH: (409, "Campaign does not belong to the requested Project"),
+    Code.CAMPAIGN_INVALID_TRANSITION: (409, "Campaign preparation transition is invalid"),
     Code.PROJECT_KEY_EXISTS: (409, "Project key already exists"),
     Code.PROJECT_TASK_MISMATCH: (409, "Task does not belong to the requested Project"),
     Code.PROJECT_RUNTIME_NOT_CONFIGURED: (409, "Project runtime is not configured"),
@@ -27,7 +67,7 @@ ERROR_MAPPING = {
     Code.PERSISTENCE_ERROR: (500, "Persistence operation failed"),
 }
 
-ERROR_RESPONSES = {status: {"model": ErrorEnvelope} for status in (404, 409, 422, 500)}
+ERROR_RESPONSES = {status: {"model": ErrorEnvelope} for status in (404, 409, 413, 422, 500)}
 
 
 def error_response(status, code, message):
@@ -41,6 +81,10 @@ async def application_error_handler(request, exc: ApplicationError):
 
 
 async def validation_error_handler(request, exc: RequestValidationError):
+    from .source_body_limit import RUN_PATH
+    if request.method == "POST" and RUN_PATH.fullmatch(request.url.path) and any(
+            e["loc"] == ("body", "idempotency_key") for e in exc.errors()):
+        return error_response(422, "INVALID_IDEMPOTENCY_KEY", "Invalid Run idempotency key")
     return error_response(422, "REQUEST_VALIDATION_ERROR", "Request validation failed")
 
 

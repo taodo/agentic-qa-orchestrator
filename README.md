@@ -1,8 +1,28 @@
 # Agentic QA Orchestrator
 
-**Agentic QA Orchestrator** is a portfolio-grade QA engineering platform that combines reasoning agents with deterministic execution, explicit workflow gates, durable evidence, and controlled source mutation.
+**Agentic QA Orchestrator** is a QA platform for preparing requirements, test specifications, human review and coverage within Project-owned QA Campaigns.
 
-The project started as **QA Sentinel** and is evolving toward an end-to-end QA orchestration workflow for real software projects.
+The primary browser journey is **Specification → Test Design → Execution → Results**.
+Open a Project configure a [WEB Target Under Test](docs/TARGET_UNDER_TEST.md), then create a QA
+workspace (the existing QACampaign internally) and explicitly select its Target.
+Upload PDF/DOCX/Markdown/text, explicitly analyze supported behavior, review findings
+and generate test cases. Review, add information and approve selected ready tests;
+export CSV/XLSX; select approved eligible tests for an immutable synthetic Run;
+inspect outcomes and truthful evidence. Unresolved tests do not block unrelated
+approved eligible tests. Images/layouts are not analyzed; no OCR or vision is added.
+
+[Product UX V2](docs/PRODUCT_UX_V2.md) documents formats, bounds, human-version
+provenance, explicit approvals, selected Run eligibility, Audit and migrations 0012/0013.
+Apply migrations explicitly to the backed-up operator database before using V2;
+startup never auto-migrates. Existing preparation and legacy Task routes remain
+available under Advanced / Audit and Legacy workflows.
+
+Campaign Runs remain deterministic **synthetic demonstrations**, with no external
+target tested. Individual test FAIL continues remaining tests; execution FAILED
+means a system failure. Trusted real-local Task/runtime infrastructure remains
+separate. [QA Runs](docs/QA_RUNS.md) records the original compatible lifecycle.
+
+The project started as **QA Sentinel**. Source mutation and repair are historical infrastructure, not the product's primary journey.
 
 > **Agents reason. Tools act. Evidence records reality. The orchestrator controls progression.**
 
@@ -25,9 +45,13 @@ This repository is designed to show more than a collection of AI prompts. It foc
 
 The core idea is simple: an LLM may propose or reason about work, but it does **not** directly control the filesystem, shell, workflow state, or final approval.
 
-## Current workflow
+Phase 2 preparation now includes [explicit human approval, Requirement/Test
+traceability and derived Campaign readiness](docs/CAMPAIGN_REVIEW.md). Readiness
+is separate from Campaign preparation status and does not execute tests.
 
-A normal successful task progresses through:
+## Legacy Task workflow
+
+An existing legacy Task progresses through:
 
 ```text
 CREATED
@@ -176,6 +200,36 @@ Real local mode can bind a Project to an explicitly configured local workspace a
 - persisted workflow evidence
 
 Real local mode is intentionally loopback-only and operator-controlled.
+
+## Daily local start — already configured workspace
+
+After one-time Python/Node dependency setup, an existing Project, current database
+and trusted local config, use this from the source/editable checkout:
+
+```powershell
+$env:OPENAI_API_KEY = "sk-..."
+qa-sentinel local start --config .\qa-sentinel.local.json
+```
+
+Use your own key only in the current process environment; never save it in JSON,
+source or chat. Startup checks its presence, not provider connectivity or validity.
+
+- **Normal restart:** stop with Ctrl+C, then run the same command again:
+  frontend build → authoritative local validation → foreground loopback server.
+- **Frontend changed:** no extra step; start runs `npm run build` every time.
+  Configure `frontend_dist` to this checkout's `frontend/dist`. Node/npm and
+  already-installed frontend dependencies are required; start never runs `npm ci`.
+- **Database migration required:** startup stops, showing safe current/required
+  schema identifiers when available. No migration runs automatically. Stop hosts,
+  inspect the applicable migrations and explicitly upgrade the selected database
+  before starting again. See [manual DB preparation](docs/HOSTING.md#local-one-command-start).
+
+Startup runs no test suite or target proving action. Existing explicitly queued
+execution requests retain the normal host worker semantics after serve starts.
+Lower-level `qa-sentinel local validate --config ...` and
+`qa-sentinel serve --config ...` remain available for troubleshooting. Unlike
+`local start`, lower-level `serve` retains its existing migration/bootstrap behavior.
+See [local onboarding and hosting](docs/HOSTING.md#local-one-command-start).
 
 ## Quick start — synthetic demo
 

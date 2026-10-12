@@ -5,7 +5,22 @@ Each domain route validates transport input, calls one application use case and
 serializes its frozen DTO. Routes have no ORM, repositories, workflow engines,
 model calls, tools or transaction ownership. Core and application code do not
 depend on API contracts. Task 13 required no migration; Task 20 adds an operational
-job table through 0003 without changing core workflow policies.
+job table through 0003 without changing core workflow policies. Task 2.1 adds
+Project-owned campaign preparation through 0004; see [QA Campaigns](CAMPAIGNS.md).
+Task 2.2 adds scoped source ingestion and explicit structured extraction through
+0005; see [Campaign requirements](REQUIREMENTS.md) for bounds and safe outcomes.
+
+Task 2.3 adds executor-neutral test import/design through 0006; see
+[Test specifications](TEST_SPECIFICATIONS.md) for exact import grammars, bounds,
+traceability, idempotency and generation usage. Task 2.4 adds [explicit approval,
+review evidence, traceability and derived readiness](CAMPAIGN_REVIEW.md) through
+0007. Task 3.3 adds [QA Run creation and immutable bounded snapshots](QA_RUNS.md)
+through 0008. Task 3.4 adds POST /runs/{run_id}/start for synchronous pure synthetic
+execution and migration 0009 for a nullable safe error code. Creation requires READY
+and performs no execution. Start requires CREATED; normal assertion FAIL continues
+and returns COMPLETED + FAIL, whereas system failure returns FAILED with a safe code.
+See QA_RUNS.md for exact lifecycle and snapshot boundaries. Existing auth/CSRF
+and workflow APIs remain unchanged.
 
 ## Application factory and host composition
 
@@ -50,6 +65,26 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | PATCH /api/v1/projects/{project_id} | update_project → ProjectView |
 | GET /api/v1/projects/{project_id}/tasks | list_tasks_for_project → CollectionPage[TaskSummary] |
 | POST /api/v1/projects/{project_id}/tasks | create_task → TaskSummary (201) |
+| POST /api/v1/projects/{project_id}/campaigns | create_campaign → QACampaignView (201) |
+| GET /api/v1/projects/{project_id}/campaigns | list_project_campaigns → CollectionPage[QACampaignView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id} | get_campaign → QACampaignView |
+| PATCH /api/v1/projects/{project_id}/campaigns/{campaign_id} | update_campaign → QACampaignView |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/transitions | transition_campaign → QACampaignView |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources | ingest_campaign_source → CampaignSourceView (201) |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources | list_campaign_sources → CollectionPage[CampaignSourceView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources/{source_id} | get_campaign_source → CampaignSourceDetail |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/sources/{source_id}/extract-requirements | extract_campaign_requirements → ExtractionView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/requirements | list_campaign_requirements → CollectionPage[CampaignRequirementView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/requirements/{requirement_id} | get_campaign_requirement → CampaignRequirementView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/model-usage | get_campaign_model_usage → CampaignModelUsage |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-imports | import_campaign_tests → TestImportView (201) |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-imports | list_campaign_test_imports → CollectionPage[TestImportView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-imports/{import_id} | get_campaign_test_import → TestImportDetail |
+| POST /api/v1/projects/{project_id}/campaigns/{campaign_id}/generate-tests | generate_campaign_tests → TestGenerationView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-generations | list_campaign_test_generations → CollectionPage[TestGenerationView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-generations/{generation_id} | get_campaign_test_generation → TestGenerationView |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-specifications | list_campaign_test_specifications → CollectionPage[TestSpecificationView] |
+| GET /api/v1/projects/{project_id}/campaigns/{campaign_id}/test-specifications/{test_spec_id} | get_campaign_test_specification → TestSpecificationView |
 | GET /api/v1/tasks/{task_id} | get_task_detail → TaskDetail |
 | GET /api/v1/tasks/{task_id}/reconciliation | assess_task_reconciliation → ReconciliationAssessmentView |
 | POST /api/v1/tasks/{task_id}/run | run_task → TaskDetail |
@@ -68,6 +103,11 @@ Domain routes use `/api/v1`. Process health is **GET /health**, returning
 | GET /api/v1/tasks/{task_id}/decisions | get_task_decisions → CollectionPage[DecisionView] |
 | GET /api/v1/tasks/{task_id}/gates | get_task_gate_evaluations → CollectionPage[GateEvaluationView] |
 | GET /api/v1/tasks/{task_id}/invocations | get_task_invocations → CollectionPage[InvocationView] |
+| GET /api/v1/tasks/{task_id}/model-usage | get_task_model_usage → TaskModelUsage |
+
+[Phase 1 model usage](MODEL_USAGE.md) is a separate bounded aggregate, with
+limit default/max 200 and an optional execution_job_id evidence-time window.
+It exposes no provider/source payloads and does not execute workflows.
 
 All collections accept `?limit=50`, capped at 200 except timeline (500).
 For the existing Task 13 collections, zero, negative, non-integer and over-maximum values produce 422; values are never
@@ -215,3 +255,12 @@ Global execution overlap retains safe RUNTIME_STOPPED. /run never enqueues; Resu
 remains synchronous and separate. Host lifespan owns the worker; a standalone API
 only persists requests unless its embedding explicitly supplies a worker. Preview
 job routes stay Basic-protected. [Ordering/restart limits](EXECUTION_JOBS.md).
+
+## Task 3.5 recovery endpoints
+
+[Preparation recovery](PREPARATION_RECOVERY.md) supersedes the original single-attempt
+and unsupported-clarification limitations: explicit bounded retry history, inert
+addendum evidence and separate revision into new Requirement identities. Current
+readiness/coverage/new Run selection exclude superseded Requirements and their
+dependent Tests. Historical content/approvals remain audit evidence. No automatic
+retry, approval transfer, executor or auth change.

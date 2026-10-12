@@ -17,7 +17,13 @@ from .status import add_runtime_status
 
 class FrontendFiles(StaticFiles):
     """StaticFiles owns containment/lookup. Only known browser routes get fallback."""
-    UI_ROUTE = re.compile(r"/(?:operations|projects(?:/[A-Za-z0-9_-]+)?|tasks/[A-Za-z0-9_-]+)/?$")
+    # Keep aligned with the explicit browser routes in frontend/src/app/App.tsx.
+    UI_ROUTE = re.compile(
+        r"/(?:operations|projects(?:/[A-Za-z0-9_-]+"
+        r"(?:/settings|/campaigns/[A-Za-z0-9_-]+"
+        r"(?:/(?:requirements|test-specifications|traceability|readiness|specification|test-design|execution|results|audit|runs(?:/[A-Za-z0-9_-]+)?))?"
+        r")?)?|tasks/[A-Za-z0-9_-]+)/?$"
+    )
     ASSET_SUFFIXES = {".js", ".css", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".woff", ".woff2", ".txt"}
 
     async def __call__(self, scope, receive, send):
@@ -43,13 +49,13 @@ class FrontendFiles(StaticFiles):
         return await super().get_response(path, scope)
 
 
-def create_host_app(config: HostConfig):
+def create_host_app(config: HostConfig, *, existing_database=False):
     credentials = preview_credentials() if config.mode == "preview-demo" else None
     operator = hosted_credentials() if config.mode == "hosted-demo" else None
     if operator is not None:
         preflight_storage(config)
     root = validate_frontend(config)  # Full-stack readiness before migration/seed IO.
-    composed = compose(config)
+    composed = compose(config, existing_database=True) if existing_database else compose(config)
     try:
         app = create_api_app(composed.application)
         if credentials is not None:

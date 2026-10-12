@@ -10,7 +10,7 @@ import { project, task, page, event, response, deferred, reconciliation } from '
 function open(path = '/projects') { return render(<MemoryRouter initialEntries={[path]}><App /></MemoryRouter>); }
 function mockRoutes(handler: (url: string, options: RequestInit) => Promise<Response> | Response) {
   return vi.mocked(fetch).mockImplementation((input, options = {}) => Promise.resolve(
-    String(input).endsWith('/reconciliation') ? response(reconciliation(String(input).split('/').at(-2))) : String(input).includes('/executions?') ? response(page([])) : handler(String(input), options)));
+    String(input).includes('/campaigns?') ? response(page([])) : String(input).endsWith('/reconciliation') ? response(reconciliation(String(input).split('/').at(-2))) : String(input).includes('/executions?') ? response(page([])) : handler(String(input), options)));
 }
 function taskReads(value = task, events = [event('z', 'STATE_TRANSITIONED')]) {
   return mockRoutes(url => url.includes('/timeline?') ? response(page(events)) : response(value));
@@ -84,6 +84,7 @@ describe('Project Detail and Task creation', () => {
   it('renders only the Project task list returned by its scoped endpoint', async () => {
     const calls = mockRoutes(url => url.includes('/tasks?') ? response(page([task])) : response(project)); open('/projects/project-a');
     expect(await screen.findByRole('heading', { name: project.name })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Legacy workflows' }));
     expect(await screen.findByRole('link', { name: task.title })).toHaveAttribute('href', '/tasks/task-a');
     expect(screen.getByText(project.description)).toBeInTheDocument(); expect(document.body).not.toHaveTextContent('Project B');
     expect(calls.mock.calls.map(([url]) => url)).toEqual(expect.arrayContaining(['/api/v1/projects/project-a', '/api/v1/projects/project-a/tasks?limit=50']));
@@ -93,7 +94,7 @@ describe('Project Detail and Task creation', () => {
     const calls = mockRoutes((url, options) => {
       if (options.method === 'POST') { created = true; return response(task, 201); }
       return url.includes('/tasks?') ? response(page(created ? [task] : [])) : response(project);
-    }); open('/projects/project-a'); await screen.findByText('No Tasks in this Project yet.');
+    }); open('/projects/project-a'); await screen.findByRole('button', { name: 'Legacy workflows' }); fireEvent.click(screen.getByRole('button', { name: 'Legacy workflows' })); await screen.findByText('No Tasks in this Project yet.');
     fireEvent.change(screen.getByLabelText(/Title/), { target: { value: task.title } });
     fireEvent.change(screen.getByLabelText(/Requirement/), { target: { value: task.requirement } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));
@@ -117,6 +118,7 @@ describe('Project Detail and Task creation', () => {
     render(<MemoryRouter initialEntries={['/projects/project-a']}><Link to="/projects/project-b">Switch Project</Link><App /></MemoryRouter>);
     fireEvent.click(screen.getByRole('link', { name: 'Switch Project' }));
     expect(await screen.findByRole('heading', { name: 'Project B' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Legacy workflows' }));
     expect(await screen.findByRole('link', { name: 'Task B' })).toBeInTheDocument();
     await act(async () => { oldProject.resolve(response(project)); oldTasks.resolve(response(page([task]))); });
     expect(screen.getByRole('heading', { name: 'Project B' })).toBeInTheDocument();
@@ -124,7 +126,7 @@ describe('Project Detail and Task creation', () => {
   });
   it('keeps the Task form on server error without changing ownership', async () => {
     mockRoutes((url, options) => options.method === 'POST' ? response({ error: { code: 'INVALID_INPUT', message: 'Invalid application input' } }, 422) : url.includes('/tasks?') ? response(page([])) : response(project));
-    open('/projects/project-a'); await screen.findByText('No Tasks in this Project yet.');
+    open('/projects/project-a'); await screen.findByRole('button', { name: 'Legacy workflows' }); fireEvent.click(screen.getByRole('button', { name: 'Legacy workflows' })); await screen.findByText('No Tasks in this Project yet.');
     fireEvent.change(screen.getByLabelText(/Title/), { target: { value: task.title } });
     fireEvent.change(screen.getByLabelText(/Requirement/), { target: { value: task.requirement } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Task' }));

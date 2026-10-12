@@ -33,7 +33,7 @@ describe('Operations dashboard', () => {
   it('routes with primary navigation, summary text and accessible tables', async () => {
     routes(); open();
     expect(await screen.findByRole('table', { name: 'Task states and execution lifecycles' })).toBeInTheDocument();
-    expect(within(screen.getByRole('navigation', { name: 'Primary' })).getByRole('link', { name: 'Operations' })).toHaveAttribute('aria-current', 'page');
+    expect(within(screen.getByRole('navigation', { name: 'Operational' })).getByRole('link', { name: 'Operations' })).toHaveAttribute('aria-current', 'page');
     for (const name of ['Projects', 'Tasks', 'Running', 'Queued', 'Blocked', 'Reconciliation attention']) expect(screen.getByLabelText('System summary')).toHaveTextContent(name);
     expect(screen.getByRole('region', { name: 'Task summaries' })).toHaveAttribute('tabindex', '0');
     expect(screen.getByRole('columnheader', { name: 'Task state' })).toHaveAttribute('scope', 'col');

@@ -82,11 +82,14 @@ it('discards late readiness after Project navigation', async () => {
     const url = String(input);
     if (url === '/host/runtime-status/project-a') return old.promise;
     if (url === '/host/runtime-status/project-b') return Promise.resolve(response({ ...configured, project_id: b.id, runtime_configured: false, model_ready: null, test_targets_configured: false }));
-    return Promise.resolve(response(url.includes('/tasks?') ? page([]) : url.endsWith('project-a') ? project : b));
+    return Promise.resolve(response((url.includes('/tasks?') || url.includes('/campaigns?')) ? page([]) : url.endsWith('project-a') ? project : b));
   });
   render(<MemoryRouter initialEntries={['/projects/project-a']}><Link to="/projects/project-b">Switch Project</Link><App /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole('button', { name: 'Legacy workflows' }));
   await screen.findByText('Checking this host…');
   fireEvent.click(screen.getByRole('link', { name: 'Switch Project' }));
+  await screen.findByRole('heading', { name: 'Project B' });
+  fireEvent.click(screen.getByRole('button', { name: 'Legacy workflows' }));
   expect(await screen.findByText('Runtime: Not configured for this host')).toBeVisible();
   await act(async () => old.resolve(response(configured)));
   expect(screen.queryByText('Runtime: Configured for this host')).not.toBeInTheDocument();

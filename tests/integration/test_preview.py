@@ -216,3 +216,36 @@ def test_deployment_manifest_and_image_inputs():
     assert 'CMD ["python", "-m", "qa_sentinel.host.container"]' in docker
     assert 'QA_SENTINEL_PREVIEW_PASSWORD' not in docker and 'OPENAI_API_KEY' not in docker
     assert '!frontend/package-lock.json' in (root / '.dockerignore').read_text()
+
+
+def test_campaign_routes_keep_preview_basic_access(config):
+    with TestClient(create_host_app(preview(config))) as client:
+        project = client.get('/api/v1/projects', headers=header()).json()['items'][0]
+        base = f"/api/v1/projects/{project['id']}/campaigns"
+        assert client.get(base).status_code == 401
+        assert client.post(base, json={'name':'Smoke'}).status_code == 401
+        created = client.post(base, headers=header(), json={'name':'Smoke'})
+        assert created.status_code == 201
+        assert client.get(base, headers=header()).json()['items'][0]['status'] == 'DRAFT'
+        assert client.get(f"/api/v1/projects/{project['id']}/tasks", headers=header()).json()['items'] == []
+
+
+def test_preview_content_keeps_basic_access_and_no_real_extractor(config, monkeypatch):
+    def forbidden(*args, **kwargs): pytest.fail('Preview cannot construct a real extractor')
+    monkeypatch.setattr(composition.RequirementExtractor, '__init__', forbidden)
+    monkeypatch.setattr(composition.TestSpecificationGenerator, '__init__', forbidden)
+    web = create_host_app(preview(config))
+    app = web.state.host_composition.application
+    assert app._requirement_extractor is None and app._test_generator is None
+    project = app.list_projects().items[0]
+    campaign = app.create_campaign(project.id, name='Synthetic PRD')
+    with TestClient(web) as client:
+        path = f'/api/v1/projects/{project.id}/campaigns/{campaign.id}'
+        body = dict(name='Synthetic spec', source_type='TEXT', content='Synthetic users can sign in.')
+        assert client.post(path+'/sources', json=body).status_code == 401
+        source = client.post(path+'/sources', json=body, headers=header())
+        assert source.status_code == 201
+        result = client.post(path+'/sources/'+source.json()['id']+'/extract-requirements', headers=header())
+        assert result.status_code == 409 and result.json()['error']['code'] == 'EXTRACTION_NOT_CONFIGURED'
+        assert client.get(path+'/requirements', headers=header()).json()['items'] == []
+        assert app.get_campaign(project.id, campaign.id) == campaign

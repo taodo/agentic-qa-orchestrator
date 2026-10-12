@@ -21,10 +21,18 @@ class ModelSettings(FrozenModel):
     max_output_tokens: int = Field(default=8192, ge=256, le=32768, strict=True)
 
 
+class ContextSelection(FrozenModel):
+    original_chars: Count
+    selected_chars: Count
+    selected_bytes: Count
+    reused_results: Count = 0
+
+
 class ModelRequest(ModelSettings):
     agent_name: AgentName
     system_instructions: str = Field(min_length=1, max_length=8192)
     user_input: str = Field(min_length=1, max_length=60000)
+    context_selection: ContextSelection | None = None
 
 
 class ModelMetadata(FrozenModel):
@@ -34,8 +42,10 @@ class ModelMetadata(FrozenModel):
     input_tokens: Count | None = None
     output_tokens: Count | None = None
     total_tokens: Count | None = None
+    reasoning_tokens: Count | None = None
+    context_selection: ContextSelection | None = None
     latency_ms: float = Field(ge=0, allow_inf_nan=False)
-    status: str = Field(default="completed", pattern=r"^completed$")
+    status: str = Field(default="completed", pattern=r"^(completed|incomplete|failed|cancelled|queued|in_progress)$")
 
 
 class ModelResponse(FrozenModel):
@@ -65,11 +75,13 @@ class ProviderErrorCategory(StrEnum):
 
 class ModelError(Exception):
     """Fixed reason codes only: never stores provider exception/request/payload."""
-    def __init__(self, category: ProviderErrorCategory, *, changed_input: bool = False):
+    def __init__(self, category: ProviderErrorCategory, *, changed_input: bool = False,
+                 metadata: ModelMetadata | None = None):
         self.category = ProviderErrorCategory(category)
         self.code = "MODEL_" + self.category.value
         super().__init__(self.code)
         self.changed_input = changed_input
+        self.metadata = metadata
         self.error_type = ErrorType.AGENT_ERROR
         self.disposition = FailureDisposition.STRUCTURAL
         self.blocker_reason = None

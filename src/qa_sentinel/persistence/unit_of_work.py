@@ -3,6 +3,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from .read_queries import ReadQueries
 from .operations import OperationalQueries
 from .execution_jobs import ExecutionJobRepository
+from .qa_runs import QARunRepository
+from .campaigns import QACampaignRepository
+from .targets import TargetRepository
+from .campaign_review import CampaignReviewRepository
+from .campaign_content import CampaignContentRepository
+from .test_specifications import TestSpecificationRepository
 from .repositories import (
     TaskRepository, ArtifactRepository, InvocationRepository, HistoryRepository,
     FailureFingerprintRepository, RequirementRepository, AcceptanceCriterionRepository,
@@ -21,6 +27,12 @@ class UnitOfWork:
         self.session = self.session_factory()
         self.tasks = TaskRepository(self.session)
         self.projects = ProjectRepository(self.session)
+        self.campaigns = QACampaignRepository(self.session)
+        self.targets = TargetRepository(self.session)
+        self.qa_runs = QARunRepository(self.session)
+        self.campaign_reviews = CampaignReviewRepository(self.session)
+        self.campaign_content = CampaignContentRepository(self.session)
+        self.test_specifications = TestSpecificationRepository(self.session)
         self.execution_jobs = ExecutionJobRepository(self.session)
         self.reads = ReadQueries(self.session)
         self.operations = OperationalQueries(self.session)

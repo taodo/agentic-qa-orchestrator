@@ -150,11 +150,12 @@ class AgentExecutor:
                 mutation_result=getattr(failure, "application_result", None), metadata=metadata, owner="TOOL")
         except (SchemaOutputError, ValidationError) as failure:
             return self._failed(invocation, ErrorType.SCHEMA_ERROR, "OUTPUT_SCHEMA_INVALID",
-                FailureDisposition.CORRECTABLE, getattr(failure, "changed_input", False))
+                FailureDisposition.CORRECTABLE, getattr(failure, "changed_input", False), metadata=metadata)
         except ModelError as failure:
             return self._failed(invocation, failure.error_type, failure.code, failure.disposition,
                 failure.changed_input, failure.blocker_reason,
-                schema_correction_planned=(failure.error_type == ErrorType.SCHEMA_ERROR and failure.changed_input))
+                schema_correction_planned=(failure.error_type == ErrorType.SCHEMA_ERROR and failure.changed_input),
+                metadata=failure.metadata)
         except AgentError as failure:
             return self._failed(invocation, ErrorType.AGENT_ERROR, "SIMULATED_AGENT_FAILURE",
                                 failure.disposition, failure.changed_input, failure.blocker_reason)

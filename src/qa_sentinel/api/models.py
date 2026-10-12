@@ -1,5 +1,7 @@
+from uuid import UUID
 """Transport input and error schemas; no persistence or workflow behavior."""
-from pydantic import BaseModel, ConfigDict, StrictStr, model_validator
+from pydantic import BaseModel, ConfigDict, StrictStr, model_validator, Field
+from qa_sentinel.application import CampaignPreparationStatus, SourceType, ImportFormat
 
 
 class RequestModel(BaseModel):
@@ -39,3 +41,50 @@ class ErrorEnvelope(RequestModel):
 
 class HealthView(RequestModel):
     status: str = "ok"
+
+
+class CreateCampaignRequest(RequestModel):
+    target_id: UUID | None = None
+    name: StrictStr
+    objective: StrictStr | None = None
+
+
+class UpdateCampaignRequest(RequestModel):
+    name: StrictStr | None = None
+    objective: StrictStr | None = None
+
+    @model_validator(mode="after")
+    def non_null_name(self):
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("Campaign name cannot be null")
+        return self
+
+
+class TransitionCampaignRequest(RequestModel):
+    status: CampaignPreparationStatus
+
+
+class IngestSourceRequest(RequestModel):
+    name: StrictStr
+    source_type: SourceType
+    content: StrictStr = Field(max_length=65536)
+
+
+class ExtractRequirementsRequest(RequestModel):
+    pass
+
+
+class ImportTestsRequest(RequestModel):
+    name: StrictStr
+    format: ImportFormat
+    content: StrictStr = Field(max_length=65536)
+
+
+class GenerateTestsRequest(RequestModel):
+    requirement_ids: tuple[UUID, ...] = Field(min_length=1, max_length=20)
+
+
+class ClarificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_key: str = Field(min_length=1,max_length=128,pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+    content: str = Field(min_length=1,max_length=4000)

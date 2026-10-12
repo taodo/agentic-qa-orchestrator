@@ -95,17 +95,23 @@ class ControlledRepositoryExecution:
             else:
                 self._record(invocation, "MODEL_TURN_STARTED", dict(turn_index=index,
                     model=invocation.model, reasoning_effort=invocation.reasoning_effort))
+                metadata = None
                 try:
                     response = runtime.run(invocation.agent, context.model_copy(update={"repository_results": tuple(evidence)}))
-                    if not isinstance(response, ModelResponse) or type(response.parsed_output) is not expected:
+                    if not isinstance(response, ModelResponse):
+                        raise ValueError("Invalid turn envelope")
+                    metadata = ModelMetadata.model_validate(response.metadata.model_dump())
+                    if type(response.parsed_output) is not expected:
                         raise ValueError("Invalid turn envelope")
                     turn = expected.model_validate(response.parsed_output.model_dump(mode="json"))
-                    metadata = ModelMetadata.model_validate(response.metadata.model_dump())
                 except ModelError as failure:
-                    self._record(invocation, "MODEL_TURN_FAILED", dict(turn_index=index, code=failure.code))
+                    self._record(invocation, "MODEL_TURN_FAILED", dict(turn_index=index, code=failure.code,
+                        **({"model_metadata": failure.metadata.model_dump(mode="json")}
+                           if failure.metadata is not None else {})))
                     raise
                 except (ValueError, ValidationError):
-                    self._record(invocation, "MODEL_TURN_FAILED", dict(turn_index=index, code="OUTPUT_SCHEMA_INVALID"))
+                    self._record(invocation, "MODEL_TURN_FAILED", dict(turn_index=index, code="OUTPUT_SCHEMA_INVALID",
+                        **({"model_metadata": metadata.model_dump(mode="json")} if metadata is not None else {})))
                     raise SchemaOutputError() from None
                 # Only validated turns and safe scalar metadata are persisted, not SDK responses.
                 self._record(invocation, "MODEL_TURN_COMPLETED", dict(turn_index=index,

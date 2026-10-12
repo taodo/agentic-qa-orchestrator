@@ -30,7 +30,7 @@ def parser(*, target_errors=False):
     serve.add_argument("--port", type=int, default=None, help="TCP port (default: 8000)")
     serve.add_argument("--database", type=Path, help="File-backed SQLite path")
     serve.add_argument("--frontend-dist", type=Path, help="Built Vite directory (demo default: frontend/dist)")
-    local = commands.add_parser("local", help="Generate or validate explicit trusted local configuration")
+    local = commands.add_parser("local", help="Initialize, validate or start explicit trusted local configuration")
     setup = local.add_subparsers(dest="local_command", required=True)
     init = setup.add_parser("init", help="Write one Project binding; no model calls or execution",
         description="Requires existing Project identity and absolute database/frontend/workspace paths. No API key needed.")
@@ -47,6 +47,8 @@ def parser(*, target_errors=False):
     init.add_argument("--create-parent", action="store_true", help="Explicitly create the selected safe config parent")
     validate = setup.add_parser("validate", help="Read-only readiness; no server, provider, pytest or source writes")
     validate.add_argument("--config", type=Path, required=True)
+    start = setup.add_parser("start", help="Build frontend, validate, then serve locally; no migration or tests")
+    start.add_argument("--config", type=Path, required=True)
     reconcile = setup.add_parser("reconcile", help="Read-only crash safety; no provider, pytest, source writes or evidence repair")
     reconcile.add_argument("--config", type=Path, required=True)
     reconcile.add_argument("--task", type=UUID, required=True)
@@ -93,6 +95,9 @@ def main(argv=None):
     command_parser = parser(target_errors=arguments[:2] in (["local", "target-check"], ["local", "target-test"]))
     args = command_parser.parse_args(arguments)
     if args.command == "local":
+        if args.local_command == "start":
+            from .start import start_local
+            return start_local(args.config)
         if args.local_command in {"target-check", "target-test"}:
             from .targets import target_command
             return target_command(args)
@@ -103,14 +108,24 @@ def main(argv=None):
         return local_command(args)
     if args.host == "0.0.0.0" and not (args.preview_demo or args.hosted_demo):
         command_parser.error("External bind requires --preview-demo or --hosted-demo")
-    app = None
     try:
         config = configuration(args)
-        app = create_host_app(config)
+    except HostError as exc:
+        print(f"QA Sentinel startup failed: {exc}", file=sys.stderr)
+        return 1
+    return serve_config(config)
+
+
+def serve_config(config: HostConfig, *, existing_database=False):
+    """Shared foreground server lifetime; local start opts out of migration."""
+    app = None
+    try:
+        app = create_host_app(config, existing_database=True) if existing_database else create_host_app(config)
         # Import/start only after explicit command and complete safe preflight.
         import uvicorn
         posture = "protected deterministic demo" if config.mode in {"preview-demo", "hosted-demo"} else "local, no auth"
         print(f"QA Sentinel {config.mode} mode: http://{config.host if ':' not in config.host else '[' + config.host + ']'}:{config.port} ({posture})")
+        print("Press Ctrl+C to stop.")
         uvicorn.run(app, host=config.host, port=config.port, workers=1, reload=False,
             access_log=False, log_level="warning", proxy_headers=False, ws="none", loop="asyncio", http="h11")
         return 0
