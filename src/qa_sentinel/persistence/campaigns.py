@@ -1,7 +1,8 @@
 """Bounded campaign storage. Transactions belong to the existing UnitOfWork."""
 from sqlalchemy import select, func
 from qa_sentinel.domain.campaign import CampaignPreparationStatus, validate_campaign_transition
-from .models import QACampaignRow
+from .models import QACampaignRow, CampaignTargetRow
+from qa_sentinel.domain.campaign import QACampaign
 from .mappers import campaign_to_orm, campaign_from_orm
 
 
@@ -15,18 +16,23 @@ class QACampaignRepository:
             raise ValueError("New campaigns must be DRAFT")
         self.session.add(row)
         self.session.flush()
+        if record.target_id is not None:
+            self.session.add(CampaignTargetRow(campaign_id=str(record.id), project_id=str(record.project_id), target_id=str(record.target_id)))
+            self.session.flush()
 
     def get(self, record_id):
         row = self.session.get(QACampaignRow, str(record_id))
-        return None if row is None else campaign_from_orm(row)
+        if row is None: return None
+        target = self.session.get(CampaignTargetRow, str(record_id))
+        return QACampaign.model_validate({**campaign_from_orm(row).model_dump(), "target_id": None if target is None else target.target_id})
 
     def list_for_project(self, project_id, *, limit=50):
         if type(limit) is not int or not 1 <= limit <= 200:
             raise ValueError("Invalid campaign list limit")
-        rows = self.session.scalars(select(QACampaignRow).where(QACampaignRow.project_id == str(project_id))
+        rows = self.session.execute(select(QACampaignRow, CampaignTargetRow.target_id).outerjoin(CampaignTargetRow, CampaignTargetRow.campaign_id==QACampaignRow.id).where(QACampaignRow.project_id == str(project_id))
             .order_by(func.qa_utc_microseconds(QACampaignRow.created_at).desc(), QACampaignRow.id)
             .limit(limit + 1))
-        return [campaign_from_orm(row) for row in rows]
+        return [QACampaign.model_validate({**campaign_from_orm(row).model_dump(), "target_id": target_id}) for row,target_id in rows]
 
     def save_metadata(self, record):
         row, values = self._existing(record)

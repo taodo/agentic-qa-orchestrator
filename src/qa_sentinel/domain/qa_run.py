@@ -6,6 +6,7 @@ import json
 from typing import Annotated, Literal
 from uuid import UUID, uuid4, uuid5
 from pydantic import Field, StringConstraints, AwareDatetime, model_validator
+from .target import TargetSnapshot
 from .campaign import CampaignName, CampaignObjective
 from .campaign_content import Frozen, CampaignRequirement, Hash
 from .campaign_review import ApprovalEvidence, Readiness, content_hash
@@ -77,6 +78,7 @@ class QARun(Frozen):
     note: RunNote | None = None
     snapshot_version: Literal["qa-run-snapshot-v1", "qa-run-selection-v2"] = SNAPSHOT_VERSION
     snapshot_hash: Hash
+    target_snapshot: TargetSnapshot | None = None
     campaign_snapshot: CampaignSnapshot
     readiness_at_creation: Readiness
     requirement_count: int = Field(ge=1, le=MAX_SNAPSHOT_RECORDS, strict=True)
@@ -101,6 +103,8 @@ class QARun(Frozen):
                 raise ValueError("Invalid system failure")
             if self.execution_status == "COMPLETED" and (self.execution_error_code or self.qa_outcome == "PARTIAL"):
                 raise ValueError("Invalid normal completion")
+        if self.target_snapshot is not None and self.target_snapshot.project_id != self.project_id:
+            raise ValueError("Run target ownership invalid")
         if ((self.campaign_snapshot.project_id, self.campaign_snapshot.id) != (self.project_id, self.campaign_id)
                 or (self.readiness_at_creation.project_id, self.readiness_at_creation.campaign_id) != (self.project_id, self.campaign_id)
                 or (self.snapshot_version == "qa-run-snapshot-v1" and (self.campaign_snapshot.status != "APPROVED"
@@ -159,15 +163,20 @@ def canonical_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION):
+def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION, target_snapshot=None):
     # Run identities, caller intent, wall-clock snapshot/approval timestamps and live
     # readiness counts are excluded. Accepted approval hashes are retained as stable
     # content-version identities (including their original immutable creation time).
     def facts(entry):
         return {"position": entry.position, "content": entry.content.model_dump(mode="json", exclude={"created_at", "updated_at"}),
                 "approved_content_hash": entry.approval.content_hash}
-    return sha256(canonical_json({"version": version, "campaign": campaign.model_dump(mode="json"),
-        "requirements": [facts(r) for r in requirements], "tests": [facts(t) for t in tests]})).hexdigest()
+    payload = {"version": version, "campaign": campaign.model_dump(mode="json"),
+        "requirements": [facts(r) for r in requirements], "tests": [facts(t) for t in tests]}
+    # Null keeps legacy fingerprints byte-for-byte; captured context is separately
+    # versioned and included in the sealed fingerprint, never a live join.
+    if target_snapshot is not None:
+        payload["target_snapshot"] = target_snapshot.model_dump(mode="json")
+    return sha256(canonical_json(payload)).hexdigest()
 
 
 class PreparedQARun(Frozen):
@@ -202,7 +211,7 @@ class PreparedQARun(Frozen):
             covered.update(test.content.requirement_ids)
         if covered != set(ids):
             raise ValueError("Snapshot coverage incomplete")
-        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version):
+        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version, run.target_snapshot):
             raise ValueError("Snapshot fingerprint inconsistent")
         if len(canonical_json(self.model_dump(mode="json"))) > MAX_SNAPSHOT_BYTES:
             raise SnapshotSizeError()
@@ -213,7 +222,7 @@ class SnapshotSizeError(Exception):
     pass
 
 
-def prepare_run(campaign, readiness, command, run_number, requirements, tests):
+def prepare_run(campaign, readiness, command, run_number, requirements, tests, target_snapshot=None):
     run_id = uuid4()
     campaign_snapshot = CampaignSnapshot.model_validate(campaign.model_dump(include=set(CampaignSnapshot.model_fields)))
     reqs = tuple(QARunRequirement(id=uuid5(run_id, "requirement:" + str(record.id)), run_id=run_id,
@@ -226,6 +235,6 @@ def prepare_run(campaign, readiness, command, run_number, requirements, tests):
         for i, (record, approval) in enumerate(sorted(tests, key=lambda pair: (pair[0].logical_key, str(pair[0].id))), 1))
     version = "qa-run-selection-v2" if command.test_specification_ids is not None else SNAPSHOT_VERSION
     run = QARun(id=run_id, project_id=campaign.project_id, campaign_id=campaign.id, run_number=run_number,
-        **command.model_dump(exclude={"test_specification_ids"}), snapshot_version=version, campaign_snapshot=campaign_snapshot, readiness_at_creation=readiness,
-        requirement_count=len(reqs), test_count=len(specs), snapshot_hash=snapshot_fingerprint(campaign_snapshot, reqs, specs, version))
+        **command.model_dump(exclude={"test_specification_ids"}), snapshot_version=version, target_snapshot=target_snapshot, campaign_snapshot=campaign_snapshot, readiness_at_creation=readiness,
+        requirement_count=len(reqs), test_count=len(specs), snapshot_hash=snapshot_fingerprint(campaign_snapshot, reqs, specs, version, target_snapshot))
     return PreparedQARun(run=run, requirements=reqs, tests=specs)

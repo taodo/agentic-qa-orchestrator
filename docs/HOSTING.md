@@ -302,8 +302,8 @@ uses the same schema check. For example, stale DB output includes:
 ```text
 Overall: NOT READY (HOST_LOCAL_DATABASE_NOT_READY)
 Database schema is not ready.
-Current: 0009
-Required: 0010
+Current: 0012
+Required: 0013
 No migration was run automatically.
 ```
 
@@ -484,3 +484,15 @@ logout and unsafe-request CSRF. Local demo/real have no product auth and remain
 loopback-only; existing preview Basic/ephemeral semantics remain supported.
 [Access protocol and safe codes](HOSTED_ACCESS.md),
 [separate optional paid deployment](DEPLOYMENT.md#optional-persistent-hosted-demo-task-23).
+
+## Target configuration and current schema
+
+The current required revision is **0013**. Existing configured databases at 0012
+must be backed up and explicitly upgraded using the exact operator database
+configuration described above. Local start/validate never auto-migrates.
+
+[Target Under Test](TARGET_UNDER_TEST.md) is Project-owned external WEB configuration,
+not a local workspace/runtime binding. Target CRUD and Campaign association work
+without repository access and never fetch URLs, call providers or execute tests.
+Hosted/preview safety and authentication remain unchanged; Campaign execution is
+SYNTHETIC. Do not infer a Target from a local workspace or runtime configuration.

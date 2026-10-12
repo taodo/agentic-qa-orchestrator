@@ -50,6 +50,7 @@ class ProjectView(View):
 class QACampaignView(View):
     id: UUID
     project_id: UUID
+    target_id: UUID | None = None
     name: str
     objective: str | None
     status: CampaignPreparationStatus

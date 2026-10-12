@@ -150,8 +150,8 @@ configuration documented in [Hosting](HOSTING.md#database-and-migration-lifetime
 then explicitly `upgrade head` for that database before restart. Never assume the
 repository default database is the operator database. Local start does not migrate.
 
-Local validation/runtime admission requires revision 0012; older 0011 is not V2
-ready. An `alembic current` against the checkout's default `qa-sentinel.db` says
+Local validation/runtime admission now requires revision 0013; 0012 and older
+are not ready for the current Target-aware ORM. An `alembic current` against the checkout's default `qa-sentinel.db` says
 nothing about the separate database configured in local JSON. Verify `current`
 using the private migration configuration for that exact operator database.
 Admission checks the bounded revision marker, not every physical schema object;
@@ -179,3 +179,17 @@ matching, eligible approval states and mixed/stale selections; download CSV and
 XLSX and inspect historical titles/IDs, COMPLETED + FAIL, timestamps and evidence
 counts. Document visual/layout limitation is unchanged. No live browser validation
 is claimed for this refinement.
+
+## Target Under Test foundation
+
+Project Settings now configures WEB Targets without a source workspace. A Campaign
+explicitly chooses one Target in Overview or during workspace creation; no implicit
+default exists. Run/Results displays the immutable Target snapshot taken at creation.
+Changing a Target or Campaign selection affects future Runs only. Legacy Campaigns
+show "Target not configured"; legacy Runs disclose that Target data was not captured.
+The executor remains SYNTHETIC and never visits the configured URL.
+
+Migration 0013 adds Targets, scoped association and a nullable immutable Run snapshot;
+upgrade preserves legacy data and hashes. Downgrade refuses to discard Target
+configuration/history. Apply it manually to the actual operator database before
+restart. See [Target Under Test](TARGET_UNDER_TEST.md) for contracts and URL policy.

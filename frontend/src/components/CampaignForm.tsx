@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { createCampaign } from '../api/campaigns';
 import { publicError, type ApiError } from '../api/client';
 import type { CampaignView } from '../api/campaignTypes';
+import { TargetOptions } from './Targets';
 import { ErrorState } from './Feedback';
 
 export function CampaignForm({ projectId, onCreated }: { projectId: string; onCreated: (campaign: CampaignView) => void }) {
+  const [chooseTarget,setChooseTarget]=useState(false),[targetId,setTargetId]=useState('');
   const gate = useRef(false), active = useRef(true);
   const [busy, setBusy] = useState(false), [feedback, setFeedback] = useState('');
   const [error, setError] = useState<ApiError>();
@@ -19,7 +21,7 @@ export function CampaignForm({ projectId, onCreated }: { projectId: string; onCr
     }
     gate.current = true; setBusy(true); setError(undefined); setFeedback('');
     try {
-      const campaign = await createCampaign(projectId, { name, ...(objective ? { objective } : {}) });
+      const campaign = await createCampaign(projectId, { name, ...(objective ? { objective } : {}), ...(targetId?{target_id:targetId}:{}) });
       if (active.current) onCreated(campaign);
     } catch (failure) { if (active.current) setError(publicError(failure)); }
     finally { gate.current = false; if (active.current) setBusy(false); }
@@ -32,6 +34,9 @@ export function CampaignForm({ projectId, onCreated }: { projectId: string; onCr
       <label htmlFor="campaign-objective">Objective <span className="muted">optional</span></label>
       <textarea id="campaign-objective" name="objective" rows={4} maxLength={4000} aria-describedby="campaign-objective-hint" />
       <p id="campaign-objective-hint" className="hint">What should this workspace verify? Up to 4,000 characters.</p>
+      <button type="button" onClick={()=>setChooseTarget(!chooseTarget)}>Choose Target for this workspace</button>
+      {chooseTarget && <TargetOptions projectId={projectId} value={targetId} onChange={setTargetId}/>}
+      <p className="hint">Select a Target explicitly here or in Overview. Target != Workspace != Executor.</p>
       <button type="submit">{busy ? 'Creating workspace…' : 'Create QA workspace'}</button>
     </fieldset>{error && <ErrorState error={error} />}<p role="status">{feedback}</p></form>
   </section>;

@@ -5,6 +5,7 @@ from .operations import OperationalQueries
 from .execution_jobs import ExecutionJobRepository
 from .qa_runs import QARunRepository
 from .campaigns import QACampaignRepository
+from .targets import TargetRepository
 from .campaign_review import CampaignReviewRepository
 from .campaign_content import CampaignContentRepository
 from .test_specifications import TestSpecificationRepository
@@ -27,6 +28,7 @@ class UnitOfWork:
         self.tasks = TaskRepository(self.session)
         self.projects = ProjectRepository(self.session)
         self.campaigns = QACampaignRepository(self.session)
+        self.targets = TargetRepository(self.session)
         self.qa_runs = QARunRepository(self.session)
         self.campaign_reviews = CampaignReviewRepository(self.session)
         self.campaign_content = CampaignContentRepository(self.session)

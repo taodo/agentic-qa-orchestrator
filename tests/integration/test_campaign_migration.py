@@ -33,7 +33,10 @@ def test_0003_to_0004_preserves_existing_data_and_downgrade_is_scoped(migrated_f
         uow.campaigns.add(campaign); uow.commit()
     engine.dispose()
     with UnitOfWork(factory) as uow:
-        assert uow.campaigns.get(campaign.id) == campaign
+        # Read the historical 0004 row without requiring the current 0013 association table.
+        from qa_sentinel.persistence.models import QACampaignRow
+        from qa_sentinel.persistence.mappers import campaign_from_orm
+        assert campaign_from_orm(uow.session.get(QACampaignRow, str(campaign.id))) == campaign
     command.downgrade(config, "0003")
     assert "qa_campaigns" not in inspect(engine).get_table_names() and snapshot() == original
     command.upgrade(config, "head")
