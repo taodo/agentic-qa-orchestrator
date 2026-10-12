@@ -80,3 +80,47 @@ synthetic Run with mixed results. Do not invoke a real provider for visual revie
 
 Automated tests cover navigation, status text, readiness guidance and existing
 preparation recovery behavior; browser fixture review checks appearance only.
+
+## UI V3 foundation
+
+UI V3 preserves existing React/plain-CSS and API contracts. Semantic surface,
+field, border, text, accent and status tokens define charcoal/purple dark mode
+and deliberately neutral light mode. The shell exposes a compact Appearance
+control; only `qa-sentinel.theme` (`dark`/`light`) is persisted in localStorage.
+Missing, invalid or unavailable storage falls back to dark. Storage failures still
+allow a session-local selection. The same-origin `/assets/theme-init.js` runs
+before the SPA, fits the existing hosted `script-src 'self'` policy and static
+asset allowlist, and touches no auth/project/session configuration.
+
+The compact sidebar retains one workflow navigation set and explicit current
+Project/Campaign context. Where already loaded, live Campaign Target decoration
+is published without extra shell reads and labelled LIVE CONFIG. Historical Run
+Target context always stays in the Run view and comes from its immutable snapshot.
+Results is active for nested Run routes. Narrow layouts expose a Navigation toggle
+without removing workflow links; tables scroll within bounded containers. Keyboard
+focus, skip-to-content, native disclosures, textual statuses and reduced-motion
+rules remain. Semantic PASS/FAIL colors are distinct from the purple accent.
+
+Workspace Overview uses authoritative readiness requirement/test counts, one
+bounded `listRuns?limit=50` read, latest returned Run metadata, and five recent
+rows with explicit returned/truncated disclosure. Unknown counts are Unavailable;
+no history is No Run/Not evaluated. Approved tests are never relabelled executable.
+The workflow strip presents counts and saved status, not a frontend state machine.
+Next-action links are guidance and do not enable execution. Preparation metadata
+and Run outcomes remain independent. There is no Project-wide aggregate or fabricated
+Dashboard: Campaign-owned Target/history cannot be inferred as a Project default.
+
+Recent Runs uses only stored metadata, including target_snapshot; passed/failed
+columns are omitted because this list API does not expose those aggregates. Run
+Results retains the authoritative aggregate counts, COMPLETED + FAIL distinction,
+bounded evidence disclosures, immutable Target context and CSV/XLSX export. No N+1
+result/detail calls are made to populate the overview. Specification limitations,
+explicit retry/clarification actions, analysis audit, current test tables, approval,
+selection, human edit and source traceability remain reachable. Target creation
+is an explicit New Target disclosure; existing Campaign selection says Change Target.
+
+Visual review uses disposable read-only synthetic fixtures, never a live provider,
+operator database or Target URL. Verify dark/light Overview and Results, desktop /
+tablet / 390px navigation, long URL/IDs, status text, field/focus contrast, bounded
+scrolling, document limitations and expanded evidence. A synthetic screenshot is
+UI review proof, not evidence of real application testing.

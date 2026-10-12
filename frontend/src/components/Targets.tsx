@@ -4,10 +4,11 @@ import { useResource } from '../app/useResource';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { listTargets,createTarget,updateTarget,getCampaignTarget,associateTarget,type Target,type TargetSnapshot,type TargetInput } from '../api/targets';
 import { ErrorState,LoadingState,TruncationNotice } from './Feedback';
+import { useTargetContext } from '../app/WorkspaceContext';
 import { useCampaign } from '../pages/CampaignDetailPage';
 
-export function TargetSummary({target,historical=false}:{target:Target|TargetSnapshot|null|undefined;historical?:boolean}) {
-  return <section aria-label={historical?'Run Target snapshot':'Target Under Test'}><h3>{historical?'Run Target snapshot':'Target Under Test'}</h3>
+export function TargetSummary({target,historical=false,compact=false}:{target:Target|TargetSnapshot|null|undefined;historical?:boolean;compact?:boolean}) {
+  return <section className="target-summary" aria-label={historical?'Run Target snapshot':'Target Under Test'}>{!compact && <h3>{historical?'Run Target snapshot':'Target Under Test'}</h3>}
     {target?<><strong>{target.name}</strong><p>{target.type} · {target.environment}</p><p className="mono">{'configuration' in target?target.configuration.base_url:target.base_url}</p></>:<p>{historical?'Target information was not captured for this Run.':'Target not configured'}</p>}
     <p className="hint">Target is the configured external system. Current executor is SYNTHETIC; no Target URL is visited.</p>
   </section>;
@@ -22,12 +23,13 @@ export function TargetOptions({projectId,value,onChange,name='target_id'}:{proje
 export function TargetManager({projectId}:{projectId:string}) {
   const targets=useResource(useCallback(()=>listTargets(projectId),[projectId]));
   const [editing,setEditing]=useState<Target>();
-  return <section className="panel"><h2>Target Under Test</h2><p>Configure the external WEB application by URL. Source-code access, a repository and workspace setup are optional and are not required to configure this Target.</p>
+  const [creating,setCreating]=useState(false);
+  return <section className="panel target-manager"><div className="panel-heading"><h2>Target Under Test</h2><button onClick={()=>{setEditing(undefined);setCreating(true);}}>New Target</button></div><p>Configure the external WEB application by URL. Source-code access, a repository and workspace setup are optional and are not required to configure this Target.</p>
     {targets.loading?<LoadingState>Loading Targets…</LoadingState>:targets.error?<ErrorState error={targets.error}/>:<>
       {!targets.data?.items.length && <p>Target not configured</p>}
-      {targets.data?.items.map(t=><article key={t.id}><TargetSummary target={t}/><button onClick={()=>setEditing(t)}>Edit {t.name}</button></article>)}<TruncationNotice truncated={!!targets.data?.truncated}/></>}
-    <TargetEditor key={editing?.id??'new'} projectId={projectId} target={editing} changed={async()=>{setEditing(undefined);await targets.reload();}}/>
-    {editing && <button onClick={()=>setEditing(undefined)}>Cancel Target edit</button>}
+      {targets.data?.items.map(t=><article key={t.id}><TargetSummary target={t} compact/><button onClick={()=>setEditing(t)}>Edit {t.name}</button></article>)}<TruncationNotice truncated={!!targets.data?.truncated}/></>}
+    {(creating || editing) && <TargetEditor key={editing?.id??'new'} projectId={projectId} target={editing} changed={async()=>{setEditing(undefined);setCreating(false);await targets.reload();}}/>}
+    {(creating || editing) && <button onClick={()=>{setEditing(undefined);setCreating(false);}}>Cancel Target edit</button>}
   </section>;
 }
 function TargetEditor({projectId,target,changed}:{projectId:string;target?:Target;changed:()=>Promise<void>}) {
@@ -46,10 +48,11 @@ function TargetEditor({projectId,target,changed}:{projectId:string;target?:Targe
 export function CampaignTarget() {
   const {projectId:p,campaignId:c,campaign,transition}=useCampaign();
   const current=useResource(useCallback(()=>campaign.target_id?getCampaignTarget(p,c):Promise.resolve(null),[p,c,campaign.target_id]));
+  useTargetContext(p,c,!current.loading&&!current.error?current.data??undefined:undefined);
   const [choosing,setChoosing]=useState(false),[selected,setSelected]=useState('');
   const action=usePreparationAction<Awaited<ReturnType<typeof associateTarget>>>();
-  return <section className="panel">{current.loading?<LoadingState>Loading Campaign Target…</LoadingState>:current.error?<ErrorState error={current.error}/>:<TargetSummary target={current.data}/>}
-    <button disabled={action.busy} onClick={()=>{setSelected(campaign.target_id??'');setChoosing(!choosing);}}>Choose Campaign Target</button>
+  return <section className="panel campaign-target">{current.loading?<LoadingState>Loading Campaign Target…</LoadingState>:current.error?<ErrorState error={current.error}/>:<TargetSummary target={current.data}/>}
+    <button disabled={action.busy} onClick={()=>{setSelected(campaign.target_id??'');setChoosing(!choosing);}}>{campaign.target_id?'Change Target':'Choose Campaign Target'}</button>
     {choosing && <form aria-label="Campaign Target selection" onSubmit={e=>{e.preventDefault();void action.run(()=>associateTarget(p,c,selected||null),async value=>{await transition(value);setChoosing(false);});}}>
       <fieldset disabled={action.busy}><TargetOptions projectId={p} value={selected} onChange={setSelected}/><button disabled={action.error?.code==='HOST_AUTH_REQUIRED'} type="submit">Save Campaign Target</button></fieldset>
     </form>}{action.error && <ErrorState error={action.error}/>}<Link to={`/projects/${encodeURIComponent(p)}/settings`}>Configure Project Targets</Link>

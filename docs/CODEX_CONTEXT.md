@@ -60,6 +60,18 @@ non-migrating runtime opening now require 0013 (the configured operator DB, not 
 checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
 
+## UI V3 presentation
+
+Frontend-only shared dark/light semantic tokens, local appearance preference and
+CSP-compatible prepaint asset; compact adaptive sidebar and loaded Target decoration.
+Overview shows readiness counts plus one bounded Run list; no detail fan-out,
+Project-wide aggregation, fake executable count or frontend workflow truth.
+Recent Runs uses stored Target snapshots, omits unavailable per-Run PASS/FAIL totals;
+Run Results retains authoritative aggregates/evidence/exports and immutable context.
+Target editing/association, approval, recovery, synthetic execution, API/security,
+provider/token contracts, migrations and dependencies are unchanged. See
+[workspace conventions](WORKSPACE_UI.md#ui-v3-foundation).
+
 ## Target Under Test foundation
 
 **Target != Workspace != Executor.** Project-owned WEB Targets hold only typed

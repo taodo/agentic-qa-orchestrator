@@ -140,7 +140,7 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
 
 it.each(['extract','generate'])('discards stale %s completions after Campaign navigation',async kind=>{
   const pending=deferred<Response>();mock(()=>pending.promise,{sources:[source]});const oldMock=vi.mocked(fetch).getMockImplementation()!;
-  vi.mocked(fetch).mockImplementation((input,options)=>String(input).includes('/campaigns/other') ? Promise.resolve(response(String(input).endsWith('/readiness')?{...readiness,campaign_id:'other'}:{...campaign,id:'other',name:'Other Campaign'})) : oldMock(input,options));
+  vi.mocked(fetch).mockImplementation((input,options)=>String(input).includes('/campaigns/other/runs?') ? Promise.resolve(response(page([]))) : String(input).includes('/campaigns/other') ? Promise.resolve(response(String(input).endsWith('/readiness')?{...readiness,campaign_id:'other'}:{...campaign,id:'other',name:'Other Campaign'})) : oldMock(input,options));
   render(<MemoryRouter initialEntries={[base+'/'+(kind==='extract'?'requirements':'test-specifications')]}><Link to={'/projects/'+campaign.project_id+'/campaigns/other'}>Switch Campaign</Link><App /></MemoryRouter>);
   if(kind==='extract')fireEvent.click(await screen.findByRole('button',{name:'Extract Requirements'}));else{fireEvent.click(await within(await screen.findByRole('form',{name:'Generate Test Cases'})).findByRole('checkbox',{name:/PAY/}));submit('Generate Test Cases');}
   fireEvent.click(screen.getByRole('link',{name:'Switch Campaign'}));await screen.findByRole('heading',{name:'Other Campaign'});const reads=vi.mocked(fetch).mock.calls.length;

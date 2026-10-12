@@ -1,3 +1,4 @@
+import { RecentRuns } from '../components/RecentRuns';
 import { CampaignTarget } from '../components/Targets';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -185,7 +186,7 @@ export function ExecutionPage() {
       try{await startRun(p,c,run.id);}finally{navigate(runsPath(p,c,run.id));}
     });
   }
-  return <><SectionHeader title="Execution"/><aside className="notice synthetic-notice"><strong>SYNTHETIC execution only</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
+  return <><SectionHeader title="Execution"/><CampaignTarget/><aside className="notice synthetic-notice"><strong>SYNTHETIC execution only</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
     <section className="panel"><p>Select approved eligible tests. Whole-workspace readiness does not block unrelated eligible tests.</p>
       <div className="actions"><button disabled={!!intent || action.busy || new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)]).size>500} onClick={()=>setSelected([...new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)])])}>Select all eligible on this page</button><button disabled={!!intent || action.busy} onClick={()=>setSelected([])}>Clear selection</button><span role="status">Selected: {selected.length} across pages (maximum 500)</span>
       <button className="button--primary" disabled={(!selected.length && !intent) || action.busy || action.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void runSelected()}>{action.busy?'Creating / running…':intent?'Retry same create intent':'Run selected (Synthetic)'}</button></div>
@@ -200,13 +201,32 @@ export function ResultsPage() {
   const {projectId:p,campaignId:c}=useCampaign();const runs=useResource(useCallback(()=>listRuns(p,c),[p,c]));
   return <><SectionHeader title="Results"/><p>Saved immutable test selections and truthful SYNTHETIC outcomes. A test FAIL is a QA outcome; execution FAILED denotes a system problem.</p>
     <button disabled={runs.loading} onClick={()=>void runs.reload()}>Refresh saved results</button>
-    {runs.loading?<LoadingState>Loading results…</LoadingState>:runs.error?<ErrorState error={runs.error}/>:runs.data && <>{!runs.data.items.length?<EmptyState>No Runs yet. Run selected approved tests in Execution.</EmptyState>:<section className="panel">{runs.data.items.map(run=><article key={run.id}><h3><Link to={runsPath(p,c,run.id)}>RUN-{String(run.run_number).padStart(3,'0')}</Link></h3><p>{run.test_count} selected tests · SYNTHETIC</p><p>Execution: <StateBadge status={run.execution_status}/> QA outcome: <StateBadge status={run.qa_outcome}/></p><DateTime value={run.created_at}/></article>)}</section>}<TruncationNotice truncated={runs.data.truncated}/></>}
+    {runs.loading?<LoadingState>Loading results…</LoadingState>:runs.error?<ErrorState error={runs.error}/>:runs.data && <RecentRuns page={runs.data} projectId={p} campaignId={c}/>}
   </>;
 }
 export function ProductOverviewPage() {
-  const {base,readiness}=useCampaign();const value=readiness.data;
-  return <><SectionHeader title="Overview"/><CampaignTarget/><p>Specification → Test Design → Execution → Results</p><div className="content-grid">{[['Specification','Upload and analyze supported behavior','specification'],['Test Design','Review, clarify and approve selected cases','test-design'],['Execution','Run an immutable eligible selection','execution'],['Results','Inspect outcomes and evidence','results']].map(([title,description,path])=><section className="panel" key={path}><h3><Link to={base+'/'+path}>{title}</Link></h3><p>{description}</p></section>)}</div>
-    {readiness.loading?<LoadingState>Loading workspace counts…</LoadingState>:readiness.error?<ErrorState error={readiness.error}/>:value && <dl className="metadata"><div><dt>Test Design</dt><dd>{value.total_test_specifications} current tests</dd></div><div><dt>Approved tests</dt><dd>{value.approved_test_specifications}</dd></div><div><dt>Source findings needing information</dt><dd>{value.clarification_requirements}</dd></div></dl>}
-    <p className="hint">Whole-workspace readiness is available in Audit; it does not control a selected Run's eligibility.</p></>;
+  const {base,projectId:p,campaignId:c,readiness}=useCampaign();const value=!readiness.loading&&!readiness.error?readiness.data:undefined;
+  const runs=useResource(useCallback(()=>listRuns(p,c),[p,c]));
+  const latest=!runs.loading&&!runs.error?runs.data?.items[0]:undefined;
+  const next=!value?undefined:value.total_requirements===0?['Add Specification','specification']:value.approved_test_specifications===0?['Review Test Design','test-design']:['Review execution selection','execution'];
+  return <><SectionHeader title="Overview"/>
+    <CampaignTarget/>
+    <dl className="overview-metrics" aria-label="Workspace summary">
+      <div><dt>Requirements</dt><dd>{value?.total_requirements??'Unavailable'}</dd></div>
+      <div><dt>Approved tests</dt><dd>{value?.approved_test_specifications??'Unavailable'}</dd></div>
+      <div><dt>Latest saved Run</dt><dd>{latest?'RUN-'+String(latest.run_number).padStart(3,'0'):runs.loading||runs.error?'Unavailable':'No Run'}</dd></div>
+      <div><dt>QA outcome</dt><dd>{latest?<StateBadge status={latest.qa_outcome}/>:runs.loading||runs.error?'Unavailable':'Not evaluated'}</dd></div>
+    </dl>
+    {readiness.loading?<LoadingState>Loading workspace counts…</LoadingState>:readiness.error?<ErrorState error={readiness.error}/>:null}
+    <section aria-label="QA workflow"><h3>QA workflow</h3><ol className="workflow-strip">
+      <li><Link to={base+'/specification'}><span className="workflow-number">1</span>Specification</Link><p>{value?`${value.total_requirements} current requirements · ${value.clarification_requirements} need information`:'Preparation counts unavailable'}</p></li>
+      <li><Link to={base+'/test-design'}><span className="workflow-number">2</span>Test Design</Link><p>{value?`${value.approved_test_specifications} approved / ${value.total_test_specifications} current tests`:'Approval counts unavailable'}</p></li>
+      <li><Link to={base+'/execution'}><span className="workflow-number">3</span>Execution</Link><p>Review eligible selection · SYNTHETIC</p></li>
+      <li><Link to={base+'/results'}><span className="workflow-number">4</span>Results</Link><p>{latest?`Latest execution: ${latest.execution_status}`:'No execution result available'}</p></li>
+    </ol></section>
+    {next && <aside className="next-step"><div><strong>Next action</strong><p className="hint">Review saved preparation; the backend remains authoritative for eligibility.</p></div><Link className="button button--primary" to={base+'/'+next[1]}>{next[0]}</Link></aside>}
+    <p className="hint">Whole-workspace readiness is available in Audit; it does not control a selected Run's eligibility. Approved counts are not executable-test counts.</p>
+    {runs.loading?<LoadingState>Loading recent Runs…</LoadingState>:runs.error?<ErrorState error={runs.error}/>:runs.data && <RecentRuns page={runs.data} projectId={p} campaignId={c} maximum={5}/>}
+  </>;
 }
 export function AuditPage() {const {base}=useCampaign();return <><SectionHeader title="Advanced / Audit"/><p>Persisted diagnostics and preparation evidence. Viewing this area never calls a provider.</p><nav className="actions"><Link to={base+'/requirements'}>Requirement versions / AI activity</Link><Link to={base+'/traceability'}>Traceability</Link><Link to={base+'/readiness'}>Whole-workspace readiness</Link><Link to={base+'/test-specifications'}>Legacy test detail / import</Link></nav><details><summary>Preparation readiness</summary><CampaignReadinessPage/></details></>;}

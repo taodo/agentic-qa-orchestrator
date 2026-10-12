@@ -15,7 +15,7 @@ import { SectionHeader } from '../components/WorkspaceUI';
 import { CampaignReadiness } from '../components/CampaignReadiness';
 
 function SyntheticNotice() { return <aside className="notice synthetic-notice"><strong>Synthetic execution</strong><p>No external target is tested in this mode.</p><p>Deterministic demo fixture: odd snapshot positions PASS, even positions FAIL. Results demonstrate lifecycle behavior, not target application correctness.</p></aside>; }
-function RunSummary({ run }: { run: QARun }) { return <dl className="metadata"><div><dt>Execution status</dt><dd><StateBadge status={run.execution_status} /></dd></div><div><dt>QA outcome</dt><dd><StateBadge status={run.qa_outcome} /></dd></div>
+function RunSummary({ run }: { run: QARun }) { return <dl className="metadata run-facts"><div><dt>Execution status</dt><dd><StateBadge status={run.execution_status} /></dd></div><div><dt>QA outcome</dt><dd><StateBadge status={run.qa_outcome} /></dd></div>
   <div><dt>Requirement count</dt><dd>{run.requirement_count}</dd></div><div><dt>Test count</dt><dd>{run.test_count}</dd></div><div><dt>Created</dt><dd><DateTime value={run.created_at} /></dd></div><div><dt>Started</dt><dd><DateTime value={run.started_at} /></dd></div><div><dt>Completed</dt><dd><DateTime value={run.completed_at} /></dd></div><div><dt>Note</dt><dd>{run.note ?? 'No note'}</dd></div></dl>; }
 
 export function CampaignRunsPage() {

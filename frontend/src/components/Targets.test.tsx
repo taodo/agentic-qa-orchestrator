@@ -1,4 +1,4 @@
-import { act,fireEvent,render,screen,waitFor } from '@testing-library/react';
+import { act,fireEvent,render,screen,waitFor,within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect,it,vi } from 'vitest';
 import { App } from '../app/App';
@@ -25,6 +25,7 @@ it('creates/edits a WEB Target with no workspace prerequisites, fetching or impl
   render(<MemoryRouter><TargetManager projectId={project.id}/></MemoryRouter>);
   await screen.findByText('Staging WEB',{selector:'strong'});expect(mutations()).toHaveLength(0);
   expect(screen.getByText(/Source-code access, a repository and workspace setup are optional/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'New Target'}));
   fireEvent.change(screen.getByLabelText('Target name'),{target:{value:'Staging'}});
   fireEvent.change(screen.getByLabelText('Base URL'),{target:{value:'https://staging.example.com'}});
   fireEvent.submit(screen.getByRole('form',{name:'Create WEB Target'}));
@@ -52,8 +53,8 @@ it('shows a legacy Campaign honestly and explicitly associates a Target without 
 });
 
 it('renders the Campaign-selected Target using its scoped configuration',async()=>{
-  setup(undefined,true);open(base);await screen.findByText('Staging WEB',{selector:'strong'});
-  expect(screen.getByText('WEB · STAGING')).toBeInTheDocument();expect(mutations()).toHaveLength(0);
+  setup(undefined,true);open(base);const region=await screen.findByRole('region',{name:'Target Under Test'});await within(region).findByText('Staging WEB',{selector:'strong'});
+  expect(within(region).getByText('WEB · STAGING')).toBeInTheDocument();expect(mutations()).toHaveLength(0);
 });
 
 it('keeps historical Run Target display isolated from mutable Project Targets',async()=>{
@@ -79,6 +80,7 @@ it('does not complete a Target save after unmount',async()=>{
   const pending=deferred<Response>();setup((url,options)=>url.endsWith('/targets')&&options?.method==='POST'?pending.promise:undefined);
   const view=render(<MemoryRouter><TargetManager projectId={project.id}/></MemoryRouter>);
   await screen.findByText('Staging WEB',{selector:'strong'});
+  fireEvent.click(screen.getByRole('button',{name:'New Target'}));
   fireEvent.change(screen.getByLabelText('Target name'),{target:{value:'New'}});fireEvent.change(screen.getByLabelText('Base URL'),{target:{value:'http://localhost:3000'}});
   fireEvent.submit(screen.getByRole('form',{name:'Create WEB Target'}));view.unmount();
   await act(async()=>pending.resolve(response(target)));expect(mutations()).toHaveLength(1);
@@ -102,6 +104,7 @@ it('creates a Campaign with an explicit lazily selected Target and no workspace 
 it('shows safe auth failure and never automatically retries Target creation',async()=>{
   setup((url,options)=>url.endsWith('/targets')&&options?.method==='POST'?response({error:{code:'HOST_AUTH_REQUIRED',message:'Authentication required'}},401):undefined);
   render(<MemoryRouter><TargetManager projectId={project.id}/></MemoryRouter>);await screen.findByText('Staging WEB',{selector:'strong'});
+  fireEvent.click(screen.getByRole('button',{name:'New Target'}));
   fireEvent.change(screen.getByLabelText('Target name'),{target:{value:'New'}});fireEvent.change(screen.getByLabelText('Base URL'),{target:{value:'http://localhost:3000'}});
   fireEvent.submit(screen.getByRole('form',{name:'Create WEB Target'}));await screen.findByText('HOST_AUTH_REQUIRED');
   expect(screen.getByRole('button',{name:'Create WEB Target'})).toBeDisabled();expect(mutations()).toHaveLength(1);
