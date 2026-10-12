@@ -20,7 +20,7 @@ def digest(value):
 
 def run_test_snapshot_digest(test):
     # Progress/outcome change; approved immutable content, links and receipt do not.
-    return sha256(canonical_json(test.model_dump(mode="json", exclude={"execution_status", "qa_result"}))).hexdigest()
+    return sha256(canonical_json(test.model_dump(mode="json", exclude={"execution_status", "qa_result", "browser_plan"}))).hexdigest()
 
 
 def relative_destination(base_url, path):

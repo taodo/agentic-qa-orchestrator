@@ -55,10 +55,10 @@ def test_preflight_and_existing_open_reject_actual_0011_without_migrating(prepar
     monkeypatch.setattr(onboarding, 'model_key_present', forbidden)
     with pytest.raises(database.SchemaNotReady) as error:
         onboarding.validate_local(value)
-    assert (error.value.current, error.value.required) == ('0011', '0013')
+    assert (error.value.current, error.value.required) == ('0011', '0014')
     with pytest.raises(database.SchemaNotReady) as error:
         database.open_existing_database(value.database)
-    assert (error.value.current, error.value.required) == ('0011', '0013')
+    assert (error.value.current, error.value.required) == ('0011', '0014')
     assert value.database.read_bytes() == before
 
 
@@ -117,7 +117,7 @@ def test_populated_0011_upgrade_reopen_supports_fresh_v2_campaign_and_legacy_evi
         assert restarted.get_campaign_test_specification(project.id, old_campaign.id, test.id) == old_test
         assert restarted.get_qa_run_results(project.id, old_campaign.id, old_run.id) == old_results
         with reopened.connect() as connection:
-            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0013'
+            assert connection.scalar(text('SELECT version_num FROM alembic_version')) == '0014'
             assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
             assert connection.scalar(text('SELECT count(*) FROM campaign_sources WHERE campaign_id=:id'), {'id':fresh_id}) == 1
             assert connection.scalar(text('SELECT count(*) FROM tasks')) == 0

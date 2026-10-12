@@ -1,6 +1,6 @@
-# Browser execution foundation (Task 5.1)
+# Browser execution contracts and Chromium runtime (Tasks 5.1–5.2)
 
-Task 5.1 defines contracts and policy only. It does not perform real browser execution.
+Task 5.1 defined contracts and policy only. Task 5.2 implements Chromium execution through an explicit trusted internal application service; public/browser Start remains synthetic-only.
 
 Browser assertion failure is a QA outcome. Browser/executor infrastructure failure is an execution-system failure.
 
@@ -11,7 +11,7 @@ Approved immutable Run Test + immutable WEB Target snapshot
     -> BrowserExecutionPlan + snapshot-bound candidate provenance
     -> BrowserExecutionPolicy (pure static validation)
     -> BrowserExecutor port
-    -> future Playwright adapter (Task 5.2)
+    -> Playwright Chromium adapter (Task 5.2)
     -> existing TestExecutionResult + typed EvidenceDraft persistence boundary
 ```
 
@@ -31,18 +31,15 @@ ExecutorKind.SYNTHETIC. TestExecutionResult names its producing executor and val
 agreement with evidence. The read-only evidence projection adds executor_kind from
 the registered typed policy, never parsing summary prose. Historical legacy payloads
 retain their reviewed synthetic fallback; rows and snapshot hashes are not rewritten.
-Old Runs without evidence still have no fabricated observation or producing executor.
+Old Runs without evidence still have no fabricated observation; their Run executor identity is truthfully backfilled SYNTHETIC.
 
-ExecutorKind includes WEB_BROWSER for future plans, but current Create/Start input
-cannot select it. UnavailableBrowserExecutor validates then raises the fixed
+ExecutorKind includes WEB_BROWSER, but public Create/Start input cannot select it. UnavailableBrowserExecutor validates then raises the fixed
 BROWSER_RUNTIME_UNAVAILABLE code, without synthetic fallback, DB activity, result,
 evidence or state transition. It is not wired into public Start or host composition.
 
-No migration is needed: existing immutable persisted evidence identifies its producer,
-no browser Run or browser plan is accepted for durable execution yet, and no new
-column/table/speculative persistence is introduced. Current migration head remains
-0013 and startup never auto-migrates. A future enabled browser Run needs an immutable
-executor selection/version boundary reviewed before use, not inference from Target
+Task 5.1 did not need a migration: existing immutable persisted evidence identifies its producer,
+Task 5.1 did not accept browser Runs/plans for durable execution. Task 5.2 adds migration 0014 for executor/runtime identity, safe browser error code and per-test sealed plan columns; startup never auto-migrates. A browser-enabled Run now has an immutable
+executor selection/version boundary, not inference from Target
 existence or retroactive reinterpretation of legacy synthetic Runs.
 
 ## Inert plan and locator contracts
@@ -52,8 +49,8 @@ NAVIGATE, CLICK, FILL, SELECT, CHECK, PRESS, WAIT_FOR, ASSERT_TEXT, ASSERT_VISIB
 ASSERT_URL. Locators discriminate ROLE, LABEL, TEXT, TEST_ID, PLACEHOLDER and CSS.
 Roles and press keys are deliberately limited literals. Exact matching is default;
 no regex/code fields. CSS is bounded selector data, never an executable expression;
-engine-chain and explicit alternate-engine forms are rejected. A future adapter
-must force the CSS engine rather than pass an untrusted selector-engine expression.
+engine-chain and explicit alternate-engine forms are rejected. The adapter forces
+the CSS engine rather than passing an untrusted selector-engine expression.
 Unknown versions/actions/fields fail closed. No evaluate/code, method name, browser
 args, process, shell, filesystem, generated spec, downloads or sleep actions exist.
 Text resembling code stays literal input/expected text, never evaluated.
@@ -69,7 +66,7 @@ Bounds:
   an arbitrary delay. These are contracts, not pretend timers or screenshots.
 Existing evidence remains capped at 20 records/test and 2,048 bytes/payload.
 
-## Navigation policy and runtime security gap
+## Static navigation policy and runtime enforcement
 
 NAVIGATE and ASSERT_URL use origin-root-relative paths, such as /courses. They
 cannot replace the captured Target authority. Absolute/network-path destinations,
@@ -82,15 +79,15 @@ public request cannot enable it. No DNS lookup or Target probe is performed.
 
 Static strings do NOT secure redirects, DNS rebinding, public names resolving to
 private networks, service workers, popups, subresource requests or browser traffic.
-Task 5.2 must apply same-origin/resolved-address policy to every request and redirect,
-including scheme/port checks and rebinding protection, before enabling real execution.
-It must enforce actual overall/action deadlines, redirect/evidence/screenshot budgets
-and cleanup. Do not translate this policy pass into a reachability/health claim.
+The Task 5.2 adapter adds same-origin/resolved-address policy for intercepted requests,
+including scheme/port checks and rebinding protection, and rejects all redirects.
+It enforces actual overall/action deadlines, evidence budgets and cleanup; screenshots
+remain unsupported, as detailed below. Do not translate this policy pass into a reachability/health claim.
 
-## Candidate provenance and Task 5.2 handoff
+## Candidate provenance and durable execution seals
 
-BrowserPlanEnvelope is an inert candidate, not a new approval receipt or execution
-record. It binds Project/Campaign/Run/Run Test IDs, MANUAL/DETERMINISTIC/AI origin,
+BrowserPlanEnvelope describes executable intent, not a new approval receipt.
+Task 5.2 persists it as a sealed Run Test plan before execution. It binds Project/Campaign/Run/Run Test IDs, MANUAL/DETERMINISTIC/AI origin,
 SHA-256 of canonical versioned plan content and its bounds, immutable Test snapshot
 (including approved content receipt/links, excluding progress/outcome) and captured
 Target snapshot. validate_envelope consumes authoritative detached repository Run
@@ -101,15 +98,124 @@ no planner/provider call exists. No claim that a candidate plan was human-approv
 or executed is made. The approved Test receipt identifies approved source content;
 plan_hash identifies validated executable intent, not equivalent approval.
 
-Task 5.2 must decide and persist immutable executor choice/plan provenance before
-execution, within accepted Run/persistence boundaries. Reuse Start lifecycle and
+Task 5.2 persists immutable executor choice/plan provenance before execution within
+accepted Run/persistence boundaries, as detailed below. Reuse Start lifecycle and
 atomic result/evidence handling, not a second workflow. Extend TestExecutionResult
 and the existing closed evidence policies only with reviewed typed browser variants
 and truthful executor agreement. Do not fill synthetic evidence with browser claims.
-Navigation/assertion/screenshot/page-error/console variants and screenshot artifact
-storage/redaction are deferred until actual observations can be produced safely.
+Navigation/assertion observations are implemented below. Screenshot/page-error/console
+variants and binary artifact storage/redaction remain deferred.
 Never store secrets/raw console dumps/arbitrary JSON/local filesystem paths.
 
-Install/map Playwright only in that separately authorized task. Assert mismatches
+Playwright installation is explicit and separate from startup, as detailed below. Assert mismatches
 produce completed QA FAIL and continue eligible tests. Launch/crash/unavailable
 runtime errors remain system failures. No source workspace dependency is introduced.
+
+
+## Task 5.2: what is actually executable
+
+```text
+Immutable Run + WEB Target + executor/runtime identity
+    -> sealed manual BrowserExecutionPlan in each Run Test
+    -> static admission + pinned runtime network policy
+    -> official Playwright Chromium adapter
+    -> real navigation/assertion observations
+    -> typed TestExecutionResult / EvidenceDraft
+    -> existing atomic Run Test/evidence completion
+```
+
+Creation/start are explicit internal service methods, not new public endpoints:
+create_browser_qa_run and start_browser_qa_run. Configure the application with a
+PlaywrightBrowserExecutor only in trusted local code. Existing API Start refuses
+WEB_BROWSER Runs, and normal host/demo/preview/hosted composition never constructs
+this executor. There is no browser start/authoring UI or AI planner.
+
+The Run seals executor_kind=WEB_BROWSER and adapter version, engine CHROMIUM,
+official SDK version, Chromium revision and expected browser version. Every Test
+owns its complete typed plan/envelope. Its plan hash and target/test provenance
+are fingerprinted into the Run; immutability triggers prevent later identity/plan
+updates. Actual browser version must match the seal before navigation. Runtime
+executes only the persisted plan. Historical Runs backfill SYNTHETIC, keeping their
+original preparation fingerprints and observations. 0014 downgrade refuses browser
+history loss; safe downgrade preserves older SQLite immutability triggers.
+
+### Installation and controlled local use
+
+Install optional runtime dependencies explicitly:
+
+```powershell
+python -m pip install -e ".[browser]"
+python -m playwright install chromium
+```
+
+Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration. Official Playwright is pinned to 1.63.0. Chromium is the only
+engine; executable paths, profiles and launch arguments cannot be supplied by plans
+or operator request configuration. Fixed internal network safety switches are used.
+Perform operator DB migration explicitly with the existing documented Alembic
+configuration before opening the host; admission now requires 0014.
+
+For a controlled fixture, create PlaywrightBrowserExecutor(trusted_local_origin=
+"http://127.0.0.1:PORT") and inject it as browser_executor into the existing
+QASentinelApplication. The trusted override accepts only a literal loopback origin
+and only that exact scheme/host/port. Select approved tests and pass a UUID-to-
+BrowserExecutionPlan mapping to create_browser_qa_run; then start_browser_qa_run
+with its returned Run identity. Plans use non-secret manual test data, not credentials;
+password filling/authentication is unsupported. No source workspace is required.
+The integration fixture in tests/integration/test_playwright_runtime.py demonstrates
+this composition without a live provider or external campaign.
+
+### Network/resource enforcement and deliberate limitations
+
+All intercepted HTTP(S) requests are forwarded by a bounded transport to a validated
+pinned IP, with the original Host and verified TLS SNI/certificate. Every request
+rechecks the resolved set; private/mixed sets or address changes fail closed. Chromium
+cannot independently resolve/reach Targets: its direct traffic hits a deny-only local
+proxy, loopback bypass is disabled and non-proxied WebRTC UDP is disabled. Service
+workers are blocked; WebSockets, extra frames/pages, popups and downloads are refused.
+No Playwright evaluate/JS injection, scripts/specs or arbitrary method dispatch exists.
+Application JavaScript may execute normally within this restricted browser context.
+
+Initial runtime refuses **all redirects**, rather than allowing a redirect path that
+bypasses interception. It also refuses chunked/compressed/unknown-length responses,
+attachments and responses over 4 MiB; request bodies are limited to 64 KiB, headers
+to 16 KiB, requests to 100/test and concurrent forwarding to eight. These constraints
+are explicit system/unsupported failures, never weakened assertions or fake success.
+This is a controlled runtime foundation, not broad production website compatibility.
+DNS uses at most four bounded daemon workers: an unresponsive OS resolver occupies
+its slot until OS completion, while admission times out and creates no browser or
+connection; exhaustion fails closed. No unbounded resolver queue or executor-shutdown
+wait is introduced. No public internet is used by automated tests.
+
+Per-action and overall test deadlines are enforced with async timeouts. All browser
+page/context/browser/driver resources close in finally paths with separate deadlines
+(one second for context, two each for browser and driver; one for proxy shutdown),
+so a stalled context cannot prevent later cleanup attempts. Cleanup failure is a system failure. One process, isolated context
+and controlled page per test; no persistent profile or saved download.
+
+Assertion mismatches complete QA FAIL and remaining tests continue. Action timeouts,
+DNS/TLS/unreachable/policy/launch/crash/overall-timeout/internal/cleanup failures are
+system failures with fixed BrowserErrorCode values; existing RUN_EXECUTION_FAILED
+and partial-result semantics are retained. Earlier committed evidence survives.
+No browser-to-synthetic fallback exists. Raw SDK errors, paths, cookies, auth headers,
+DOM/HTML/console dumps or observed text are never persisted as diagnostics.
+
+BrowserObservation v1 records only navigation/assertion category, sealed test/plan
+identity, step/action, match boolean, final QA outcome and actual Chromium version.
+Existing policy projection displays WEB_BROWSER; synthetic legacy payloads remain
+readable. Screenshot capture/storage is deferred: no suitable reviewed binary
+artifact boundary exists, and nonzero screenshot requests fail closed.
+
+Minimal frontend changes only correct stored-executor labels and hide Synthetic
+Start for browser history; no visual redesign or browser execution control is added.
+SDK-double cleanup/error tests remain active without browsers. Real integration tests
+skip only if the package/binary is genuinely unavailable; the implementation validation
+actually installed and ran Chromium against the controlled local server.
+
+AI browser planning, broader safe network/response compatibility, authentication,
+self-healing and the first external campaign remain later separately authorized tasks.
+Task 5.3 is not implemented here.
+
+
+Runtime API references: [Playwright routing](https://playwright.dev/python/docs/api/class-route),
+[BrowserContext isolation/routing](https://playwright.dev/python/docs/api/class-browsercontext),
+[Chromium WebRTC IP handling](https://chromium.googlesource.com/chromium/src/+/376fc41e87a058f7a7b300b0ec3a4982b4ec0960/components/policy/resources/templates/policy_definitions/Miscellaneous/WebRtcIPHandling.yaml).

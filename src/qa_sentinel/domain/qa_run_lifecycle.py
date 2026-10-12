@@ -25,7 +25,7 @@ def finish_test(test, result):
     return QARunTest.model_validate({**test.model_dump(), "execution_status": "COMPLETED", "qa_result": result})
 
 
-def finish_run(run, tests, *, failed=False):
+def finish_run(run, tests, *, failed=False, browser_error_code=None):
     if run.execution_status != "RUNNING" or len(tests) != run.test_count or len({t.id for t in tests}) != len(tests) or any(t.run_id != run.id for t in tests):
         raise RunLifecycleError("RUN_INVALID_STATE")
     evaluated = [t.qa_result for t in tests if t.execution_status == "COMPLETED"]
@@ -37,4 +37,4 @@ def finish_run(run, tests, *, failed=False):
         outcome = "FAIL" if "FAIL" in evaluated else "PASS" if "PASS" in evaluated else "NOT_EVALUATED"
     return QARun.model_validate({**run.model_dump(), "execution_status": "FAILED" if failed else "COMPLETED",
         "qa_outcome": outcome, "completed_at": datetime.now(timezone.utc),
-        "execution_error_code": "RUN_EXECUTION_FAILED" if failed else None})
+        "execution_error_code": "RUN_EXECUTION_FAILED" if failed else None, "browser_error_code": browser_error_code})

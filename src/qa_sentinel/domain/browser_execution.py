@@ -157,3 +157,28 @@ class BrowserPlanEnvelope(Frozen):
     target_snapshot_hash: Hash
     plan_hash: Hash
     plan: BrowserExecutionPlan
+
+
+class BrowserErrorCode(StrEnum):
+    UNAVAILABLE = "BROWSER_RUNTIME_UNAVAILABLE"
+    LAUNCH = "BROWSER_LAUNCH_FAILED"
+    CRASH = "BROWSER_CRASHED"
+    NETWORK = "BROWSER_NETWORK_DENIED"
+    DNS = "BROWSER_DNS_FAILED"
+    TLS = "BROWSER_TLS_FAILED"
+    UNREACHABLE = "BROWSER_TARGET_UNREACHABLE"
+    TIMEOUT = "BROWSER_TEST_TIMEOUT"
+    ACTION_TIMEOUT = "BROWSER_ACTION_TIMEOUT"
+    CLEANUP = "BROWSER_CLEANUP_FAILED"
+    INTERNAL = "BROWSER_INTERNAL_ERROR"
+    PLAN = "BROWSER_PLAN_REJECTED"
+    REDIRECT = "BROWSER_REDIRECT_DENIED"
+    UNSUPPORTED = "BROWSER_UNSUPPORTED_FEATURE"
+
+
+class BrowserRuntimeIdentity(Frozen):
+    adapter_version: Literal["playwright-chromium-v1"] = "playwright-chromium-v1"
+    engine: Literal["CHROMIUM"] = "CHROMIUM"
+    playwright_version: Annotated[str, StringConstraints(strict=True, max_length=32, pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")]
+    chromium_revision: Annotated[str, StringConstraints(strict=True, pattern=r"^[0-9]{1,12}$")]
+    browser_version: Annotated[str, StringConstraints(strict=True, max_length=64, pattern=r"^[0-9]+(\.[0-9]+){3}$")]

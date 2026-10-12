@@ -53,7 +53,7 @@ class QARunEvidence(EvidenceDraft):
 
 
 class TestExecutionResult(Frozen):
-    executor_kind: Literal[ExecutorKind.SYNTHETIC] = ExecutorKind.SYNTHETIC
+    executor_kind: ExecutorKind = ExecutorKind.SYNTHETIC
     qa_result: QAResult
     evidence: tuple[EvidenceDraft, ...] = Field(min_length=1, max_length=MAX_TEST_EVIDENCE)
 

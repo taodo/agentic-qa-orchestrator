@@ -5,8 +5,9 @@ variant requires a reviewed typed payload, policy and entry in this module.
 """
 from types import MappingProxyType
 from typing import Annotated, Literal
-from pydantic import Field
-from .campaign_content import Frozen
+from pydantic import Field, model_validator
+from .campaign_content import Frozen, Hash
+from uuid import UUID
 from .executor import ExecutorKind
 from .qa_run import QAResult, QARunTest, MAX_SNAPSHOT_RECORDS
 
@@ -74,11 +75,56 @@ class SyntheticEvidencePolicy:
             EvidenceDetail(label="Observed synthetic outcome", value=payload.outcome)))
 
 
+class BrowserObservation(Frozen):
+    variant: Literal["browser-observation-v1"] = "browser-observation-v1"
+    category: Literal["NAVIGATION", "ASSERTION"]
+    run_test_id: UUID
+    plan_hash: Hash
+    step_number: int = Field(ge=1, le=50, strict=True)
+    action: Literal["NAVIGATE", "ASSERT_TEXT", "ASSERT_VISIBLE", "ASSERT_URL"]
+    matched: bool = Field(strict=True)
+    outcome: Literal["PASS", "FAIL"]
+    browser_version: str = Field(min_length=1,max_length=64,pattern=r"^[0-9]+(\.[0-9]+){3}$",strict=True)
+
+    @model_validator(mode="after")
+    def observation_kind(self):
+        if (self.category == "NAVIGATION") != (self.action == "NAVIGATE"):
+            raise ValueError("Browser observation category mismatch")
+        if self.category == "NAVIGATION" and not self.matched:
+            raise ValueError("Navigation failure is not completed evidence")
+        return self
+
+    def safe_summary(self):
+        return f"Browser step {self.step_number}: {self.action} {'matched' if self.matched else 'mismatched'}."
+
+
+class BrowserEvidencePolicy(SyntheticEvidencePolicy):
+    executor_kind = ExecutorKind.WEB_BROWSER
+    payload_type = BrowserObservation
+    variant = "browser-observation-v1"
+    source = "web-browser"
+
+    def validate_snapshot(self,payload,snapshot):
+        plan=snapshot.browser_plan
+        if (plan is None or payload.run_test_id!=snapshot.id or payload.plan_hash!=plan.plan_hash or
+                payload.step_number>len(plan.plan.steps) or
+                payload.action!=plan.plan.steps[payload.step_number-1].action):
+            raise ValueError("Browser observation outside sealed test")
+
+    def presentation(self,payload):
+        return EvidencePresentation(variant=self.variant,display_label="WEB_BROWSER",details=(
+            EvidenceDetail(label="Observed action",value=payload.action),
+            EvidenceDetail(label="Snapshot step",value=str(payload.step_number)),
+            EvidenceDetail(label="Matched",value=str(payload.matched)),
+            EvidenceDetail(label="Chromium",value=payload.browser_version)))
+
+
+BROWSER_EVIDENCE = BrowserEvidencePolicy()
 SYNTHETIC_EVIDENCE = SyntheticEvidencePolicy()
 # Compile-time closed discriminated boundary, not arbitrary JSON or runtime plugins.
 # A future reviewed variant extends this alias and the explicit policy mapping.
-EvidencePayload = Annotated[SyntheticObservation, Field(discriminator="variant")]
-_POLICIES = MappingProxyType({SyntheticObservation: SYNTHETIC_EVIDENCE})
+EvidencePayload = Annotated[SyntheticObservation | BrowserObservation, Field(discriminator="variant")]
+_POLICIES = MappingProxyType({SyntheticObservation: SYNTHETIC_EVIDENCE, BrowserObservation: BROWSER_EVIDENCE})
 
 
 def evidence_policy(payload):

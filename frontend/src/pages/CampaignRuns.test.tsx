@@ -202,3 +202,13 @@ describe('Run Results and execution evidence',()=>{
     expect(row.querySelector('details')!.open).toBe(true);expect(fetch).toHaveBeenCalledTimes(before+1);expect(posts()).toHaveLength(0);
   });
 });
+
+
+it('labels sealed browser history truthfully and exposes no synthetic or browser start control',async()=>{
+  routes(url=>url===api+'/runs/run-a'?response({...run,executor_kind:'WEB_BROWSER'}):undefined);
+  render(<MemoryRouter initialEntries={[base+'/runs/run-a']}><App/></MemoryRouter>);
+  expect(await screen.findByText('WEB_BROWSER execution')).toBeInTheDocument();
+  expect(screen.queryByText('Synthetic execution')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Start Synthetic Run'})).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
+});

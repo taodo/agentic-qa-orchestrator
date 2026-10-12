@@ -7,6 +7,8 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4, uuid5
 from pydantic import Field, StringConstraints, AwareDatetime, model_validator
 from .target import TargetSnapshot
+from .executor import ExecutorKind
+from .browser_execution import BrowserPlanEnvelope, BrowserRuntimeIdentity, BrowserErrorCode
 from .campaign import CampaignName, CampaignObjective
 from .campaign_content import Frozen, CampaignRequirement, Hash
 from .campaign_review import ApprovalEvidence, Readiness, content_hash
@@ -79,6 +81,9 @@ class QARun(Frozen):
     snapshot_version: Literal["qa-run-snapshot-v1", "qa-run-selection-v2"] = SNAPSHOT_VERSION
     snapshot_hash: Hash
     target_snapshot: TargetSnapshot | None = None
+    executor_kind: ExecutorKind = ExecutorKind.SYNTHETIC
+    runtime_identity: BrowserRuntimeIdentity | None = None
+    browser_error_code: BrowserErrorCode | None = None
     campaign_snapshot: CampaignSnapshot
     readiness_at_creation: Readiness
     requirement_count: int = Field(ge=1, le=MAX_SNAPSHOT_RECORDS, strict=True)
@@ -92,6 +97,12 @@ class QARun(Frozen):
 
     @model_validator(mode="after")
     def snapshot_owner(self):
+        if self.executor_kind == "SYNTHETIC" and (self.runtime_identity is not None or self.browser_error_code is not None):
+            raise ValueError("Synthetic identity cannot contain browser claims")
+        if self.executor_kind == "WEB_BROWSER" and (self.target_snapshot is None or self.runtime_identity is None):
+            raise ValueError("Browser identity requires captured Target and runtime")
+        if self.browser_error_code is not None and self.execution_status != "FAILED":
+            raise ValueError("Browser system code requires execution failure")
         if self.execution_status == "CREATED" and (self.started_at or self.completed_at or self.execution_error_code or self.qa_outcome != "NOT_EVALUATED"):
             raise ValueError("Invalid CREATED lifecycle")
         if self.execution_status == "RUNNING" and (self.started_at is None or self.completed_at or self.execution_error_code or self.qa_outcome != "NOT_EVALUATED"):
@@ -147,6 +158,7 @@ class QARunTest(Frozen):
     linked_requirement_snapshot_ids: tuple[UUID, ...] = Field(min_length=1, max_length=20)
     execution_status: RunTestExecutionStatus = RunTestExecutionStatus.NOT_STARTED
     qa_result: QAResult = QAResult.NOT_EVALUATED
+    browser_plan: BrowserPlanEnvelope | None = None
 
     @model_validator(mode="after")
     def approved(self):
@@ -163,19 +175,25 @@ def canonical_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION, target_snapshot=None):
+def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION, target_snapshot=None, runtime_identity=None):
     # Run identities, caller intent, wall-clock snapshot/approval timestamps and live
     # readiness counts are excluded. Accepted approval hashes are retained as stable
     # content-version identities (including their original immutable creation time).
     def facts(entry):
-        return {"position": entry.position, "content": entry.content.model_dump(mode="json", exclude={"created_at", "updated_at"}),
+        fact = {"position": entry.position, "content": entry.content.model_dump(mode="json", exclude={"created_at", "updated_at"}),
                 "approved_content_hash": entry.approval.content_hash}
+        if getattr(entry, "browser_plan", None) is not None:
+            fact["browser_plan"] = entry.browser_plan.model_dump(mode="json")
+        return fact
     payload = {"version": version, "campaign": campaign.model_dump(mode="json"),
         "requirements": [facts(r) for r in requirements], "tests": [facts(t) for t in tests]}
     # Null keeps legacy fingerprints byte-for-byte; captured context is separately
     # versioned and included in the sealed fingerprint, never a live join.
     if target_snapshot is not None:
         payload["target_snapshot"] = target_snapshot.model_dump(mode="json")
+    if runtime_identity is not None:
+        payload["executor_kind"] = "WEB_BROWSER"
+        payload["runtime_identity"] = runtime_identity.model_dump(mode="json")
     return sha256(canonical_json(payload)).hexdigest()
 
 
@@ -211,7 +229,20 @@ class PreparedQARun(Frozen):
             covered.update(test.content.requirement_ids)
         if covered != set(ids):
             raise ValueError("Snapshot coverage incomplete")
-        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version, run.target_snapshot):
+        for test in self.tests:
+            envelope = test.browser_plan
+            if run.executor_kind == "SYNTHETIC":
+                if envelope is not None: raise ValueError("Synthetic test cannot own a browser plan")
+                continue
+            if envelope is None: raise ValueError("Browser test requires sealed plan")
+            def fingerprint(value): return sha256(canonical_json(value)).hexdigest()
+            if ((envelope.project_id,envelope.campaign_id,envelope.run_id,envelope.run_test_id) !=
+                    (run.project_id,run.campaign_id,run.id,test.id) or
+                    envelope.plan_hash != fingerprint(envelope.plan.model_dump(mode="json")) or
+                    envelope.target_snapshot_hash != fingerprint(run.target_snapshot.model_dump(mode="json")) or
+                    envelope.test_snapshot_hash != fingerprint(test.model_dump(mode="json",exclude={"execution_status","qa_result","browser_plan"}))):
+                raise ValueError("Browser plan provenance inconsistent")
+        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version, run.target_snapshot, run.runtime_identity):
             raise ValueError("Snapshot fingerprint inconsistent")
         if len(canonical_json(self.model_dump(mode="json"))) > MAX_SNAPSHOT_BYTES:
             raise SnapshotSizeError()

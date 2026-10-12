@@ -64,17 +64,17 @@ function RunDetail({runId}:{runId:string}) {
   const action = usePreparationAction<QARun>();
   const exporting = usePreparationAction<Awaited<ReturnType<typeof exportRun>>>();
   async function refresh() { await results.reload(); }
-  return <><Link to={`${base}/runs`}>← Runs</Link><SectionHeader title="QA Run detail" /><SyntheticNotice />
+  return <><Link to={`${base}/runs`}>← Runs</Link><SectionHeader title="QA Run detail" />{run.data && (run.data.executor_kind==='WEB_BROWSER'?<aside className="notice"><strong>WEB_BROWSER execution</strong><p>This Run uses a sealed Chromium plan. Browser execution is available through the trusted internal service only.</p></aside>:<SyntheticNotice/>)}
     <p>This Run uses the immutable preparation snapshot captured when the Run was created. Later Campaign changes do not alter this Run.</p>
     <button disabled={run.loading || action.busy} onClick={() => void refresh()}>Refresh Run and results</button>
     <div className="actions">{(['CSV','XLSX'] as const).map(format=><button key={format} disabled={!run.data||run.data.execution_status==='RUNNING'||exporting.busy||exporting.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void exporting.run(()=>exportRun(p,c,runId,format),async result=>{saveExport(result);})}>Export {format}</button>)}</div>{exporting.error && <ErrorState error={exporting.error}/>}
     {action.error && <ErrorState error={action.error} />}
     {run.loading ? <LoadingState>Loading Run…</LoadingState> : run.error ? <ErrorState error={run.error} retry={() => void refresh()} /> : run.data && <section className="panel run-summary"><h3>RUN-{String(run.data.run_number).padStart(3,'0')}</h3><p className="mono muted technical-id">{run.data.id}</p><RunSummary run={run.data} /><TargetSummary target={run.data.target_snapshot} historical/>
-      {results.data && <ResultDistribution summary={results.data.summary}/>}
+      {results.data && <ResultDistribution summary={results.data.summary} executorKind={run.data.executor_kind??'SYNTHETIC'}/>}
       {results.data && <dl className="metadata" aria-label="Run result totals">{Object.entries({Total:results.data.summary.total,Completed:results.data.summary.completed,Passed:results.data.summary.passed,Failed:results.data.summary.failed,Skipped:results.data.summary.skipped,'Not evaluated':results.data.summary.not_evaluated,Remaining:results.data.summary.remaining}).map(([label,count])=><div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}</dl>}
       <details><summary>Snapshot audit</summary><p>Snapshot hash: <code>{run.data.snapshot_hash}</code></p><p>Whole-workspace readiness at creation: {run.data.readiness_at_creation.status}</p><p>Captured workspace: {run.data.campaign_snapshot.name}</p><p>{run.data.snapshot_version}</p></details>
-      {run.data.execution_error_code && <p role="alert">{run.data.execution_error_code}: Synthetic execution could not complete. Earlier completed QA results and evidence remain saved. Interrupted and unstarted tests are not evaluated; this is an execution-system failure, not a product assertion failure.</p>}
-      {run.data.execution_status === 'CREATED' && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(async () => {
+      {run.data.execution_error_code && <p role="alert">{run.data.execution_error_code}{run.data.browser_error_code && ` / ${run.data.browser_error_code}`}: {run.data.executor_kind==='WEB_BROWSER'?'Browser':'Synthetic'} execution could not complete. Earlier completed QA results and evidence remain saved. Interrupted and unstarted tests are not evaluated; this is an execution-system failure, not a product assertion failure.</p>}
+      {run.data.execution_status === 'CREATED' && run.data.executor_kind !== 'WEB_BROWSER' && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(async () => {
         try { return await startRun(p,c,runId); } catch (error) { await refresh(); throw error; }
       }, async () => { await refresh(); })}>{action.busy ? 'Running synthetic execution…' : 'Start Synthetic Run'}</button>}
       {action.busy && <p role="status">Results refresh when synchronous execution completes.</p>}

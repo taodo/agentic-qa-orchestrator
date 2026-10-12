@@ -201,7 +201,7 @@ export function ExecutionPage() {
 
 export function ResultsPage() {
   const {projectId:p,campaignId:c}=useCampaign();const runs=useResource(useCallback(()=>listRuns(p,c),[p,c]));
-  return <><SectionHeader title="Results"/><p>Saved immutable test selections and truthful SYNTHETIC outcomes. A test FAIL is a QA outcome; execution FAILED denotes a system problem.</p>
+  return <><SectionHeader title="Results"/><p>Saved immutable test selections and truthful execution outcomes. A test FAIL is a QA outcome; execution FAILED denotes a system problem.</p>
     <button disabled={runs.loading} onClick={()=>void runs.reload()}>Refresh saved results</button>
     {runs.loading?<LoadingState>Loading results…</LoadingState>:runs.error?<ErrorState error={runs.error}/>:runs.data && <RecentRuns page={runs.data} projectId={p} campaignId={c}/>}
   </>;
