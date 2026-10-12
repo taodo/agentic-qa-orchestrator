@@ -1,3 +1,4 @@
+import { ResultDistribution } from '../components/CommandVisuals';
 import { TargetSummary } from '../components/Targets';
 import { exportRun, saveExport } from '../api/productV2';
 import { useCallback, useState } from 'react';
@@ -15,7 +16,7 @@ import { SectionHeader } from '../components/WorkspaceUI';
 import { CampaignReadiness } from '../components/CampaignReadiness';
 
 function SyntheticNotice() { return <aside className="notice synthetic-notice"><strong>Synthetic execution</strong><p>No external target is tested in this mode.</p><p>Deterministic demo fixture: odd snapshot positions PASS, even positions FAIL. Results demonstrate lifecycle behavior, not target application correctness.</p></aside>; }
-function RunSummary({ run }: { run: QARun }) { return <dl className="metadata"><div><dt>Execution status</dt><dd><StateBadge status={run.execution_status} /></dd></div><div><dt>QA outcome</dt><dd><StateBadge status={run.qa_outcome} /></dd></div>
+function RunSummary({ run }: { run: QARun }) { return <dl className="metadata run-facts"><div><dt>Execution status</dt><dd><StateBadge status={run.execution_status} /></dd></div><div><dt>QA outcome</dt><dd><StateBadge status={run.qa_outcome} /></dd></div>
   <div><dt>Requirement count</dt><dd>{run.requirement_count}</dd></div><div><dt>Test count</dt><dd>{run.test_count}</dd></div><div><dt>Created</dt><dd><DateTime value={run.created_at} /></dd></div><div><dt>Started</dt><dd><DateTime value={run.started_at} /></dd></div><div><dt>Completed</dt><dd><DateTime value={run.completed_at} /></dd></div><div><dt>Note</dt><dd>{run.note ?? 'No note'}</dd></div></dl>; }
 
 export function CampaignRunsPage() {
@@ -69,6 +70,7 @@ function RunDetail({runId}:{runId:string}) {
     <div className="actions">{(['CSV','XLSX'] as const).map(format=><button key={format} disabled={!run.data||run.data.execution_status==='RUNNING'||exporting.busy||exporting.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void exporting.run(()=>exportRun(p,c,runId,format),async result=>{saveExport(result);})}>Export {format}</button>)}</div>{exporting.error && <ErrorState error={exporting.error}/>}
     {action.error && <ErrorState error={action.error} />}
     {run.loading ? <LoadingState>Loading Run…</LoadingState> : run.error ? <ErrorState error={run.error} retry={() => void refresh()} /> : run.data && <section className="panel run-summary"><h3>RUN-{String(run.data.run_number).padStart(3,'0')}</h3><p className="mono muted technical-id">{run.data.id}</p><RunSummary run={run.data} /><TargetSummary target={run.data.target_snapshot} historical/>
+      {results.data && <ResultDistribution summary={results.data.summary}/>}
       {results.data && <dl className="metadata" aria-label="Run result totals">{Object.entries({Total:results.data.summary.total,Completed:results.data.summary.completed,Passed:results.data.summary.passed,Failed:results.data.summary.failed,Skipped:results.data.summary.skipped,'Not evaluated':results.data.summary.not_evaluated,Remaining:results.data.summary.remaining}).map(([label,count])=><div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}</dl>}
       <details><summary>Snapshot audit</summary><p>Snapshot hash: <code>{run.data.snapshot_hash}</code></p><p>Whole-workspace readiness at creation: {run.data.readiness_at_creation.status}</p><p>Captured workspace: {run.data.campaign_snapshot.name}</p><p>{run.data.snapshot_version}</p></details>
       {run.data.execution_error_code && <p role="alert">{run.data.execution_error_code}: Synthetic execution could not complete. Earlier completed QA results and evidence remain saved. Interrupted and unstarted tests are not evaluated; this is an execution-system failure, not a product assertion failure.</p>}

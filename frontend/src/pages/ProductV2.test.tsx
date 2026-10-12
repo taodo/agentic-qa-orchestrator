@@ -23,7 +23,7 @@ const open=(path:string)=>render(<MemoryRouter initialEntries={[base+'/'+path]}>
 const writes=()=>vi.mocked(fetch).mock.calls.filter(([,o])=>o?.method==='POST');
 
 it('uses product navigation and passive authoritative overview without provider writes',async()=>{
-  routes();open('');await screen.findByText('130 current tests');
+  routes();open('');await screen.findByText('129 approved / 130 current tests');
   const nav=screen.getByRole('navigation',{name:'Campaign preparation'});
   for(const name of ['Overview','Specification','Test Design','Execution','Results','Project Settings','Advanced / Audit'])expect(within(nav).getByRole('link',{name})).toBeInTheDocument();
   for(const name of ['Requirements','Traceability','Readiness','Runs'])expect(within(nav).queryByRole('link',{name})).not.toBeInTheDocument();
@@ -92,7 +92,7 @@ it('discards a late create completion on unmount without starting a Run',async()
 
 it('shows saved Results as synthetic without provider or start calls',async()=>{
   routes(url=>url===api+'/runs?limit=50'?response(page([{...run,execution_status:'COMPLETED',qa_outcome:'FAIL'}])):undefined);open('results');
-  await screen.findByRole('link',{name:'RUN-001'});expect(screen.getByText('2 selected tests · SYNTHETIC')).toBeInTheDocument();expect(writes()).toHaveLength(0);
+  await screen.findByRole('link',{name:'RUN-001'});expect(within(screen.getByRole('region',{name:'Recent Runs'})).getByText('2')).toBeInTheDocument();expect(screen.getByText('SYNTHETIC · saved history')).toBeInTheDocument();expect(writes()).toHaveLength(0);
 });
 
 

@@ -80,3 +80,76 @@ synthetic Run with mixed results. Do not invoke a real provider for visual revie
 
 Automated tests cover navigation, status text, readiness guidance and existing
 preparation recovery behavior; browser fixture review checks appearance only.
+
+## UI V3 foundation
+
+UI V3 preserves existing React/plain-CSS and API contracts. Semantic surface,
+field, border, text, accent and status tokens define charcoal/purple dark mode
+and deliberately neutral light mode. The shell exposes a compact Appearance
+control; only `qa-sentinel.theme` (`dark`/`light`) is persisted in localStorage.
+Missing, invalid or unavailable storage falls back to dark. Storage failures still
+allow a session-local selection. The same-origin `/assets/theme-init.js` runs
+before the SPA, fits the existing hosted `script-src 'self'` policy and static
+asset allowlist, and touches no auth/project/session configuration.
+
+The compact sidebar retains one workflow navigation set and explicit current
+Project/Campaign context. Where already loaded, live Campaign Target decoration
+is published without extra shell reads and labelled LIVE CONFIG. Historical Run
+Target context always stays in the Run view and comes from its immutable snapshot.
+Results is active for nested Run routes. Narrow layouts expose a Navigation toggle
+without removing workflow links; tables scroll within bounded containers. Keyboard
+focus, skip-to-content, native disclosures, textual statuses and reduced-motion
+rules remain. Semantic PASS/FAIL colors are distinct from the purple accent.
+
+Workspace Overview uses authoritative readiness requirement/test counts, one
+bounded `listRuns?limit=50` read, latest returned Run metadata, and five recent
+rows with explicit returned/truncated disclosure. Unknown counts are Unavailable;
+no history is No Run/Not evaluated. Approved tests are never relabelled executable.
+The workflow strip presents counts and saved status, not a frontend state machine.
+Next-action links are guidance and do not enable execution. Preparation metadata
+and Run outcomes remain independent. There is no Project-wide aggregate or fabricated
+Dashboard: Campaign-owned Target/history cannot be inferred as a Project default.
+
+Recent Runs uses only stored metadata, including target_snapshot; passed/failed
+columns are omitted because this list API does not expose those aggregates. Run
+Results retains the authoritative aggregate counts, COMPLETED + FAIL distinction,
+bounded evidence disclosures, immutable Target context and CSV/XLSX export. No N+1
+result/detail calls are made to populate the overview. Specification limitations,
+explicit retry/clarification actions, analysis audit, current test tables, approval,
+selection, human edit and source traceability remain reachable. Target creation
+is an explicit New Target disclosure; existing Campaign selection says Change Target.
+
+Visual review uses disposable read-only synthetic fixtures, never a live provider,
+operator database or Target URL. Verify dark/light Overview and Results, desktop /
+tablet / 390px navigation, long URL/IDs, status text, field/focus contrast, bounded
+scrolling, document limitations and expanded evidence. A synthetic screenshot is
+UI review proof, not evidence of real application testing.
+
+### Reviewed visual refinement
+
+The refinement keeps the same requests/actions and theme persistence. A compact
+Target hero groups authoritative name, environment, inert URL, Campaign identity
+and already-loaded preparation counts; its SYNTHETIC warning stays visible and
+association context is a native disclosure. Project UUID remains available in the
+Project link title instead of primary navigation. Sidebar labels are calmer, with
+stronger purple selection and quieter Settings/Audit hierarchy.
+
+Metrics share one surface, workflow steps use connected horizontal/vertical
+presentation without derived completion states, and Recent Runs emphasizes stored
+Run identity and semantic outcomes. Dark and light have distinct hero, sidebar,
+section and metric surfaces, modest shadows and stronger system typography.
+No new API read, state machine, fake health indicator or behavioral gate is added.
+
+### Visual Pass 2: QA command center
+
+Dark-first purple gradients, restrained glows and category icon tiles distinguish
+navigation, Target hero, metrics and connected workflow. Light mode uses its own
+readable pale surfaces. The contextual rail reuses the already-loaded Target and
+links to existing preparation/results routes; it introduces no additional reads.
+
+Results charts only the persisted RunResults.summary total, passed, failed,
+skipped and not_evaluated counts. Empty or contradictory counts produce an honest
+notice instead of invented segments. Text counts remain available alongside the
+static decorative SVG. Overview does not fetch result details to invent a chart,
+health, pass rate, trend, duration or activity feed. Mobile stacks main content
+before contextual cards; existing bounded table/evidence disclosures remain intact.

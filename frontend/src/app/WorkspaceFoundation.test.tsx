@@ -11,7 +11,7 @@ const base = `/projects/${project.id}/campaigns/${campaign.id}`, api = '/api/v1'
 function routes(overrides: Record<string, unknown> = {}) {
   const fixtures: Record<string, unknown> = { [api]: campaign, [api+'/readiness']: readiness,
     [api+'/requirements?limit=50']: page([requirement, blockedRequirement]),
-    [api+'/traceability?limit=50']: traceability, [api+'/sources?limit=50']: page([]),
+    [api+'/runs?limit=50']: page([]), [api+'/traceability?limit=50']: traceability, [api+'/sources?limit=50']: page([]),
     [api+'/test-specifications?limit=50']: page([specification]), ['/api/v1/projects?limit=50']: page([project]), ...overrides };
   vi.mocked(fetch).mockImplementation(async input => {
     const url=String(input);
@@ -33,7 +33,12 @@ describe('workspace navigation and hierarchy', () => {
     expect(within(nav).getAllByRole('link')).toHaveLength(7);
     expect(within(nav).getByRole('link',{name:'Overview'})).toHaveAttribute('aria-current','page');
     expect(within(sidebar).getByText(campaign.name)).toBeInTheDocument();
-    await screen.findByText('130 current tests');expect(fetch).toHaveBeenCalledTimes(2);
+    const contextPanel=within(sidebar).getByRole('region',{name:'Project Workspace context'});
+    expect(within(contextPanel).getByText(campaign.name)).toBeInTheDocument();
+    expect(contextPanel.querySelector('a,button,input,select,textarea,[tabindex],[role="button"],[role="link"]')).toBeNull();
+    expect(contextPanel.contains(nav)).toBe(false);
+
+    await screen.findByText('129 approved / 130 current tests');expect(fetch).toHaveBeenCalledTimes(3);
     expect(within(sidebar).queryByText(/Reports|Dashboard|Playwright/)).not.toBeInTheDocument();
   });
   it('retains one navigation set and changes active route through ordinary links', async () => {
@@ -48,7 +53,7 @@ describe('workspace navigation and hierarchy', () => {
     expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method)).toBe(true);
   });
   it('clears Campaign context after leaving and preserves skip-to-content target', async () => {
-    routes();open();await screen.findByText('130 current tests');
+    routes();open();await screen.findByText('129 approved / 130 current tests');
     fireEvent.click(screen.getByRole('link',{name:'Leave Campaign'}));
     await screen.findByRole('heading',{name:'Projects',level:1});
     expect(screen.queryByRole('navigation',{name:'Campaign preparation'})).not.toBeInTheDocument();
