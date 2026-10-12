@@ -33,6 +33,11 @@ describe('workspace navigation and hierarchy', () => {
     expect(within(nav).getAllByRole('link')).toHaveLength(7);
     expect(within(nav).getByRole('link',{name:'Overview'})).toHaveAttribute('aria-current','page');
     expect(within(sidebar).getByText(campaign.name)).toBeInTheDocument();
+    const contextPanel=within(sidebar).getByRole('region',{name:'Project Workspace context'});
+    expect(within(contextPanel).getByText(campaign.name)).toBeInTheDocument();
+    expect(contextPanel.querySelector('a,button,input,select,textarea,[tabindex],[role="button"],[role="link"]')).toBeNull();
+    expect(contextPanel.contains(nav)).toBe(false);
+
     await screen.findByText('129 approved / 130 current tests');expect(fetch).toHaveBeenCalledTimes(3);
     expect(within(sidebar).queryByText(/Reports|Dashboard|Playwright/)).not.toBeInTheDocument();
   });

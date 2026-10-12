@@ -66,6 +66,12 @@ it('keeps the compact Target hero authoritative, inert and explicit',async()=>{
   expect(within(sidebar).queryByText(project.id)).not.toBeInTheDocument();
   expect(within(sidebar).getByRole('link',{name:'Project workspaces'})).toHaveAttribute('title','Project ID: '+project.id);
   expect(within(sidebar).queryByText(/LIVE CONFIG/)).not.toBeInTheDocument();
+  const panel=within(sidebar).getByRole('region',{name:'Project Workspace context'});
+  expect(within(panel).getByText('Campaign Target')).toBeInTheDocument();
+  expect(within(panel).getByText('Production WEB')).toBeInTheDocument();
+  expect(within(panel).getByText('WEB · PRODUCTION')).toBeInTheDocument();
+  expect(panel.querySelector('a,button,[tabindex],[role="button"],[role="link"]')).toBeNull();
+
   expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).endsWith('/target'))).toHaveLength(1);
   expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
   fireEvent.click(screen.getByText('Target context'));expect(screen.getByText(/Association changes apply to future Runs only/)).toBeVisible();
