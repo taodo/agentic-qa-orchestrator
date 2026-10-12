@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useResource } from '../app/useResource';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { listTargets,createTarget,updateTarget,getCampaignTarget,associateTarget,type Target,type TargetSnapshot,type TargetInput } from '../api/targets';
@@ -45,14 +45,14 @@ function TargetEditor({projectId,target,changed}:{projectId:string;target?:Targe
     </fieldset>{action.error && <ErrorState error={action.error}/>}</form>;
 }
 
-export function CampaignTarget() {
-  const {projectId:p,campaignId:c,campaign,transition,readiness}=useCampaign();
+export function CampaignTarget({commandCenter=false,children}:{commandCenter?:boolean;children?:ReactNode}) {
+  const {projectId:p,campaignId:c,campaign,transition,readiness,base}=useCampaign();
   const current=useResource(useCallback(()=>campaign.target_id?getCampaignTarget(p,c):Promise.resolve(null),[p,c,campaign.target_id]));
   useTargetContext(p,c,!current.loading&&!current.error?current.data??undefined:undefined);
   const counts=!readiness.loading&&!readiness.error?readiness.data:undefined;
   const [choosing,setChoosing]=useState(false),[selected,setSelected]=useState('');
   const action=usePreparationAction<Awaited<ReturnType<typeof associateTarget>>>();
-  return <section className="panel campaign-target">
+  return <><section className="panel campaign-target">
     <div className="target-hero-layout"><div className="target-hero-content">
       {current.loading?<LoadingState>Loading Campaign Target…</LoadingState>:current.error?<ErrorState error={current.error}/>:<section className="target-hero-identity" aria-label="Target Under Test">
         <h3>Target Under Test</h3>
@@ -70,5 +70,12 @@ export function CampaignTarget() {
     {choosing && <form aria-label="Campaign Target selection" onSubmit={e=>{e.preventDefault();void action.run(()=>associateTarget(p,c,selected||null),async value=>{await transition(value);setChoosing(false);});}}>
       <fieldset disabled={action.busy}><TargetOptions projectId={p} value={selected} onChange={setSelected}/><button disabled={action.error?.code==='HOST_AUTH_REQUIRED'} type="submit">Save Campaign Target</button></fieldset>
     </form>}{action.error && <ErrorState error={action.error}/>}
-  </section>;
+  </section>{commandCenter && <div className="command-center-main">{children}</div>}{commandCenter && <aside className="command-context-rail" aria-label="Command center context">
+    <section className="context-card context-target"><h3>Target configuration</h3>
+      {current.loading?<p className="hint">Loading configured Target…</p>:current.error?<p className="hint">Target details unavailable.</p>:current.data?<><p className="rail-target-name">{current.data.name}</p><span className="environment-pill">{current.data.type} · {current.data.environment}</span><p className="mono">{current.data.configuration.base_url}</p></>:<p>No Target selected.</p>}
+      <p className="hint">Configuration only; reachability is not checked.</p>
+    </section>
+    <section className="context-card"><h3>Quick actions</h3><nav aria-label="Quick actions"><Link to={base+'/specification'}>Add specification <span aria-hidden="true">↗</span></Link><Link to={base+'/test-design'}>Review test design <span aria-hidden="true">↗</span></Link><Link to={base+'/execution'}>Execution selection <span aria-hidden="true">↗</span></Link><Link to={base+'/results'}>Saved results <span aria-hidden="true">↗</span></Link></nav></section>
+    <section className="context-card execution-context"><span className="command-mode">SYNTHETIC</span><h3>Execution context</h3><p>No external Target is tested.</p><p className="hint">Approved tests still require explicit eligible selection. Execution status and QA outcome stay separate.</p><Link to={base+'/audit'}>Open preparation audit</Link></section>
+  </aside>}</>;
 }

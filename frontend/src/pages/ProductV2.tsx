@@ -1,3 +1,4 @@
+import { MetricIcon } from '../components/CommandVisuals';
 import { RecentRuns } from '../components/RecentRuns';
 import { CampaignTarget } from '../components/Targets';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -210,12 +211,12 @@ export function ProductOverviewPage() {
   const latest=!runs.loading&&!runs.error?runs.data?.items[0]:undefined;
   const next=!value?undefined:value.total_requirements===0?['Add Specification','specification']:value.approved_test_specifications===0?['Review Test Design','test-design']:['Review execution selection','execution'];
   return <><div className="overview-heading"><SectionHeader title="Overview"/></div>
-    <CampaignTarget/>
+    <div className="command-center-layout"><CampaignTarget commandCenter>
     <dl className="overview-metrics" aria-label="Workspace summary">
-      <div><dt>Requirements</dt><dd>{value?.total_requirements??'Unavailable'}</dd></div>
-      <div><dt>Approved tests</dt><dd>{value?.approved_test_specifications??'Unavailable'}</dd></div>
-      <div><dt>Latest saved Run</dt><dd>{latest?'RUN-'+String(latest.run_number).padStart(3,'0'):runs.loading||runs.error?'Unavailable':'No Run'}</dd></div>
-      <div><dt>QA outcome</dt><dd>{latest?<StateBadge status={latest.qa_outcome}/>:runs.loading||runs.error?'Unavailable':'Not evaluated'}</dd></div>
+      <div><MetricIcon kind="requirements"/><dt>Requirements</dt><dd>{value?.total_requirements??'Unavailable'}</dd></div>
+      <div><MetricIcon kind="approved"/><dt>Approved tests</dt><dd>{value?.approved_test_specifications??'Unavailable'}</dd></div>
+      <div><MetricIcon kind="run"/><dt>Latest saved Run</dt><dd>{latest?'RUN-'+String(latest.run_number).padStart(3,'0'):runs.loading||runs.error?'Unavailable':'No Run'}</dd></div>
+      <div><MetricIcon kind="outcome"/><dt>QA outcome</dt><dd>{latest?<StateBadge status={latest.qa_outcome}/>:runs.loading||runs.error?'Unavailable':'Not evaluated'}</dd></div>
     </dl>
     {readiness.loading?<LoadingState>Loading workspace counts…</LoadingState>:readiness.error?<ErrorState error={readiness.error}/>:null}
     <section className="workflow-section" aria-label="QA workflow"><h3>QA workflow</h3><ol className="workflow-strip">
@@ -227,6 +228,7 @@ export function ProductOverviewPage() {
     {next && <aside className="next-step"><div><strong>Next action</strong><p className="hint">Review saved preparation; the backend remains authoritative for eligibility.</p></div><Link className="button button--primary" to={base+'/'+next[1]}>{next[0]}</Link></aside>}
     <p className="hint">Whole-workspace readiness is available in Audit; it does not control a selected Run's eligibility. Approved counts are not executable-test counts.</p>
     {runs.loading?<LoadingState>Loading recent Runs…</LoadingState>:runs.error?<ErrorState error={runs.error}/>:runs.data && <RecentRuns page={runs.data} projectId={p} campaignId={c} maximum={5}/>}
+    </CampaignTarget></div>
   </>;
 }
 export function AuditPage() {const {base}=useCampaign();return <><SectionHeader title="Advanced / Audit"/><p>Persisted diagnostics and preparation evidence. Viewing this area never calls a provider.</p><nav className="actions"><Link to={base+'/requirements'}>Requirement versions / AI activity</Link><Link to={base+'/traceability'}>Traceability</Link><Link to={base+'/readiness'}>Whole-workspace readiness</Link><Link to={base+'/test-specifications'}>Legacy test detail / import</Link></nav><details><summary>Preparation readiness</summary><CampaignReadinessPage/></details></>;}

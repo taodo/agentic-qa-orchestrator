@@ -70,3 +70,15 @@ it('keeps the compact Target hero authoritative, inert and explicit',async()=>{
   expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
   fireEvent.click(screen.getByText('Target context'));expect(screen.getByText(/Association changes apply to future Runs only/)).toBeVisible();
 });
+
+it('uses already-loaded Target context in the right rail and only navigation quick actions',async()=>{
+  setup();open();const rail=await screen.findByRole('complementary',{name:'Command center context'});
+  await within(rail).findByText('Production WEB');expect(within(rail).getByText('https://example.com')).toBeInTheDocument();
+  expect(within(rail).getByText('Configuration only; reachability is not checked.')).toBeInTheDocument();
+  const actions=within(rail).getByRole('navigation',{name:'Quick actions'});
+  expect(within(actions).getByRole('link',{name:'Execution selection'})).toHaveAttribute('href',base+'/execution');
+  expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).endsWith('/target'))).toHaveLength(1);
+  expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).includes('/runs'))).toHaveLength(1);
+  expect(screen.queryByRole('region',{name:'Persisted result distribution'})).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
+});

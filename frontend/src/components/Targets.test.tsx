@@ -47,7 +47,7 @@ it('shows a legacy Campaign honestly and explicitly associates a Target without 
   await screen.findByRole('option',{name:'Staging WEB · STAGING'});
   fireEvent.change(screen.getByRole('combobox',{name:'Target Under Test'}),{target:{value:target.id}});
   fireEvent.submit(screen.getByRole('form',{name:'Campaign Target selection'}));
-  await screen.findByText('https://staging.example.com');expect(mutations()).toHaveLength(1);
+  await within(await screen.findByRole('region',{name:'Target Under Test'})).findByText('https://staging.example.com');expect(mutations()).toHaveLength(1);
   expect(mutations()[0][1]?.method).toBe('PUT');expect(JSON.parse(mutations()[0][1]?.body as string)).toEqual({target_id:target.id});
   expect(screen.getByText(/Current executor is SYNTHETIC; no Target URL is visited/)).toBeInTheDocument();
 });

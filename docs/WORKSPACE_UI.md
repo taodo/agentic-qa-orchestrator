@@ -139,3 +139,17 @@ presentation without derived completion states, and Recent Runs emphasizes store
 Run identity and semantic outcomes. Dark and light have distinct hero, sidebar,
 section and metric surfaces, modest shadows and stronger system typography.
 No new API read, state machine, fake health indicator or behavioral gate is added.
+
+### Visual Pass 2: QA command center
+
+Dark-first purple gradients, restrained glows and category icon tiles distinguish
+navigation, Target hero, metrics and connected workflow. Light mode uses its own
+readable pale surfaces. The contextual rail reuses the already-loaded Target and
+links to existing preparation/results routes; it introduces no additional reads.
+
+Results charts only the persisted RunResults.summary total, passed, failed,
+skipped and not_evaluated counts. Empty or contradictory counts produce an honest
+notice instead of invented segments. Text counts remain available alongside the
+static decorative SVG. Overview does not fetch result details to invent a chart,
+health, pass rate, trend, duration or activity feed. Mobile stacks main content
+before contextual cards; existing bounded table/evidence disclosures remain intact.
