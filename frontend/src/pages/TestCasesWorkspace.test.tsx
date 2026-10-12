@@ -34,7 +34,7 @@ function downloads(){const blobs:Blob[]=[];const NativeURL=URL;vi.stubGlobal('UR
 describe('Test Cases current workspace',()=>{
   it('uses compact local identity, honest filters and exact visible selection',async()=>{
     setup({truncated:true});open();await screen.findByRole('table');
-    expect(screen.getByRole('heading',{name:'Test Cases',level:2})).toBeInTheDocument();expect(screen.getByRole('link',{name:'Test Cases'})).toHaveAttribute('href',base+'/test-specifications');
+    expect(screen.getByRole('heading',{name:'Test Cases',level:2})).toBeInTheDocument();expect(screen.getByRole('link',{name:'Test Design'})).toHaveAttribute('href',base+'/test-design');
     expect(within(caseRow(ready.title)).getByRole('rowheader')).toHaveTextContent('READYReady case');
     expect(screen.getByText(/Counts, selection and CSV exports cover returned current/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Ready for review (1)'}));expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(1);

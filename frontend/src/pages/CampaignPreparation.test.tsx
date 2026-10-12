@@ -13,7 +13,7 @@ function routes(overrides: Record<string, Response | Promise<Response>> = {}) {
   return vi.mocked(fetch).mockImplementation(input => {
     const url = String(input);
     if (overrides[url]) return Promise.resolve(overrides[url]);
-    const fixtures: Record<string, unknown> = { [api]: campaign, [api+'/readiness']: readiness,
+    const fixtures: Record<string, unknown> = { [api]: campaign, [api+'/readiness']: readiness, [api+'/runs?limit=50']: page([]),
       [api+'/sources?limit=50']: page([]), [api+'/requirements?limit=50']: page([requirement, blockedRequirement]), [api+'/traceability?limit=50']: traceability,
       [api+'/test-specifications?limit=50']: page([specification, blockedSpecification]),
       ['/api/v1/projects/'+project.id]: project, ['/api/v1/projects/'+project.id+'/campaigns?limit=50']: page([campaign]) };
@@ -27,13 +27,15 @@ describe('Campaign routes and readiness', () => {
     routes(); open(suffix);
     expect(await screen.findByRole('heading', { name: heading, level: 2 })).toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: 'Campaign preparation' });
-    expect(within(nav).getAllByRole('link')).toHaveLength(6);
-    expect(within(nav).getByRole('link', { name: suffix === '/readiness' ? 'Readiness' : heading })).toHaveAttribute('aria-current', 'page');
+    expect(within(nav).getAllByRole('link').map(link=>link.textContent)).toEqual(['Overview','Specification','Test Design','Execution','Results','Project Settings','Advanced / Audit']);
+    if (!suffix) expect(within(nav).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current','page');
+    else expect(within(nav).queryAllByRole('link').filter(link=>link.getAttribute('aria-current')==='page')).toHaveLength(0); // Legacy diagnostic deep links remain supported, outside primary product stages.
     expect(screen.queryByRole('button', { name: /Run|Mark Ready|Resolve|Execute/i })).not.toBeInTheDocument();
     expect(vi.mocked(fetch).mock.calls.every(([, options]) => !options?.method || options.method === 'GET')).toBe(true);
   });
   it('separates preparation Approved from Not ready and uses full aggregates', async () => {
-    routes(); open(); await screen.findByText('Not ready');
+    routes(); open('/audit'); await screen.findByRole('heading',{name:'Advanced / Audit'});
+    fireEvent.click(screen.getByText('Preparation readiness')); await screen.findByText('Not ready');
     expect(screen.getByText('Approved', { selector: '.badge' })).toBeInTheDocument();
     expect(screen.getByText('One or more Requirements need clarification.')).toBeInTheDocument();
     const counts = screen.getByRole('heading', { name: 'Preparation summary' }).closest('section')!;
