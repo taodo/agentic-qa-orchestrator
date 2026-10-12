@@ -2,7 +2,7 @@
 from uuid import UUID
 from fastapi import APIRouter
 from pydantic import BaseModel, ConfigDict
-from qa_sentinel.domain.target import CreateTarget, UpdateTarget, TargetUnderTest
+from qa_sentinel.application import CreateTarget, UpdateTarget, TargetUnderTest
 from qa_sentinel.application.models import CollectionPage, QACampaignView
 from .dependencies import Application, CollectionLimit
 from .errors import ERROR_RESPONSES

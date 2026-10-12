@@ -38,3 +38,9 @@ from qa_sentinel.domain.campaign_content import SourceType
 
 from .test_specifications import TestImportView, TestImportDetail, TestSpecificationView, TestGenerationView
 from qa_sentinel.domain.test_specification import ImportFormat
+
+# Typed API inputs are exposed through the application boundary.
+from qa_sentinel.domain.target import CreateTarget, UpdateTarget, TargetUnderTest
+from qa_sentinel.domain.test_specification import TestDesign
+from qa_sentinel.domain.campaign_content import Hash
+__all__ += ["CreateTarget", "UpdateTarget", "TargetUnderTest", "TestDesign", "Hash"]

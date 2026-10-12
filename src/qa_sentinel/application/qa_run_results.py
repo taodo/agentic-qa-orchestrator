@@ -3,6 +3,7 @@ from pydantic import Field, model_validator
 from qa_sentinel.domain.qa_run import QARun, QARunTest, MAX_SNAPSHOT_RECORDS
 from qa_sentinel.domain.qa_run_evidence import QARunEvidence, MAX_TEST_EVIDENCE
 from .models import View, CollectionPage
+from qa_sentinel.domain.executor import ExecutorKind
 from qa_sentinel.domain.evidence_variants import EvidencePresentation, evidence_policy
 
 
@@ -26,11 +27,19 @@ class QARunResultSummary(View):
 
 class QARunEvidenceView(QARunEvidence):
     """Read-only policy projection; never stored or accepted as executor input."""
+    executor_kind: ExecutorKind
     presentation: EvidencePresentation
+
+    @model_validator(mode="after")
+    def producing_executor(self):
+        if self.executor_kind != evidence_policy(self.payload).executor_kind:
+            raise ValueError("Evidence executor identity mismatch")
+        return self
 
     @classmethod
     def from_record(cls, record):
         return cls(**record.model_dump(),
+            executor_kind=evidence_policy(record.payload).executor_kind,
             presentation=evidence_policy(record.payload).presentation(record.payload))
 
 
