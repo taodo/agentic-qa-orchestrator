@@ -20,9 +20,9 @@ export function AppShell() {
   }
   return <WorkspaceContext.Provider value={setContext}><div className="shell"><a className="skip-link" href="#main-content">Skip to content</a>
     <header className="topbar"><button className="sidebar-toggle" aria-controls="workspace-sidebar" aria-expanded={navigationOpen} onClick={()=>setNavigationOpen(value=>!value)}>Navigation</button><NavLink to="/projects" className="brand"><span className="brand-mark" aria-hidden="true">Q</span>Agentic QA Orchestrator</NavLink><EnvironmentNotice mode={hostedAccess() ? 'hosted-demo' : undefined} />{hostedAccess() && <button disabled={signingOut} onClick={() => void signOut()}>Sign out</button>}{accessError && <span role="alert">Unable to sign out. Try again.</span>}</header>
-    <aside id="workspace-sidebar" data-collapsed={!navigationOpen} className="sidebar" aria-label="Workspace navigation"><p className="nav-label">WORKSPACE</p><nav aria-label="Primary"><NavLink to="/projects">Projects</NavLink></nav>{inProject && <div className="workspace-context"><span className="nav-label">CURRENT PROJECT</span><NavLink to={projectPath} end>Project workspaces<span className="context-id">{context?.projectId}</span></NavLink></div>}
-      {inCampaign && <><div className="campaign-context"><span className="nav-label">QA WORKFLOW</span><p title={context?.campaignName}>{context?.campaignName}</p></div>
-        {context?.target && <div className="sidebar-target"><span className="nav-label">CAMPAIGN TARGET · LIVE CONFIG</span><strong>{context.target.name}</strong><p>{context.target.type} · {context.target.environment}</p></div>}
+    <aside id="workspace-sidebar" data-collapsed={!navigationOpen} className="sidebar" aria-label="Workspace navigation"><p className="nav-label">Workspace</p><nav aria-label="Primary"><NavLink to="/projects">Projects</NavLink></nav>{inProject && <div className="workspace-context"><span className="nav-label">Project</span><NavLink to={projectPath} end title={`Project ID: ${context?.projectId}`}>Project workspaces</NavLink></div>}
+      {inCampaign && <><div className="campaign-context"><span className="nav-label">QA workflow</span><p title={context?.campaignName}>{context?.campaignName}</p></div>
+        {context?.target && <div className="sidebar-target"><span className="nav-label" title="Current Campaign configuration; historical Runs retain their saved Target">Campaign Target</span><strong>{context.target.name}</strong><p>{context.target.type} · {context.target.environment}</p></div>}
         <nav aria-label="Campaign preparation" className="campaign-navigation">
           <NavLink to={campaignPath} end>Overview</NavLink>
           <NavLink to={campaignPath+'/specification'}>Specification</NavLink>
@@ -32,7 +32,7 @@ export function AppShell() {
           <NavLink to={projectPath+'/settings'}>Project Settings</NavLink>
           <NavLink to={campaignPath+'/audit'}>Advanced / Audit</NavLink>
         </nav></>}
-      <p className="nav-label secondary-nav-label">ACTIVITY / ADVANCED</p><nav aria-label="Operational"><NavLink to="/operations">Operations</NavLink></nav><p className="sidebar-note">Agents reason.<br />Evidence records reality.</p><ThemeControl/></aside>
+      <p className="nav-label secondary-nav-label">More</p><nav aria-label="Operational"><NavLink to="/operations">Operations</NavLink></nav><p className="sidebar-note">Agents reason.<br />Evidence records reality.</p><ThemeControl/></aside>
     <main id="main-content" tabIndex={-1}><Outlet /></main>
   </div></WorkspaceContext.Provider>;
 }

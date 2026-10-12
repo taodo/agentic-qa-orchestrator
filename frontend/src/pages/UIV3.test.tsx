@@ -54,3 +54,19 @@ it('represents Results as active on a historical Run route without live Target r
   expect(screen.getByRole('button',{name:'Export CSV'})).toBeInTheDocument();expect(screen.getByRole('button',{name:'Export XLSX'})).toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).endsWith('/target'))).toBe(false);
 });
+
+it('keeps the compact Target hero authoritative, inert and explicit',async()=>{
+  setup();open();const hero=await screen.findByRole('region',{name:'Target Under Test'});
+  await within(hero).findByText('Production WEB');expect(within(hero).getByText('PRODUCTION')).toBeInTheDocument();
+  expect(within(hero).getByText('100 requirements · 129 approved tests')).toBeInTheDocument();
+  expect(within(hero).getByText('https://example.com')).toBeInTheDocument();
+  expect(screen.queryByRole('link',{name:'https://example.com'})).not.toBeInTheDocument();
+  expect(screen.getByText('Current executor is SYNTHETIC; no Target URL is visited.')).toBeInTheDocument();
+  const sidebar=screen.getByLabelText('Workspace navigation');
+  expect(within(sidebar).queryByText(project.id)).not.toBeInTheDocument();
+  expect(within(sidebar).getByRole('link',{name:'Project workspaces'})).toHaveAttribute('title','Project ID: '+project.id);
+  expect(within(sidebar).queryByText(/LIVE CONFIG/)).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.filter(([url])=>String(url).endsWith('/target'))).toHaveLength(1);
+  expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
+  fireEvent.click(screen.getByText('Target context'));expect(screen.getByText(/Association changes apply to future Runs only/)).toBeVisible();
+});

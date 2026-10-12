@@ -209,7 +209,7 @@ export function ProductOverviewPage() {
   const runs=useResource(useCallback(()=>listRuns(p,c),[p,c]));
   const latest=!runs.loading&&!runs.error?runs.data?.items[0]:undefined;
   const next=!value?undefined:value.total_requirements===0?['Add Specification','specification']:value.approved_test_specifications===0?['Review Test Design','test-design']:['Review execution selection','execution'];
-  return <><SectionHeader title="Overview"/>
+  return <><div className="overview-heading"><SectionHeader title="Overview"/></div>
     <CampaignTarget/>
     <dl className="overview-metrics" aria-label="Workspace summary">
       <div><dt>Requirements</dt><dd>{value?.total_requirements??'Unavailable'}</dd></div>
@@ -218,7 +218,7 @@ export function ProductOverviewPage() {
       <div><dt>QA outcome</dt><dd>{latest?<StateBadge status={latest.qa_outcome}/>:runs.loading||runs.error?'Unavailable':'Not evaluated'}</dd></div>
     </dl>
     {readiness.loading?<LoadingState>Loading workspace counts…</LoadingState>:readiness.error?<ErrorState error={readiness.error}/>:null}
-    <section aria-label="QA workflow"><h3>QA workflow</h3><ol className="workflow-strip">
+    <section className="workflow-section" aria-label="QA workflow"><h3>QA workflow</h3><ol className="workflow-strip">
       <li><Link to={base+'/specification'}><span className="workflow-number">1</span>Specification</Link><p>{value?`${value.total_requirements} current requirements · ${value.clarification_requirements} need information`:'Preparation counts unavailable'}</p></li>
       <li><Link to={base+'/test-design'}><span className="workflow-number">2</span>Test Design</Link><p>{value?`${value.approved_test_specifications} approved / ${value.total_test_specifications} current tests`:'Approval counts unavailable'}</p></li>
       <li><Link to={base+'/execution'}><span className="workflow-number">3</span>Execution</Link><p>Review eligible selection · SYNTHETIC</p></li>

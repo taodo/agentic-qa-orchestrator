@@ -54,7 +54,7 @@ it('shows a legacy Campaign honestly and explicitly associates a Target without 
 
 it('renders the Campaign-selected Target using its scoped configuration',async()=>{
   setup(undefined,true);open(base);const region=await screen.findByRole('region',{name:'Target Under Test'});await within(region).findByText('Staging WEB',{selector:'strong'});
-  expect(within(region).getByText('WEB · STAGING')).toBeInTheDocument();expect(mutations()).toHaveLength(0);
+  expect(within(region).getByText('STAGING')).toBeInTheDocument();expect(within(region).getByText('Web Application · WEB')).toBeInTheDocument();expect(mutations()).toHaveLength(0);
 });
 
 it('keeps historical Run Target display isolated from mutable Project Targets',async()=>{

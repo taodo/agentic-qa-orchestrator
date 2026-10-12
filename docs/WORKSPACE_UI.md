@@ -124,3 +124,18 @@ operator database or Target URL. Verify dark/light Overview and Results, desktop
 tablet / 390px navigation, long URL/IDs, status text, field/focus contrast, bounded
 scrolling, document limitations and expanded evidence. A synthetic screenshot is
 UI review proof, not evidence of real application testing.
+
+### Reviewed visual refinement
+
+The refinement keeps the same requests/actions and theme persistence. A compact
+Target hero groups authoritative name, environment, inert URL, Campaign identity
+and already-loaded preparation counts; its SYNTHETIC warning stays visible and
+association context is a native disclosure. Project UUID remains available in the
+Project link title instead of primary navigation. Sidebar labels are calmer, with
+stronger purple selection and quieter Settings/Audit hierarchy.
+
+Metrics share one surface, workflow steps use connected horizontal/vertical
+presentation without derived completion states, and Recent Runs emphasizes stored
+Run identity and semantic outcomes. Dark and light have distinct hero, sidebar,
+section and metric surfaces, modest shadows and stronger system typography.
+No new API read, state machine, fake health indicator or behavioral gate is added.

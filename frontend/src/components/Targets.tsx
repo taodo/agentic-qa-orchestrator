@@ -46,16 +46,29 @@ function TargetEditor({projectId,target,changed}:{projectId:string;target?:Targe
 }
 
 export function CampaignTarget() {
-  const {projectId:p,campaignId:c,campaign,transition}=useCampaign();
+  const {projectId:p,campaignId:c,campaign,transition,readiness}=useCampaign();
   const current=useResource(useCallback(()=>campaign.target_id?getCampaignTarget(p,c):Promise.resolve(null),[p,c,campaign.target_id]));
   useTargetContext(p,c,!current.loading&&!current.error?current.data??undefined:undefined);
+  const counts=!readiness.loading&&!readiness.error?readiness.data:undefined;
   const [choosing,setChoosing]=useState(false),[selected,setSelected]=useState('');
   const action=usePreparationAction<Awaited<ReturnType<typeof associateTarget>>>();
-  return <section className="panel campaign-target">{current.loading?<LoadingState>Loading Campaign Target…</LoadingState>:current.error?<ErrorState error={current.error}/>:<TargetSummary target={current.data}/>}
-    <button disabled={action.busy} onClick={()=>{setSelected(campaign.target_id??'');setChoosing(!choosing);}}>{campaign.target_id?'Change Target':'Choose Campaign Target'}</button>
+  return <section className="panel campaign-target">
+    <div className="target-hero-layout"><div className="target-hero-content">
+      {current.loading?<LoadingState>Loading Campaign Target…</LoadingState>:current.error?<ErrorState error={current.error}/>:<section className="target-hero-identity" aria-label="Target Under Test">
+        <h3>Target Under Test</h3>
+        {current.data?<><div className="target-hero-name"><span className="target-mark" aria-hidden="true">◆</span><strong>{current.data.name}</strong><span className="environment-pill">{current.data.environment}</span></div>
+          <div className="target-hero-url"><span>Web Application · {current.data.type}</span><p className="mono">{current.data.configuration.base_url}</p></div></>:<strong>Target not configured</strong>}
+        <div className="target-hero-facts"><p className="target-hero-workspace">QA workspace · {campaign.name}</p>
+        <p className="target-hero-counts">{counts?`${counts.total_requirements} requirements · ${counts.approved_test_specifications} approved tests`:'Preparation counts unavailable'}</p></div>
+      </section>}
+    </div><div className="target-hero-actions">
+      <button disabled={action.busy} onClick={()=>{setSelected(campaign.target_id??'');setChoosing(!choosing);}}>{campaign.target_id?'Change Target':'Choose Campaign Target'}</button>
+      <Link to={`/projects/${encodeURIComponent(p)}/settings`}>Configure Project Targets</Link>
+    </div></div>
+    <div className="target-hero-footer"><p className="target-executor-note">Current executor is SYNTHETIC; no Target URL is visited.</p>
+    <details className="target-context-note"><summary>Target context</summary><p className="hint">Association changes apply to future Runs only. Continue with Specification → Test Design → human approval → Execution → Results.</p></details></div>
     {choosing && <form aria-label="Campaign Target selection" onSubmit={e=>{e.preventDefault();void action.run(()=>associateTarget(p,c,selected||null),async value=>{await transition(value);setChoosing(false);});}}>
       <fieldset disabled={action.busy}><TargetOptions projectId={p} value={selected} onChange={setSelected}/><button disabled={action.error?.code==='HOST_AUTH_REQUIRED'} type="submit">Save Campaign Target</button></fieldset>
-    </form>}{action.error && <ErrorState error={action.error}/>}<Link to={`/projects/${encodeURIComponent(p)}/settings`}>Configure Project Targets</Link>
-    <p className="hint">Association changes apply to future Runs only. Continue with Specification → Test Design → human approval → Execution → Results.</p>
+    </form>}{action.error && <ErrorState error={action.error}/>}
   </section>;
 }
