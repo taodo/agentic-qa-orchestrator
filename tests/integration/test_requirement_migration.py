@@ -6,7 +6,7 @@ from sqlalchemy import inspect, text, Table, MetaData, select
 from sqlalchemy.exc import IntegrityError
 from qa_sentinel.domain.campaign import QACampaign
 from qa_sentinel.domain.project import Project
-from qa_sentinel.domain.campaign_content import RequirementExtraction
+from qa_sentinel.domain.campaign_content import RequirementExtraction, CampaignSource
 from qa_sentinel.agents.requirement_extraction import ingest
 from qa_sentinel.persistence.unit_of_work import UnitOfWork
 
@@ -28,7 +28,8 @@ def test_0004_upgrade_reopen_and_downgrade_preserve_every_existing_row(migrated_
     source=ingest(campaign.project_id,campaign.id,name='PRD',source_type='TEXT',content='Login required.\n')
     attempt=RequirementExtraction(project_id=source.project_id,campaign_id=source.campaign_id,source_id=source.id,source_hash=source.content_hash,model='test-model')
     with UnitOfWork(factory) as uow:
-        uow.campaign_content.add_source(source)
+        historical_source = Table('campaign_sources', MetaData(), autoload_with=uow.session.connection())
+        uow.session.execute(historical_source.insert().values(**source.model_dump(mode='json', exclude={'purpose', 'document'})))
         # Freeze the 0005 schema; current ORM columns belong to later migrations.
         historical = Table('campaign_requirement_extractions', MetaData(), autoload_with=uow.session.connection())
         values = attempt.model_dump(mode='json', exclude={'attempt_number', 'parent_attempt_id', 'metadata'})
@@ -36,7 +37,9 @@ def test_0004_upgrade_reopen_and_downgrade_preserve_every_existing_row(migrated_
         uow.commit()
     engine.dispose()
     with UnitOfWork(factory) as uow:
-        assert uow.campaign_content.source(source.id)==source
+        historical_source = Table('campaign_sources', MetaData(), autoload_with=uow.session.connection())
+        stored_source = uow.session.execute(select(historical_source)).mappings().one()
+        assert CampaignSource.model_validate(dict(stored_source)) == source
         historical = Table('campaign_requirement_extractions', MetaData(), autoload_with=uow.session.connection())
         stored = uow.session.execute(select(historical)).mappings().one()
         assert RequirementExtraction.model_validate(dict(stored)) == attempt
@@ -67,7 +70,7 @@ def test_composite_ownership_and_unique_reservations_enforced(migrated_factory,k
                 value=str(other.id if column=='project_id' else foreign.id)
                 connection.execute(text(f'UPDATE campaign_sources SET {column}=:value WHERE id=:id'),dict(value=value,id=str(source.id)))
             elif kind=='duplicate-content':
-                connection.execute(text('INSERT INTO campaign_sources SELECT :id,project_id,campaign_id,source_type,name,content_hash,raw_hash,normalization_version,original_bytes,normalized_chars,line_count,status,normalized_text,error_code,created_at FROM campaign_sources'),dict(id=str(uuid4())))
+                connection.execute(text('INSERT INTO campaign_sources (id,project_id,campaign_id,source_type,name,content_hash,raw_hash,normalization_version,original_bytes,normalized_chars,line_count,status,normalized_text,error_code,created_at) SELECT :id,project_id,campaign_id,source_type,name,content_hash,raw_hash,normalization_version,original_bytes,normalized_chars,line_count,status,normalized_text,error_code,created_at FROM campaign_sources'),dict(id=str(uuid4())))
             else:
                 connection.execute(text('INSERT INTO campaign_requirement_extractions (id,project_id,campaign_id,source_id,source_hash,contract_version,agent,model,status,started_at,finished_at,error_code,metadata) SELECT :id,project_id,campaign_id,source_id,source_hash,contract_version,agent,model,status,started_at,finished_at,error_code,metadata FROM campaign_requirement_extractions'),dict(id=str(uuid4())))
     with UnitOfWork(factory) as uow:

@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 from pydantic import Field, AwareDatetime, StringConstraints, model_validator
 from .campaign_content import Frozen
+from .executor import ExecutorKind
 from .qa_run import QAResult, canonical_json
 from .evidence_variants import (
     EvidencePayload, evidence_policy, parse_payload,
@@ -52,6 +53,7 @@ class QARunEvidence(EvidenceDraft):
 
 
 class TestExecutionResult(Frozen):
+    executor_kind: Literal[ExecutorKind.SYNTHETIC] = ExecutorKind.SYNTHETIC
     qa_result: QAResult
     evidence: tuple[EvidenceDraft, ...] = Field(min_length=1, max_length=MAX_TEST_EVIDENCE)
 
@@ -60,5 +62,7 @@ class TestExecutionResult(Frozen):
         if self.qa_result == "NOT_EVALUATED":
             raise ValueError("Execution result must be completed")
         for draft in self.evidence:
+            if evidence_policy(draft.payload).executor_kind != self.executor_kind:
+                raise ValueError("Evidence executor identity mismatch")
             evidence_policy(draft.payload).validate_result(draft.payload, self.qa_result)
         return self

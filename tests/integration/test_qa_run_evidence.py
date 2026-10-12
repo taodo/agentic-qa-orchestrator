@@ -135,7 +135,7 @@ def test_immutable_and_composite_ownership_enforced_in_storage(ready):
             connection.execute(text(action))
     with pytest.raises(ValidationError): item.summary='Changed'
     for change in [{'run_id':str(uuid4())},{'run_test_id':str(uuid4())},{'campaign_id':str(uuid4())},{'project_id':str(uuid4())},{'sequence':21},{'summary':'x'*513},{'payload':{'padding':'x'*2049}}]:
-        values={**item.model_dump(mode='json', exclude={'presentation'}),'id':str(uuid4()),'sequence':2,**change}
+        values={**item.model_dump(mode='json', include=set(QARunEvidence.model_fields)),'id':str(uuid4()),'sequence':2,**change}
         with pytest.raises(IntegrityError),engine.begin() as connection:
             connection.execute(QARunEvidenceRow.__table__.insert().values(**values))
     assert result_view(ready,run).tests.items[0].evidence.items==(item,)

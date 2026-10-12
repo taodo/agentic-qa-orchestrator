@@ -72,6 +72,16 @@ Target editing/association, approval, recovery, synthetic execution, API/securit
 provider/token contracts, migrations and dependencies are unchanged. See
 [workspace conventions](WORKSPACE_UI.md#ui-v3-foundation).
 
+## Phase 5 Task 5.1: browser contracts only
+
+Strict inert browser action/locator plans, snapshot-bound candidate hashes and pure
+navigation/resource policy exist; no browser runtime, provider, Target network call
+or source workspace is involved. Existing immutable synthetic evidence identity
+maps to explicit executor kind in the typed result/read boundary, without a migration
+or historical rewrite. Public Run Start remains synthetic-only. Browser execution
+is unavailable and cannot fall back to synthetic. See [browser foundation](BROWSER_EXECUTION.md)
+for limits, runtime security gaps and Task 5.2 handoff.
+
 ## Target Under Test foundation
 
 **Target != Workspace != Executor.** Project-owned WEB Targets hold only typed

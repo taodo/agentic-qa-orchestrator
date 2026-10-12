@@ -3,8 +3,8 @@ from uuid import UUID
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, AfterValidator
 from qa_sentinel.application.product_v2 import ExecutionCandidate, TestEditEvidence
-from qa_sentinel.domain.test_specification import TestDesign
-from qa_sentinel.domain.campaign_content import Hash
+from qa_sentinel.application import TestDesign
+from qa_sentinel.application import Hash
 from fastapi import APIRouter
 from qa_sentinel.application import TestImportView,TestImportDetail,TestSpecificationView,TestGenerationView,CollectionPage
 from .models import ImportTestsRequest,GenerateTestsRequest

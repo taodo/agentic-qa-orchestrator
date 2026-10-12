@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import Annotated, Literal
 from pydantic import Field
 from .campaign_content import Frozen
+from .executor import ExecutorKind
 from .qa_run import QAResult, QARunTest, MAX_SNAPSHOT_RECORDS
 
 MAX_TEST_EVIDENCE = 20
@@ -43,6 +44,7 @@ class SyntheticObservation(Frozen):
 
 
 class SyntheticEvidencePolicy:
+    executor_kind = ExecutorKind.SYNTHETIC
     payload_type = SyntheticObservation
     variant = SyntheticObservation.model_fields["variant"].default
     source = "synthetic"
