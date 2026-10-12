@@ -43,6 +43,6 @@ it('keeps the preview notice and Project routing, with no additional request whe
   fireEvent.click(projectLink);
   expect(await screen.findByRole('heading', { name: project.name })).toBeVisible();
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3));
-  expect(screen.getByRole('button', { name: 'Create Campaign' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Create QA workspace' })).toBeVisible();
   expect(screen.queryByRole('button', { name: 'Create Task' })).not.toBeInTheDocument();
 });

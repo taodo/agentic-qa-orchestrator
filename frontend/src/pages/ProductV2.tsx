@@ -1,3 +1,4 @@
+import { CampaignTransition } from '../components/CampaignTransition';
 import { MetricIcon } from '../components/CommandVisuals';
 import { RecentRuns } from '../components/RecentRuns';
 import { CampaignTarget } from '../components/Targets';
@@ -231,4 +232,4 @@ export function ProductOverviewPage() {
     </CampaignTarget></div>
   </>;
 }
-export function AuditPage() {const {base}=useCampaign();return <><SectionHeader title="Advanced / Audit"/><p>Persisted diagnostics and preparation evidence. Viewing this area never calls a provider.</p><nav className="actions"><Link to={base+'/requirements'}>Requirement versions / AI activity</Link><Link to={base+'/traceability'}>Traceability</Link><Link to={base+'/readiness'}>Whole-workspace readiness</Link><Link to={base+'/test-specifications'}>Legacy test detail / import</Link></nav><details><summary>Preparation readiness</summary><CampaignReadinessPage/></details></>;}
+export function AuditPage() {const {base,campaign,transition}=useCampaign();return <><SectionHeader title="Advanced / Audit"/><p>Persisted diagnostics and preparation evidence. Viewing this area never calls a provider.</p><nav className="actions"><Link to={base+'/requirements'}>Requirement versions / AI activity</Link><Link to={base+'/traceability'}>Traceability</Link><Link to={base+'/readiness'}>Whole-workspace readiness</Link><Link to={base+'/test-specifications'}>Legacy test detail / import</Link></nav><section className="panel"><h3>Campaign preparation</h3><CampaignTransition campaign={campaign} changed={transition}/></section><details><summary>Preparation readiness</summary><CampaignReadinessPage/></details></>;}

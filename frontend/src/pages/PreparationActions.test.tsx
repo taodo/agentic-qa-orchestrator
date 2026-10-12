@@ -121,7 +121,8 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
   it('blocks Draft/clarification and unresolved/missing links without fake resolution',async()=>{
     mock(undefined,{requirements:[blockedRequirement,{...readyReq,id:'draft',review_status:'DRAFT'}],tests:[blockedSpecification,{...readyTest,id:'unlinked',requirement_ids:[]}]});open();
     await screen.findByText(blockedRequirement.title);expect(screen.queryByRole('button',{name:'Approve Requirement'})).not.toBeInTheDocument();expect(screen.getAllByText(/No Resolve-to-Approved action is available/)).toHaveLength(2);
-    fireEvent.click(screen.getByRole('link',{name:'Test Cases'}));await screen.findByText(blockedSpecification.title);expect(screen.queryByRole('button',{name:'Approve Test Case'})).not.toBeInTheDocument();expect(screen.getByText(/UNKNOWN-CURRENCY/)).toBeInTheDocument();expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('link',{name:'Advanced / Audit'}));
+    fireEvent.click(await screen.findByRole('link',{name:'Legacy test detail / import'}));await screen.findByText(blockedSpecification.title);expect(screen.queryByRole('button',{name:'Approve Test Case'})).not.toBeInTheDocument();expect(screen.getByText(/UNKNOWN-CURRENCY/)).toBeInTheDocument();expect(posts()).toHaveLength(0);
   });
   it('requires a valid reviewer label and retains note after a safe approval conflict',async()=>{
     mock(()=>response({error:{code:'REVIEW_CONFLICT',message:'Review intent conflicts with existing evidence'}},409),{requirements:[readyReq,blockedRequirement]});open();const form=await screen.findByRole('form',{name:'Approve Requirement'});fireEvent.submit(form);expect(posts()).toHaveLength(0);
@@ -132,9 +133,9 @@ function submit(name:string){fireEvent.submit(screen.getByRole('form',{name}));}
     mock(undefined,{requirements:[requirement]});open();const button=await screen.findByRole('button',{name:'View approval evidence'});expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).endsWith('/review'))).toBe(false);fireEvent.click(button);expect(await screen.findByText('qa-human')).toBeInTheDocument();expect(posts()).toHaveLength(0);
   });
   it('uses both explicit lifecycle actions without equating Approved and Ready',async()=>{
-    mock((_path,body,s)=>{s.campaign={...s.campaign,status:body.status as CampaignView['status']};return response(s.campaign);},{campaign:{...campaign,status:'DRAFT'}});open('');
+    mock((_path,body,s)=>{s.campaign={...s.campaign,status:body.status as CampaignView['status']};return response(s.campaign);},{campaign:{...campaign,status:'DRAFT'}});open('audit');
     fireEvent.click(await screen.findByRole('button',{name:'Submit Campaign for Review'}));fireEvent.click(await screen.findByRole('button',{name:'Approve Campaign Preparation'}));
-    await screen.findByText('Campaign preparation updated. Readiness is assessed separately.');expect(posts().map(([,o])=>JSON.parse(String(o?.body)))).toEqual([{status:'READY_FOR_REVIEW'},{status:'APPROVED'}]);expect(await screen.findByText('Not ready',{selector:'.badge'})).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Approve Campaign Preparation'})).not.toBeInTheDocument();
+    await screen.findByText('Campaign preparation updated. Readiness is assessed separately.');expect(posts().map(([,o])=>JSON.parse(String(o?.body)))).toEqual([{status:'READY_FOR_REVIEW'},{status:'APPROVED'}]);fireEvent.click(screen.getByText('Preparation readiness'));expect(await screen.findByText('Not ready',{selector:'.badge'})).toBeInTheDocument();expect(screen.queryByRole('button',{name:'Approve Campaign Preparation'})).not.toBeInTheDocument();
   });
  });
 
@@ -150,7 +151,7 @@ it.each(['extract','generate'])('discards stale %s completions after Campaign na
 
 it.each(['source','import','approval','transition'])('prevents duplicate pending %s writes and ignores late completions after leaving Campaign',async kind=>{
   const pending=deferred<Response>();mock(()=>pending.promise,{requirements:[readyReq,blockedRequirement],campaign:{...campaign,status:kind==='transition'?'DRAFT':campaign.status}});
-  render(<MemoryRouter initialEntries={[kind==='transition'?base:base+'/'+(kind==='import'?'test-specifications':'requirements')]}><Link to="/missing">Leave Campaign</Link><App /></MemoryRouter>);
+  render(<MemoryRouter initialEntries={[kind==='transition'?base+'/audit':base+'/'+(kind==='import'?'test-specifications':'requirements')]}><Link to="/missing">Leave Campaign</Link><App /></MemoryRouter>);
   let form:HTMLElement|undefined;
   if(kind==='source'){await screen.findByLabelText('Source name');fillSource();form=screen.getByRole('form',{name:'Add specification'});}
   if(kind==='import'){await screen.findByLabelText('Import name');fillImport();form=screen.getByRole('form',{name:'Import Test Cases'});}
@@ -196,5 +197,5 @@ it('moves focus to refreshed tests and loads fresh Traceability when visited aft
   mock((_path,_body,s)=>{s.tests=[specification];return response(receipt('TEST_SPECIFICATION',specification.id));});open('test-specifications');
   const form=await screen.findByRole('form',{name:'Approve Test Case'});fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa-human'}});fireEvent.submit(form);await screen.findByText('Approval recorded.');
   await waitFor(()=>expect(screen.getByRole('heading',{name:'Test Cases'})).toHaveFocus());
-  fireEvent.click(screen.getByRole('link',{name:'Traceability'}));await screen.findByText('Covered',{selector:'.badge'});expect(vi.mocked(fetch).mock.calls.filter(([url])=>url===api+'/traceability?limit=50')).toHaveLength(1);expect(posts()).toHaveLength(1);
+  fireEvent.click(screen.getByRole('link',{name:'Advanced / Audit'}));fireEvent.click(await screen.findByRole('link',{name:'Traceability'}));await screen.findByText('Covered',{selector:'.badge'});expect(vi.mocked(fetch).mock.calls.filter(([url])=>url===api+'/traceability?limit=50')).toHaveLength(1);expect(posts()).toHaveLength(1);
 });
