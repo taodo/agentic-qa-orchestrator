@@ -87,7 +87,8 @@ class PlaywrightBrowserExecutor:
                         proxy={"server":proxy_url,"bypass":""})
                     page=await context.new_page()
                 except BrowserExecutionError: raise
-                except (Error,TimeoutError): raise BrowserExecutionError(BrowserErrorCode.LAUNCH) from None
+                # Startup failures are bounded by phase, not by SDK exception type.
+                except Exception: raise BrowserExecutionError(BrowserErrorCode.LAUNCH) from None
                 async def abort(route):
                     try: await route.abort()
                     except Exception:
@@ -200,7 +201,8 @@ class PlaywrightBrowserExecutor:
                     except TimeoutError:
                         raise BrowserExecutionError(BrowserErrorCode.ACTION_TIMEOUT) from None
                     except Error:
-                        raise BrowserExecutionError(blocked[0] if blocked else BrowserErrorCode.CRASH if not browser.is_connected() else BrowserErrorCode.UNREACHABLE) from None
+                        # Only the pinned transport can attest unreachable; SDK action text is untrusted.
+                        raise BrowserExecutionError(blocked[0] if blocked else BrowserErrorCode.CRASH if not browser.is_connected() else BrowserErrorCode.INTERNAL) from None
                     if blocked: raise BrowserExecutionError(blocked[0])
                     if step.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL"}:
                         observations.append((number,step.action,matched))

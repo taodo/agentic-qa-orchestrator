@@ -474,7 +474,7 @@ API or schema is added:
 | Unexpected page/context/browser closure/crash | BROWSER_CRASHED |
 | Unsupported capability/framing/header/body/request/resource bound | BROWSER_UNSUPPORTED_FEATURE |
 | Cleanup/finalization deadline/failure | BROWSER_CLEANUP_FAILED |
-| Unknown exception | BROWSER_INTERNAL_ERROR |
+| Non-network SDK action error (including invalid/ambiguous locators), unknown exception | BROWSER_INTERNAL_ERROR; recorded transport/policy errors and disconnected-browser CRASH retain precedence; raw SDK messages are never classified or exposed |
 
 A deterministically observed assertion mismatch remains COMPLETED + QA FAIL;
 subsequent selected Tests continue. A missing assertion condition reported by the
