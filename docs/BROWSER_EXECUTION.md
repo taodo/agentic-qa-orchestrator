@@ -1,4 +1,4 @@
-# Browser execution contracts and Chromium runtime (Tasks 5.1–5.3)
+# Browser execution contracts and Chromium runtime (Tasks 5.1–5.4)
 
 Task 5.1 defined contracts and policy only. Task 5.2 implements Chromium execution through an explicit trusted internal application service; public/browser Start remains synthetic-only.
 
@@ -314,6 +314,108 @@ migration remains explicit/manual, never startup. Existing 0014 browser envelope
 and fingerprints are unchanged; no new nullable envelope field alters old hashes.
 SYNTHETIC and Task 5.2 runtime/network/FAIL/evidence rules remain unchanged.
 
-No frontend/dependency changes, public planning/acceptance UX, external campaign,
-DOM/screenshot AI planning or locator healing. Task 5.4 and Hermes/Jev/Phase 6 remain
-separate future work.
+No frontend/dependency changes, public planning/acceptance UX, DOM/screenshot AI
+planning or locator healing. Task 5.4 adds the trusted local composition below;
+Hermes/Jev/Phase 6 remain separate future work.
+
+
+## Task 5.4: generic controlled local end-to-end flow
+
+`qa-sentinel local web` composes the existing application, BrowserPlanGenerator,
+configured Planner role/official Responses adapter and PlaywrightBrowserExecutor.
+It is a trusted local operator CLI, independent of normal HTTP host composition.
+Demo/preview/hosted HTTP modes and public Start remain synthetic-only. No new API,
+worker, workflow, executor, evidence store or workspace binding is introduced.
+Target != source repository != execution workspace. Example/demo Targets are
+replaceable validation fixtures, never hard-coded product dependencies.
+
+Prerequisites: explicitly install the existing browser extra and Chromium (above),
+manually migrate the operator DB to 0015, and use the normal Project/Target and
+Campaign preparation flow. Associate a WEB Target; import a current Test linked
+to approved Requirements; include one strict browser-facts-v1 JSON precondition
+using the existing CSV/Markdown importer; explicitly review/approve that Test.
+Supply only non-secret operator-known facts, literal expectations and test data.
+No DOM/source lookup or fact inference occurs. General prose, unsupported actions
+or insufficient facts produce a persisted bounded failure, not guessed execution.
+No source repository, local pytest configuration or frontend build is required by
+this CLI. Existing lower-level host configuration is unchanged.
+
+### Explicit operator commands (PowerShell)
+
+Set the existing operator DB and scoped UUIDs, not an execution workspace:
+
+```powershell
+$db = "C:\operator\state.sqlite3" # replace with your existing migrated DB
+$project = "<Project UUID>"
+$campaign = "<Campaign UUID>"
+$test = "<approved current Test UUID>"
+$env:OPENAI_API_KEY = "<set locally; never put it in documents or command arguments>"
+qa-sentinel local web generate --database $db --project-id $project --campaign-id $campaign --test-id $test
+```
+
+Generate makes one configured provider call (default: existing Planner model and
+budgets; optional `--model` changes only the configured model). It makes no Target
+request, DNS resolution or browser launch, and creates no Run. It returns the
+bounded durable candidate record: UUID, approved input snapshots/hashes, configured
+and provider-reported model/usage (missing usage remains null), status, strict plan
+and plan hash. No credentials/raw provider response/hidden reasoning is emitted.
+
+Review the full candidate against the approved facts and Test intent; generation
+success alone is not authorization. Then explicitly accept the same candidate:
+
+```powershell
+$generation = "<SUCCEEDED generation UUID>"
+qa-sentinel local web candidate --database $db --project-id $project --campaign-id $campaign --generation-id $generation
+qa-sentinel local web accept --database $db --project-id $project --campaign-id $campaign --generation-id $generation --idempotency-key "<unique acceptance intent>"
+```
+
+Accept reuses Task 5.3 current Test/approval/Target revalidation and the immutable
+AI-origin seal/acceptance transaction, returning a CREATED Run. It performs no
+provider or Target access. Keep the same key for an intentional acceptance replay;
+do not accept a different candidate through that key. It currently selects one
+Test per generated-plan Run. Approval/facts authoring remains the existing Test
+review boundary, with no separate approval workflow or browser UX.
+
+Only a separate explicit Start accesses the captured Target:
+
+```powershell
+$run = "<accepted Run UUID>"
+qa-sentinel local web start --database $db --project-id $project --campaign-id $campaign --run-id $run
+qa-sentinel local web results --database $db --project-id $project --campaign-id $campaign --run-id $run
+```
+
+Start needs no API key/model and executes only the exact stored plan and Target
+snapshot through Task 5.2. Changing the live Target after acceptance does not
+replace that snapshot. Run/test RUNNING commits before execution. PASS or assertion
+FAIL returns execution COMPLETED (CLI exit 0 for both); infrastructure failure
+returns execution FAILED and a fixed browser error (exit 1), never synthetic fallback.
+Start cannot restart a terminal or uncertain Run. No automatic provider retry,
+plan regeneration, locator healing, weakened assertion or runtime AI is introduced.
+Results reuses existing bounded stored reads (10 Tests/page, evidence previews;
+`--after-position` selects the next page). It needs neither provider credentials
+nor the browser SDK and performs no Target requests. Run runtime identity, captured
+Target, AI plan origin/hash and typed actual observations remain auditable in the
+existing Results UI/read APIs too. No screenshots/network/DOM evidence is fabricated.
+All command JSON escapes control characters and has a one-MiB output limit; overflow
+returns a safe error without silently truncating. Generated records retain their
+existing 256-KiB bound. Failed post-action output does not undo persisted history;
+use Candidate/Results reads to inspect it rather than repeating side effects.
+
+For a disposable local HTTP fixture ONLY, add `--trusted-local-origin
+http://127.0.0.1:PORT` to Generate, Accept and Start. This reuses the existing exact
+numeric-loopback scheme/host/port exception; the URL still comes from the normal
+configured Target and immutable snapshot, never from a substituted fixture. Omit
+this option for a public WEB Target. There is no named-site exception or private
+network general allowlist. Optional manual external validation requires an
+operator-selected compatible Target, approved facts and locally supplied credentials.
+Do not infer success if provider/network/runtime is unavailable; retain the safe
+failure and report it. Existing redirects, response framing, authentication,
+subresource/origin and screenshots limitations above still apply unchanged.
+
+Automated proof: `python -m pytest tests/integration/test_local_web_e2e.py -q`
+uses two replaceable disposable HTTP applications with different Project/Target
+URLs, paths, locators and expectations, the real Chromium adapter and an offline
+provider transport. It proves zero Target access during Generate/Accept, exact AI
+seal, durable Results, PASS, QA FAIL and unavailable-target system failure. It uses
+no external site, source repository or real provider token. Broader browser authoring
+UX and Results UI expansion remain later Phase 5 tasks.
