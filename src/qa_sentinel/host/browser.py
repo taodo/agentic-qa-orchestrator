@@ -31,7 +31,7 @@ class LocalBrowserComposition:
         self.engine.dispose()
 
 
-def compose_browser(database, *, generate=False, configure_executor=False, settings=None, trusted_local_origin=None):
+def compose_browser(database, *, automatic=False, generate=False, configure_executor=False, settings=None, trusted_local_origin=None):
     """No bootstrap/migration, workspace, worker, browser launch or provider call.
 
     Caller is trusted local operator code, not public request configuration.
@@ -40,13 +40,19 @@ def compose_browser(database, *, generate=False, configure_executor=False, setti
     engine, factory = open_existing_database(database)
     try:
         generator = None
-        executor = PlaywrightBrowserExecutor(trusted_local_origin=trusted_local_origin) if generate or configure_executor else None
+        executor = PlaywrightBrowserExecutor(trusted_local_origin=trusted_local_origin) if generate or configure_executor or automatic else None
         if generate:
             if not os.environ.get("OPENAI_API_KEY", "").strip():
                 raise HostError("HOST_MODEL_KEY_REQUIRED")
             generator = BrowserPlanGenerator(OpenAIModelAdapter(), settings or RoleModelConfig().planner)
+        observer=reasoner=None
+        if automatic:
+            from qa_sentinel.execution.browser_observer import PlaywrightBrowserObserver
+            from qa_sentinel.agents.browser_grounding import BrowserGroundingReasoner
+            observer=PlaywrightBrowserObserver(trusted_local_origin=trusted_local_origin)
+            reasoner=BrowserGroundingReasoner(OpenAIModelAdapter(),settings or RoleModelConfig().planner)
         application = QASentinelApplication(factory, ProjectExecutionResolver(ProjectRuntimeRegistry([]), []),
-            browser_executor=executor, browser_plan_generator=generator)
+            browser_executor=executor, browser_plan_generator=generator, browser_observer=observer, browser_grounding_reasoner=reasoner)
         return LocalBrowserComposition(application, engine)
     except Exception:
         engine.dispose()

@@ -19,7 +19,9 @@ SECURITY_ARGS=("--proxy-bypass-list=<-loopback>","--host-resolver-rules=MAP * ~N
 
 
 class PlaywrightBrowserExecutor:
-    def __init__(self, *, trusted_local_origin=None):
+    def __init__(self, *, trusted_local_origin=None, mode="HEADLESS"):
+        if mode not in {"HEADLESS","HEADED"}:raise BrowserExecutionError(BrowserErrorCode.PLAN)
+        self.mode=mode
         if trusted_local_origin is not None:
             try:
                 if not ip_address(origin(trusted_local_origin)[1]).is_loopback: raise ValueError()
@@ -32,6 +34,9 @@ class PlaywrightBrowserExecutor:
             self.identity=BrowserRuntimeIdentity(playwright_version=package_version,chromium_revision=chromium["revision"],browser_version=chromium["browserVersion"])
         except (PackageNotFoundError,ImportError,ValueError,KeyError,StopIteration):
             raise BrowserExecutionError(BrowserErrorCode.UNAVAILABLE) from None
+
+    def for_mode(self,mode):
+        return type(self)(trusted_local_origin=self.trusted_local_origin,mode=mode)
 
     def policy_for(self,target):
         local=self.trusted_local_origin is not None and origin(self.trusted_local_origin)==origin(target.base_url)
@@ -85,7 +90,7 @@ class PlaywrightBrowserExecutor:
                 try:
                     manager=async_playwright()
                     driver=await manager.start()
-                    browser=await driver.chromium.launch(headless=True,args=list(SECURITY_ARGS),proxy={"server":proxy_url,"bypass":""},env=safe_env,timeout=min(limits.test_timeout_ms,10000))
+                    browser=await driver.chromium.launch(headless=self.mode=="HEADLESS",args=list(SECURITY_ARGS),proxy={"server":proxy_url,"bypass":""},env=safe_env,timeout=min(limits.test_timeout_ms,10000))
                     if browser.version!=self.identity.browser_version: raise BrowserExecutionError(BrowserErrorCode.INTERNAL)
                     context=await browser.new_context(service_workers="block",accept_downloads=False,permissions=[],
                         proxy={"server":proxy_url,"bypass":""})

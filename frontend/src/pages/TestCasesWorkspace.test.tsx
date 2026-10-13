@@ -87,7 +87,7 @@ describe('Test Cases current workspace',()=>{
     setup();open();await screen.findByRole('table');const row=caseRow(specification.title);fireEvent.click(within(row).getByRole('rowheader'));
     expect(within(row).getByRole('heading',{name:'Steps and expected behavior'})).toBeInTheDocument();expect(within(row).getByText('Submit a payment')).toBeInTheDocument();expect(within(row).getByText('Expected: Payment accepted')).toBeInTheDocument();
     expect(within(row).getByText('Observed payment state')).toBeInTheDocument();expect(within(row).getByRole('link',{name:requirement.id})).toBeInTheDocument();
-    const button=within(row).getByRole('button',{name:'View approval evidence'});expect(fetch).toHaveBeenCalledTimes(4);fireEvent.click(button);await within(row).findByText('Reviewer label (operator assertion)');expect(row.querySelector('details')!.open).toBe(true);expect(posts()).toHaveLength(0);
+    const button=within(row).getByRole('button',{name:'View approval evidence'});expect(fetch).toHaveBeenCalledTimes(5);fireEvent.click(button);await within(row).findByText('Reviewer label (operator assertion)');expect(row.querySelector('details')!.open).toBe(true);expect(posts()).toHaveLength(0);
   });
   it('offers one compact bulk approval panel above the table with live eligible counts',async()=>{
     setup();open();const table=await screen.findByRole('table');
@@ -118,7 +118,7 @@ describe('Test Cases current workspace',()=>{
     const audit=await screen.findByRole('region',{name:'Selected Test Case audit detail'});expect(audit).toHaveTextContent('read-only');expect(within(audit).queryByRole('form')).not.toBeInTheDocument();
     expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(1);fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));fireEvent.click(screen.getByRole('button',{name:'Export selected CSV'}));
     const rows=readCsv(await blobText(blobs[0]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe(ready.title);expect(rows.flat()).not.toContain(historical.title);
-    expect(fetch).toHaveBeenCalledTimes(5);expect(posts()).toHaveLength(0);click.mockRestore();
+    expect(fetch).toHaveBeenCalledTimes(6);expect(posts()).toHaveLength(0);click.mockRestore();
   });
   it('exports exactly filtered visible/selected current cases, without extra reads or provider actions',async()=>{
     setup({truncated:true});const {blobs,click}=downloads();open();await screen.findByRole('table');const reads=vi.mocked(fetch).mock.calls.length;

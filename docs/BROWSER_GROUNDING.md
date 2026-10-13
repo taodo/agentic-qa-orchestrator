@@ -8,8 +8,8 @@ Browser Plan, finish a preparation item, or implement the final Run UX.
 ## Composition and provenance
 
 The host may explicitly inject `PlaywrightBrowserObserver` and
-`BrowserGroundingReasoner` into `QASentinelApplication`. Normal demo/preview/hosted
-composition does not inject them; there is no new HTTP endpoint. The existing exhaustive safe-error mapper covers the
+`BrowserGroundingReasoner` into `QASentinelApplication`. Normal trusted-local composition now injects them for automatic batches;
+demo/preview/hosted composition does not. There is no arbitrary observation HTTP endpoint. The existing exhaustive safe-error mapper covers the
 two new internal artifact/reconciliation codes; no payload contract changes. The internal
 `ground_browser_preparation_item` requires the exact Project, Campaign, preparation,
 item and active attempt UUID. Immutable Test/approval/Target snapshots come from
@@ -132,3 +132,5 @@ were not touched by this task. No dependency or external service is added.
 5.8C must compose grounding and planning into audited mixed preparation/Run
 materialization. 5.8D owns final Run UX and headed/headless wiring. No Hermes/Jev,
 self-healing, authentication, source mutation or Phase 6 behavior is introduced.
+
+Task 5.8C–E consumes this bounded capability through [automatic batches](BROWSER_BATCHES.md). Grounding alone remains non-execution history.

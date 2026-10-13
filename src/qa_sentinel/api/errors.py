@@ -7,6 +7,9 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.BROWSER_BATCH_NOT_FOUND: (404, "Browser batch not found in this Campaign"),
+    Code.BROWSER_BATCH_NOT_CONFIGURED: (409, "Automatic browser execution is unavailable; ask the local operator to check Chromium and model setup"),
+    Code.BROWSER_BATCH_RECONCILIATION_REQUIRED: (409, "This interrupted batch requires explicit review; uncertain work will not replay"),
     Code.GROUNDING_NOT_FOUND: (404, "Browser grounding artifact not found in this Campaign"),
     Code.GROUNDING_RECONCILIATION_REQUIRED: (409, "Unresolved browser grounding requires explicit reconciliation"),
     Code.PREPARATION_NOT_FOUND: (404, "Browser preparation not found in this Campaign"),

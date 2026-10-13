@@ -1,3 +1,7 @@
+import { BrowserRunSelected, useBrowserCapability } from '../components/BrowserRunSelected';
+import { BrowserBatchHistoryPanel } from './BrowserBatchPage';
+import { browserExecutable, browserReviewable, approveBrowserTests } from '../api/browserBatches';
+import { PreparationReview } from '../components/PreparationReview';
 import { isReservedBrowserFacts } from '../api/browser';
 import { BrowserFactsForm } from '../components/BrowserFactsForm';
 import { BrowserPlanning } from '../components/BrowserPlanning';
@@ -102,15 +106,17 @@ function Pagination({page,busy=false}:{page:ReturnType<typeof useTestPage>;busy?
 export function TestDesignPage() {
   const {projectId:p,campaignId:c,base,readiness}=useCampaign();
   const [search,setSearch]=useState(''),[filter,setFilter]=useState('ALL'),[number,setNumber]=useState(1),[size,setSize]=useState(10);
+  const capability=useBrowserCapability(p,c), sourceFree=capability.data?.source_free_review==='AVAILABLE';
+  const [runSelection,setRunSelection]=useState<Record<string,CampaignTestSpecification>>({});
   const [selected,setSelected]=useState<string[]>([]),[all,setAll]=useState<{selection:DesignSelection;summary:SelectionSummary}>(),[notice,setNotice]=useState(''),[reviewer,setReviewer]=useState('');
   const page=useResource(useCallback(()=>designPage(p,c,{search,status:filter},number,size),[p,c,search,filter,number,size]));
   const exporting=usePreparationAction<Awaited<ReturnType<typeof exportTests>>>();
   const selecting=usePreparationAction<SelectionSummary>();const approving=usePreparationAction<Awaited<ReturnType<typeof approveSelection>>>();
   const selectionGeneration=useRef(0);
   const visible=page.data?.items??[], chosen=visible.filter(row=>selected.includes(row.test.id));
-  const eligible=all?.summary.eligible??chosen.filter(row=>row.approvable).length;
+  const eligible=all?.summary.eligible??chosen.filter(row=>sourceFree?browserReviewable(row.test) && ['READY_FOR_REVIEW','NEEDS_CLARIFICATION'].includes(row.test.review_status):row.approvable).length;
   const busy=selecting.busy||approving.busy;
-  function clear(){selectionGeneration.current++;setSelected([]);setAll(undefined);}
+  function clear(){selectionGeneration.current++;setSelected([]);setAll(undefined);setRunSelection({});}
   useEffect(()=>{clear();return()=>{selectionGeneration.current++;};},[p,c,search,filter,size]);
   useEffect(()=>setSelected([]),[number]);
 
@@ -123,6 +129,7 @@ export function TestDesignPage() {
     const selection=all?.selection??{criteria:{search,status:filter},ids:chosen.map(row=>row.test.id),expected_versions:Object.fromEntries(chosen.map(row=>[row.test.id,`${row.content_hash}:${row.test.review_status}`]))};
     const generation=selectionGeneration.current;
     await approving.run(async()=>{
+      if(sourceFree && !all){return approveBrowserTests(p,c,chosen.map(row=>row.test.id),Object.fromEntries(chosen.map(row=>[row.test.id,row.content_hash])),reviewer);}
       const summary=all?.summary??await selectionSummary(p,c,selection);
       // Explicit page selection also pins the versions that were displayed.
       if(generation!==selectionGeneration.current)throw new Error('Selection changed');
@@ -132,26 +139,28 @@ export function TestDesignPage() {
   async function download(format:'CSV'|'XLSX') {await exporting.run(()=>exportTests(p,c,chosen.map(row=>row.test.id),format),async result=>{saveExport(result);setNotice(`Exported ${result.count} selected cases as ${format}.`);});}
   const totalPages=page.data?.total_pages??1,current=page.data?.page??number;
   const numbers=[...new Set([1,totalPages,current-1,current,current+1].filter(n=>n>=1 && n<=totalPages))].sort((a,b)=>a-b);
-  return <><SectionHeader title="Test Design"/><p>Review, add information and approve the ready tests you need. Unresolved tests do not block unrelated ready work.</p>
+  return <><SectionHeader title="Test Design"/><p>Review, add information and approve the ready tests you need. Unresolved tests do not block unrelated ready work. Specifications are optional for imported executable browser tests.</p>
+    <nav className="actions"><Link className="button" to={base+'/test-specifications#test-import'}>Import Test Cases</Link><Link className="button" to={base+'/traceability'}>Generate from Specs</Link></nav>
     <section className="panel"><div className="actions"><label>Search tests<input disabled={busy} value={search} onChange={e=>{clear();setSearch(e.target.value);setNumber(1);}} maxLength={200}/></label><label>Design status<select disabled={busy} value={filter} onChange={e=>{clear();setFilter(e.target.value);setNumber(1);}}>{['ALL','READY','NEEDS_INFO','DRAFT','APPROVED'].map(value=><option key={value}>{value}</option>)}</select></label><button disabled={page.loading||busy} onClick={()=>void changed()}>Refresh tests</button></div>
-      <div className="actions"><button disabled={page.loading||busy||!visible.length} onClick={()=>{clear();setSelected(visible.map(row=>row.test.id));}}>Select page ({visible.length})</button><button disabled={page.loading||busy||!page.data?.total||page.data.total>10000} onClick={()=>void selectMatching()}>Select all {page.data?.total??0} matching tests</button><button disabled={busy} onClick={clear}>Clear selection</button><span role="status">Selected: {all?.summary.matched??chosen.length} · {eligible} eligible for approval</span><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('CSV')}>Export CSV</button><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('XLSX')}>Export XLSX</button></div>
+      <div className="actions"><button disabled={page.loading||busy||!visible.length||new Set([...Object.keys(runSelection),...visible.filter(row=>browserExecutable(row.test)).map(row=>row.test.id)]).size>500} onClick={()=>{selectionGeneration.current++;setAll(undefined);setSelected(visible.map(row=>row.test.id));setRunSelection(previous=>({...previous,...Object.fromEntries(visible.filter(row=>browserExecutable(row.test)).map(row=>[row.test.id,row.test]))}));}}>Select page ({visible.length})</button><button disabled={sourceFree||page.loading||busy||!page.data?.total||page.data.total>10000} onClick={()=>void selectMatching()}>Select all {page.data?.total??0} matching tests</button><button disabled={busy} onClick={clear}>Clear selection</button><span role="status">Selected: {all?.summary.matched??chosen.length} · {eligible} eligible for approval</span><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('CSV')}>Export CSV</button><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('XLSX')}>Export XLSX</button></div>
       {!!page.data && page.data.total>10000 && <p className="notice">All-matching approval is limited to 10,000 tests. Narrow the search/filter.</p>}
       <form aria-label="Approve selected tests" onSubmit={e=>{e.preventDefault();void approve();}}><label>Reviewer label<input required maxLength={64} disabled={busy} value={reviewer} onChange={e=>setReviewer(e.target.value)}/></label><button className="button--primary" disabled={!eligible||busy||page.loading||approving.error?.code==='HOST_AUTH_REQUIRED'} type="submit">{approving.busy?'Recording approvals…':`Approve selected (${eligible})`}</button><p className="hint">Explicit human approval only. Ineligible tests are skipped; any changed matching set/version rejects the selection.</p></form>
+      <BrowserRunSelected p={p} c={c} base={base} ids={Object.keys(runSelection)} capability={capability} disabled={busy}/><p className="hint">{Object.keys(runSelection).length} approved browser tests selected across pages (maximum 500). Browser selection uses explicit tests, not all-matching approval.</p>
       <p role="status">{notice}</p>{[exporting.error,selecting.error,approving.error].map((error,i)=>error && <ErrorState key={i} error={error}/>)}
-      {page.loading?<LoadingState>Loading test design…</LoadingState>:page.error?<ErrorState error={page.error}/>:!visible.length?<EmptyState>No matching tests. Analyze a specification and generate cases, or adjust the filter.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Design table" tabIndex={0}><table className="campaign-table"><thead><tr><th>Select</th><th>Test case</th><th>Priority</th><th>Status / approval</th><th>Review</th></tr></thead><tbody>{visible.map(row=><DesignTestRow key={row.test.id} row={row} selected={!!all||selected.includes(row.test.id)} disabled={busy||!!all} select={checked=>{if(all)clear();setSelected(checked?[...selected,row.test.id]:selected.filter(id=>id!==row.test.id));}} changed={changed}/>)}</tbody></table></div>}
+      {page.loading?<LoadingState>Loading test design…</LoadingState>:page.error?<ErrorState error={page.error}/>:!visible.length?<EmptyState>No matching tests. Import Test Cases, generate from Specs, or adjust the filter.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Design table" tabIndex={0}><table className="campaign-table"><thead><tr><th>Select</th><th>Test case</th><th>Priority</th><th>Status / approval</th><th>Review</th></tr></thead><tbody>{visible.map(row=><DesignTestRow key={row.test.id} row={row} sourceFree={sourceFree} selected={!!all||selected.includes(row.test.id)||!!runSelection[row.test.id]} disabled={busy||!!all || (!selected.includes(row.test.id) && !runSelection[row.test.id] && Object.keys(runSelection).length>=500)} select={checked=>{if(all)clear();setSelected(checked?[...selected,row.test.id]:selected.filter(id=>id!==row.test.id));setRunSelection(previous=>{const next={...previous};if(checked && browserExecutable(row.test))next[row.test.id]=row.test;else delete next[row.test.id];return next;});}} changed={changed}/>)}</tbody></table></div>}
       <nav aria-label="Test Design pages" className="actions"><label>Rows per page<select disabled={busy} value={size} onChange={e=>{clear();setSize(Number(e.target.value));setNumber(1);}}>{[10,20,50,100].map(n=><option key={n}>{n}</option>)}</select></label><button disabled={current<=1||busy||page.loading} onClick={()=>setNumber(current-1)}>Previous page</button>{numbers.map((n,i)=><span key={n}>{i>0 && n-numbers[i-1]>1 && <span> … </span>}<button disabled={busy||page.loading} aria-current={n===current?'page':undefined} onClick={()=>setNumber(n)}>{n}</button></span>)}<button disabled={current>=totalPages||busy||page.loading} onClick={()=>setNumber(current+1)}>Next page</button><span>Page {current} of {totalPages} · {page.data?.total??0} matching tests</span></nav>
     </section><GenerateFromFindings changed={changed}/><Link className="button" to={base+'/execution'}>Continue to Execution</Link></>;
 }
-function DesignTestRow({row,selected,disabled,select,changed}:{row:DesignRow;selected:boolean;disabled:boolean;select:(checked:boolean)=>void;changed:()=>Promise<void>}) {
+function DesignTestRow({row,selected,disabled,select,changed,sourceFree=false}:{row:DesignRow;sourceFree?:boolean;selected:boolean;disabled:boolean;select:(checked:boolean)=>void;changed:()=>Promise<void>}) {
   const [open,setOpen]=useState(false);
   function noninteractive(target:EventTarget|null){return target instanceof Element && !target.closest('button,a,input,select,textarea,label,summary,details,[role="button"],[role="checkbox"],[role="switch"],[role="combobox"],[contenteditable]');}
   return <tr onClick={e=>{if(noninteractive(e.target))setOpen(!open);}} onKeyDown={e=>{if(e.target===e.currentTarget && (e.key==='Enter'||e.key===' ')){e.preventDefault();setOpen(!open);}}} tabIndex={0} aria-expanded={open} aria-label={`Review ${row.test.key}`}>
-    <td><input type="checkbox" disabled={disabled} aria-label={`Select ${row.test.key}`} checked={selected} onChange={e=>select(e.target.checked)}/></td><th scope="row">{row.test.key}<h3>{row.test.title}</h3></th><td>{row.test.priority}</td><td><DesignStatus test={row.test}/></td><td><TestReview row={row} changed={changed} open={open} toggle={()=>setOpen(!open)}/></td>
+    <td><input type="checkbox" disabled={disabled} aria-label={`Select ${row.test.key}`} checked={selected} onChange={e=>select(e.target.checked)}/></td><th scope="row">{row.test.key}<h3>{row.test.title}</h3></th><td>{row.test.priority}</td><td><DesignStatus test={row.test}/></td><td><TestReview row={row} sourceFree={sourceFree} changed={changed} open={open} toggle={()=>setOpen(!open)}/></td>
   </tr>;
 }
 
 
-function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;changed:()=>Promise<void>;open?:boolean;toggle?:()=>void}) {
+function TestReview({row,changed,open,toggle,sourceFree=false}:{row:ExecutionCandidate|DesignRow;sourceFree?:boolean;changed:()=>Promise<void>;open?:boolean;toggle?:()=>void}) {
   const {projectId:p,campaignId:c,base}=useCampaign();const test=row.test;
   const [editing,setEditing]=useState(false),[title,setTitle]=useState(test.title),[steps,setSteps]=useState(test.steps),[expected,setExpected]=useState(test.overall_expected_result??''),[resolved,setResolved]=useState(false),[priority,setPriority]=useState(test.priority),[preconditions,setPreconditions]=useState(test.preconditions.filter(text=>!isReservedBrowserFacts(text)).join('\n')),[evidence,setEvidence]=useState(test.required_evidence.join('\n'));
   const action=usePreparationAction<CampaignTestSpecification>();
@@ -162,7 +171,8 @@ function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;
     <details><summary>Supporting source findings</summary>{test.requirement_ids.map((id,i)=><p key={id}><Link to={`${base}/requirements?requirement_id=${encodeURIComponent(id)}`}>View supporting finding {i+1} and its source evidence</Link></p>)}</details>
     {'eligible' in row && !row.eligible && <p className="hint">Execution: {row.reason}</p>}
     {!!test.unresolved_requirement_refs.length && <p className="notice">Resolve supporting source links in Audit before editing this test. Human facts cannot invent traceability.</p>}
-    <BrowserFactsForm p={p} c={c} test={test} hash={row.content_hash} changed={changed}/>
+    <PreparationReview projectId={p} campaignId={c} kind="Test Case" objectId={test.id} status={test.review_status} sourceFree={sourceFree} previousHash={row.content_hash} blocked={sourceFree?!browserReviewable(test):!test.requirement_ids.length || !!test.information_markers.length || !!test.unresolved_requirement_refs.length} changed={changed}/>
+    <details><summary>Advanced browser configuration</summary><BrowserFactsForm p={p} c={c} test={test} hash={row.content_hash} changed={changed}/></details>
     <button disabled={!!test.unresolved_requirement_refs.length} onClick={()=>setEditing(!editing)}>Edit / provide facts</button>{editing && <form aria-label={`Edit ${test.key}`} onSubmit={event=>{event.preventDefault();const data=new FormData(event.currentTarget);
       const {key,test_type,information_markers}=test;
       const required_evidence=evidence.split("\n").filter(Boolean), preconditionLines=preconditions.split("\n").filter(Boolean);
@@ -180,10 +190,10 @@ function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;
 }
 
 export function ExecutionPage() {
-  const {projectId:p,campaignId:c}=useCampaign();const page=useTestPage();const navigate=useNavigate();const [selected,setSelected]=useState<string[]>([]);
+  const {projectId:p,campaignId:c,base}=useCampaign();const capability=useBrowserCapability(p,c),browser=capability.data?.source_free_review==='AVAILABLE';const page=useTestPage();const navigate=useNavigate();const [selected,setSelected]=useState<string[]>([]);
   const [intent,setIntent]=useState<{idempotency_key:string;test_specification_ids:string[]}>();const action=usePreparationAction<Awaited<ReturnType<typeof createRun>>>();
 
-  const rows=page.data.data?.items??[];
+  const rows=page.data.data?.items??[];const eligible=(row:ExecutionCandidate)=>browser?browserExecutable(row.test):row.eligible;
   async function runSelected(){
     const body=intent??{idempotency_key:crypto.randomUUID(),test_specification_ids:[...selected]};setIntent(body);
     await action.run(()=>createRun(p,c,body),async run=>{
@@ -192,22 +202,22 @@ export function ExecutionPage() {
       try{await startRun(p,c,run.id);}finally{navigate(runsPath(p,c,run.id));}
     });
   }
-  return <><SectionHeader title="Execution"/><CampaignTarget/><aside className="notice synthetic-notice"><strong>SYNTHETIC fixture execution</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
-    <BrowserPlanning key={`${p}/${c}`} p={p} c={c} tests={rows.map(row=>row.test)}/>
+  return <><SectionHeader title="Execution"/><CampaignTarget/>{!browser && <aside className="notice synthetic-notice"><strong>SYNTHETIC fixture execution</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>}
+    <details><summary>Advanced browser planning</summary><BrowserPlanning key={`${p}/${c}`} p={p} c={c} tests={rows.map(row=>row.test)}/></details>
     <section className="panel"><p>Select approved eligible tests. Whole-workspace readiness does not block unrelated eligible tests.</p>
-      <div className="actions"><button disabled={!!intent || action.busy || new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)]).size>500} onClick={()=>setSelected([...new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)])])}>Select all eligible on this page</button><button disabled={!!intent || action.busy} onClick={()=>setSelected([])}>Clear selection</button><span role="status">Selected: {selected.length} across pages (maximum 500)</span>
-      <button className="button--primary" disabled={(!selected.length && !intent) || action.busy || action.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void runSelected()}>{action.busy?'Creating / running…':intent?'Retry same create intent':'Run selected (Synthetic)'}</button></div>
+      <div className="actions"><button disabled={!!intent || action.busy || new Set([...selected,...rows.filter(eligible).map(row=>row.test.id)]).size>500} onClick={()=>setSelected([...new Set([...selected,...rows.filter(eligible).map(row=>row.test.id)])])}>Select all eligible on this page</button><button disabled={!!intent || action.busy} onClick={()=>setSelected([])}>Clear selection</button><span role="status">Selected: {selected.length} across pages (maximum 500)</span>
+      {browser?<BrowserRunSelected key={`${p}/${c}`} p={p} c={c} base={base} ids={selected} capability={capability}/>:<button className="button--primary" disabled={(!selected.length && !intent) || action.busy || action.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void runSelected()}>{action.busy?'Creating / running…':intent?'Retry same create intent':'Run selected (Synthetic)'}</button>}</div>
       {intent && action.error && <><p>The request retains its immutable selection for explicit retry. Refresh/navigation never retries it.</p><button onClick={()=>{setIntent(undefined);setSelected([]);}}>New selection intent</button></>}
       {action.error && <ErrorState error={action.error}/>}
-      {page.data.loading?<LoadingState>Loading execution candidates…</LoadingState>:page.data.error?<ErrorState error={page.data.error}/>:<div className="campaign-table-scroll"><table className="campaign-table"><thead><tr><th>Select</th><th>Test case</th><th>Eligibility</th></tr></thead><tbody>{rows.map(row=><tr key={row.test.id}><td><input type="checkbox" aria-label={`Run ${row.test.key}`} disabled={(!row.eligible && !selected.includes(row.test.id)) || (!selected.includes(row.test.id) && selected.length>=500) || !!intent || action.busy} checked={selected.includes(row.test.id)} onChange={e=>setSelected(e.target.checked?[...selected,row.test.id]:selected.filter(id=>id!==row.test.id))}/></td><th scope="row">{row.test.key} — {row.test.title}</th><td>{row.eligible?'Approved and eligible':row.reason}</td></tr>)}</tbody></table></div>}
-      {!rows.length && !page.data.loading && <EmptyState>No current tests. Generate and approve tests in Test Design.</EmptyState>}<Pagination page={page} busy={!!intent || action.busy}/>
+      {page.data.loading?<LoadingState>Loading execution candidates…</LoadingState>:page.data.error?<ErrorState error={page.data.error}/>:<div className="campaign-table-scroll"><table className="campaign-table"><thead><tr><th>Select</th><th>Test case</th><th>Eligibility</th></tr></thead><tbody>{rows.map(row=><tr key={row.test.id}><td><input type="checkbox" aria-label={`Run ${row.test.key}`} disabled={(!eligible(row) && !selected.includes(row.test.id)) || (!selected.includes(row.test.id) && selected.length>=500) || !!intent || action.busy} checked={selected.includes(row.test.id)} onChange={e=>setSelected(e.target.checked?[...selected,row.test.id]:selected.filter(id=>id!==row.test.id))}/></td><th scope="row">{row.test.key} — {row.test.title}</th><td>{eligible(row)?'Approved and eligible':row.reason??'Needs human review / complete executable intent'}</td></tr>)}</tbody></table></div>}
+      {!rows.length && !page.data.loading && <EmptyState>No current tests. Import or generate, then explicitly approve tests in Test Design.</EmptyState>}<Pagination page={page} busy={!!intent || action.busy}/>
     </section></>;
 }
 
 export function ResultsPage() {
   const {projectId:p,campaignId:c}=useCampaign();const runs=useResource(useCallback(()=>listRuns(p,c),[p,c]));
   return <><SectionHeader title="Results"/><p>Saved immutable test selections and truthful execution outcomes. A test FAIL is a QA outcome; execution FAILED denotes a system problem.</p>
-    <button disabled={runs.loading} onClick={()=>void runs.reload()}>Refresh saved results</button>
+    <BrowserBatchHistoryPanel/><button disabled={runs.loading} onClick={()=>void runs.reload()}>Refresh saved results</button>
     {runs.loading?<LoadingState>Loading results…</LoadingState>:runs.error?<ErrorState error={runs.error}/>:runs.data && <RecentRuns page={runs.data} projectId={p} campaignId={c}/>}
   </>;
 }
@@ -215,7 +225,7 @@ export function ProductOverviewPage() {
   const {base,projectId:p,campaignId:c,readiness}=useCampaign();const value=!readiness.loading&&!readiness.error?readiness.data:undefined;
   const runs=useResource(useCallback(()=>listRuns(p,c),[p,c]));
   const latest=!runs.loading&&!runs.error?runs.data?.items[0]:undefined;
-  const next=!value?undefined:value.total_requirements===0?['Add Specification','specification']:value.approved_test_specifications===0?['Review Test Design','test-design']:['Review execution selection','execution'];
+  const next=!value?undefined:value.total_test_specifications===0?['Import or design Tests','test-design']:value.approved_test_specifications===0?['Review Test Design','test-design']:['Review execution selection','execution'];
   return <><div className="overview-heading"><SectionHeader title="Overview"/></div>
     <div className="command-center-layout"><CampaignTarget commandCenter>
     <dl className="overview-metrics" aria-label="Workspace summary">
@@ -228,7 +238,7 @@ export function ProductOverviewPage() {
     <section className="workflow-section" aria-label="QA workflow"><h3>QA workflow</h3><ol className="workflow-strip">
       <li><Link to={base+'/specification'}><span className="workflow-number">1</span>Specification</Link><p>{value?`${value.total_requirements} current requirements · ${value.clarification_requirements} need information`:'Preparation counts unavailable'}</p></li>
       <li><Link to={base+'/test-design'}><span className="workflow-number">2</span>Test Design</Link><p>{value?`${value.approved_test_specifications} approved / ${value.total_test_specifications} current tests`:'Approval counts unavailable'}</p></li>
-      <li><Link to={base+'/execution'}><span className="workflow-number">3</span>Execution</Link><p>Review eligible selection · SYNTHETIC</p></li>
+      <li><Link to={base+'/execution'}><span className="workflow-number">3</span>Execution</Link><p>Select approved tests · Choose browser mode</p></li>
       <li><Link to={base+'/results'}><span className="workflow-number">4</span>Results</Link><p>{latest?`Latest execution: ${latest.execution_status}`:'No execution result available'}</p></li>
     </ol></section>
     {next && <aside className="next-step"><div><strong>Next action</strong><p className="hint">Review saved preparation; the backend remains authoritative for eligibility.</p></div><Link className="button button--primary" to={base+'/'+next[1]}>{next[0]}</Link></aside>}

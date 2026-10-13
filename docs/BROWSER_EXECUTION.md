@@ -150,11 +150,11 @@ python -m pip install -e ".[browser]"
 python -m playwright install chromium
 ```
 
-Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration to current head 0017. Official Playwright is pinned to 1.63.0. Chromium is the only
+Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration to current head 0018. Official Playwright is pinned to 1.63.0. Chromium is the only
 engine; executable paths, profiles and launch arguments cannot be supplied by plans
 or operator request configuration. Fixed internal network safety switches are used.
 Perform operator DB migration explicitly with the existing documented Alembic
-configuration before opening the host; admission now requires 0017.
+configuration before opening the host; admission now requires 0018.
 
 For a controlled fixture, create PlaywrightBrowserExecutor(trusted_local_origin=
 "http://127.0.0.1:PORT") and inject it as browser_executor into the existing
@@ -585,7 +585,7 @@ and distinct from WEB_BROWSER; a WEB Target alone never chooses an executor.
 ### Source-free local setup
 
 Create/select an existing persisted Project and explicitly migrate its operator DB
-to head 0017 while stopped. Configure a browser-only local Project without dummy
+to head 0018 while stopped. Configure a browser-only local Project without dummy
 workspace paths or pytest targets:
 
 ```json
@@ -715,3 +715,13 @@ mixed-batch Run creation and normal non-technical UX remain later child tasks.
 See [observation/grounding contracts and limits](BROWSER_GROUNDING.md). The internal
 capability reuses this secured session/transport, requires an active owned preparation
 attempt, and adds no public route, QA Run, synthetic fallback or final Run UX.
+
+### Task 5.8C–E normal browser product flow
+
+[Automatic browser batches](BROWSER_BATCHES.md) now compose the merged 5.8A/5.8B
+contracts through normal Run selected, including source-free human approval,
+Headless/Headed, immutable machine plan receipts and whole-batch Results. The 5.7
+manual Browser Facts/Generate/Accept/Start path above remains Advanced only. All
+secured network and executor semantics above remain authoritative. Default-cache
+installation with environment overrides unset is the supported reproducible setup;
+custom executable/browser-cache paths remain unsupported.

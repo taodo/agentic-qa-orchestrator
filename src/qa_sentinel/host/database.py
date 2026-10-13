@@ -10,7 +10,7 @@ from qa_sentinel.persistence.database import create_engine, create_session_facto
 from .config import HostError, canonical_path
 
 # Local admission must match the schema used by the current ORM/repositories.
-CURRENT_REVISION = "0017"
+CURRENT_REVISION = "0018"
 
 
 def migration_directory() -> Path:

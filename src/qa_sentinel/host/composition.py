@@ -78,14 +78,20 @@ def compose(config: HostConfig, *, existing_database=False) -> HostComposition:
         admission, wake = ExecutionAdmission(), threading.Event()
         extractor = RequirementExtractor(OpenAIModelAdapter(), RoleModelConfig().researcher) if config.mode == "local" else None
         generator = TestSpecificationGenerator(OpenAIModelAdapter(), RoleModelConfig().planner) if config.mode == "local" else None
-        browser_executor = browser_generator = None
+        browser_executor = browser_generator = browser_observer = browser_reasoner = None
         if config.mode == "local":
             from .browser import PlaywrightBrowserExecutor, BrowserExecutionError, BrowserPlanGenerator
-            try: browser_executor = PlaywrightBrowserExecutor()
+            from qa_sentinel.execution.browser_observer import PlaywrightBrowserObserver
+            from qa_sentinel.agents.browser_grounding import BrowserGroundingReasoner
+            try:
+                browser_executor = PlaywrightBrowserExecutor()
+                browser_observer = PlaywrightBrowserObserver()
             except BrowserExecutionError: pass  # Optional runtime missing; UI capability is unavailable.
             browser_generator = BrowserPlanGenerator(OpenAIModelAdapter(), RoleModelConfig().planner)
+            browser_reasoner = BrowserGroundingReasoner(OpenAIModelAdapter(), RoleModelConfig().planner)
         application = QASentinelApplication(factory, resolver, execution_admission=admission, execution_notify=wake.set,
-            requirement_extractor=extractor, test_generator=generator, browser_executor=browser_executor, browser_plan_generator=browser_generator)
+            requirement_extractor=extractor, test_generator=generator, browser_executor=browser_executor, browser_plan_generator=browser_generator, browser_observer=browser_observer, browser_grounding_reasoner=browser_reasoner)
+        application._browser_batch_project_keys = tuple(p.key for p in config.projects) if config.mode=="local" else ()
         worker = ExecutionWorker(application, admission, wake, on_exit=engine.dispose)
         return HostComposition(application, engine, resolver, worker)
     except Exception as exc:

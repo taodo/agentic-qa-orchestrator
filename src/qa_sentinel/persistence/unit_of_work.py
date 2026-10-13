@@ -7,6 +7,7 @@ from .qa_runs import QARunRepository
 from .browser_generations import BrowserPlanRepository
 from .browser_preparations import BrowserPreparationRepository
 from .browser_groundings import BrowserGroundingRepository
+from .browser_batches import BrowserBatchRepository
 from .campaigns import QACampaignRepository
 from .targets import TargetRepository
 from .campaign_review import CampaignReviewRepository
@@ -36,6 +37,7 @@ class UnitOfWork:
         self.browser_plans = BrowserPlanRepository(self.session)
         self.browser_preparations = BrowserPreparationRepository(self.session)
         self.browser_groundings = BrowserGroundingRepository(self.session)
+        self.browser_batches = BrowserBatchRepository(self.session)
         self.campaign_reviews = CampaignReviewRepository(self.session)
         self.campaign_content = CampaignContentRepository(self.session)
         self.test_specifications = TestSpecificationRepository(self.session)

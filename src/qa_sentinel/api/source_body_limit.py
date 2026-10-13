@@ -11,6 +11,8 @@ RECOVERY_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:requirem
 SOURCE_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/(?:sources|documents|test-imports|generate-tests|test-exports|test-design/(?:selection|approval)|test-specifications/[^/]+/edits)$")
 
 
+BROWSER_BULK_REVIEW_PATH = re.compile(r"^/api/v1/projects/[^/]+/campaigns/[^/]+/browser/tests/approve-selection$")
+
 TARGET_PATH = re.compile(r"^/api/v1/projects/[^/]+/(?:targets(?:/[^/]+)?|campaigns(?:/[^/]+/target)?)$")
 
 
@@ -29,7 +31,7 @@ class SourceBodyLimit:
         run = RUN_PATH.fullmatch(scope["path"]) or START_RUN_PATH.fullmatch(scope["path"])
         if not target and not review and not run and not SOURCE_PATH.fullmatch(scope["path"]) and not browser:
             return await self.app(scope, receive, send)
-        maximum = 32768 if browser else ((32768 if scope["path"].endswith("/campaigns") else 8192) if target else 3 * 1024 * 1024 if scope["path"].endswith("/documents") else 32768 if RUN_PATH.fullmatch(scope["path"]) or "/test-design/" in scope["path"] else MAX_REVIEW_BODY_BYTES if review or run else MAX_SOURCE_BODY_BYTES)
+        maximum = (131072 if BROWSER_BULK_REVIEW_PATH.fullmatch(scope["path"]) else 32768) if browser else ((32768 if scope["path"].endswith("/campaigns") else 8192) if target else 3 * 1024 * 1024 if scope["path"].endswith("/documents") else 32768 if RUN_PATH.fullmatch(scope["path"]) or "/test-design/" in scope["path"] else MAX_REVIEW_BODY_BYTES if review or run else MAX_SOURCE_BODY_BYTES)
         code = "RUN_REQUEST_SIZE_LIMIT" if run else "REVIEW_SIZE_LIMIT" if review else "SOURCE_SIZE_LIMIT"
         error_message = "Run request exceeds supported size" if run else "Review request exceeds supported size" if review else "Source exceeds supported size"
         lengths = [value for key, value in scope["headers"] if key.lower() == b"content-length"]

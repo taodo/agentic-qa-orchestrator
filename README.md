@@ -2,25 +2,24 @@
 
 **Agentic QA Orchestrator** is a QA platform for preparing requirements, test specifications, human review and coverage within Project-owned QA Campaigns.
 
-The primary browser journey is **Specification → Test Design → Execution → Results**.
-Open a Project configure a [WEB Target Under Test](docs/TARGET_UNDER_TEST.md), then create a QA
-workspace (the existing QACampaign internally) and explicitly select its Target.
-Upload PDF/DOCX/Markdown/text, explicitly analyze supported behavior, review findings
-and generate test cases. Review, add information and approve selected ready tests;
-export CSV/XLSX; select approved eligible tests for an immutable synthetic Run;
-inspect outcomes and truthful evidence. Unresolved tests do not block unrelated
-approved eligible tests. Images/layouts are not analyzed; no OCR or vision is added.
+The normal trusted-local browser flow is **Test Cases → Select → Run selected →
+Headless / Headed → Results**. Specifications are optional: import executable
+CSV/Markdown Test Cases or generate them from reviewed Specification findings,
+then explicitly approve Test meaning. Configure a Project-owned WEB Target and
+associate it with the Campaign; no source repository/workspace is required.
 
-[Product UX V2](docs/PRODUCT_UX_V2.md) documents formats, bounds, human-version
-provenance, explicit approvals, selected Run eligibility, Audit and migrations 0012/0013.
-Apply migrations explicitly to the backed-up operator database before using V2;
-startup never auto-migrates. Existing preparation and legacy Task routes remain
-available under Advanced / Audit and Legacy workflows.
+QA Sentinel automatically performs bounded observation, structured grounding and
+validated plan sealing after the explicit Run action. Needs-attention items stay
+visible in whole-batch Results without blocking unrelated runnable tests. Assertion
+FAIL is a QA outcome and execution continues; genuine runtime failure preserves
+prior evidence. Browser Facts/manual planning are Advanced operations. Synthetic
+Runs remain a distinct development/demo capability; public hosts remain fake-only.
 
-Campaign Runs remain deterministic **synthetic demonstrations**, with no external
-target tested. Individual test FAIL continues remaining tests; execution FAILED
-means a system failure. Trusted real-local Task/runtime infrastructure remains
-separate. [QA Runs](docs/QA_RUNS.md) records the original compatible lifecycle.
+See [automatic browser batches and secure Chromium setup](docs/BROWSER_BATCHES.md)
+for installation, Headed semantics, recovery, supported bounds and manual schema
+upgrade to **0018**. Startup never installs browsers or auto-migrates. Existing
+[Product UX V2](docs/PRODUCT_UX_V2.md) approval/history and [QA Run](docs/QA_RUNS.md)
+lifecycle contracts remain compatible.
 
 The project started as **QA Sentinel**. Source mutation and repair are historical infrastructure, not the product's primary journey.
 

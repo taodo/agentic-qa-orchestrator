@@ -1,3 +1,4 @@
+import { batchPagePath } from '../api/browserBatches';
 import { BrowserRunStart } from '../components/BrowserPlanning';
 import { BrowserRunIdentity } from '../components/BrowserRunIdentity';
 import { ResultDistribution } from '../components/CommandVisuals';
@@ -67,6 +68,7 @@ function RunDetail({runId}:{runId:string}) {
   const exporting = usePreparationAction<Awaited<ReturnType<typeof exportRun>>>();
   async function refresh() { await results.reload(); }
   return <><Link to={`${base}/runs`}>← Runs</Link><SectionHeader title="QA Run detail" />{run.data && (run.data.executor_kind==='WEB_BROWSER'?<aside className="notice"><strong>WEB_BROWSER execution</strong><p>Results show stored browser execution identity and evidence. Viewing Results does not access the Target.</p></aside>:run.data.executor_kind==='SYNTHETIC'?<SyntheticNotice/>:<aside className="notice">Executor identity unavailable. No executor is inferred from the Target.</aside>)}
+    {run.data?.preparation_id && <Link to={batchPagePath(base,run.data.preparation_id)}>View whole browser batch, including preparation exceptions</Link>}
     <p>This Run uses the immutable preparation snapshot captured when the Run was created. Later Campaign changes do not alter this Run.</p>
     <button disabled={run.loading || action.busy} onClick={() => void refresh()}>Refresh Run and results</button>
     <div className="actions">{(['CSV','XLSX'] as const).map(format=><button key={format} disabled={!run.data||run.data.execution_status==='RUNNING'||exporting.busy||exporting.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void exporting.run(()=>exportRun(p,c,runId,format),async result=>{saveExport(result);})}>Export {format}</button>)}</div>{exporting.error && <ErrorState error={exporting.error}/>}

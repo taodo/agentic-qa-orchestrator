@@ -163,7 +163,7 @@ describe('Traceability and selected detail reads', () => {
   });
   it('uses a listed selected test without a redundant detail request', async () => {
     routes(); open('/test-specifications?test_spec_id=test-a'); await screen.findByText(specification.title);
-    expect(fetch).toHaveBeenCalledTimes(4); expect(screen.getByRole('link', { name: 'Clear selection' })).toHaveAttribute('href', base+'/test-specifications');
+    expect(fetch).toHaveBeenCalledTimes(5); expect(screen.getByRole('link', { name: 'Clear selection' })).toHaveAttribute('href', base+'/test-specifications');
   });
 });
 
