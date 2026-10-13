@@ -1,4 +1,5 @@
-import type { RunTestResult } from '../api/runTypes';
+import { SealedBrowserPlanIdentity } from './BrowserRunIdentity';
+import type { QARun, RunTestResult } from '../api/runTypes';
 import { getRunTestEvidence } from '../api/runs';
 import { usePreparationAction } from '../app/usePreparationAction';
 import { PreparationRow } from './PreparationRow';
@@ -19,7 +20,7 @@ function EvidenceDetail({test,p,c,runId}:{test:RunTestResult;p:string;c:string;r
   </section>;
 }
 
-export function RunResultsTable({items,p,c,runId}:{items:RunTestResult[];p:string;c:string;runId:string}) {
+export function RunResultsTable({items,p,c,runId,executorKind}:{items:RunTestResult[];p:string;c:string;runId:string;executorKind?:QARun['executor_kind']}) {
   return <div className="campaign-table-scroll" role="region" aria-label="Test Results table" tabIndex={0}>
     <table className="campaign-table"><caption>Persisted results from immutable Run Test snapshots</caption>
       <thead><tr>{['#','Test Case','Execution','QA Result','Evidence / details'].map(label=><th scope="col" key={label}>{label}</th>)}</tr></thead>
@@ -27,6 +28,7 @@ export function RunResultsTable({items,p,c,runId}:{items:RunTestResult[];p:strin
         <td>{item.position}</td><th scope="row"><span className="record-key">{item.content.key}</span><h4>{item.position}. {item.content.title}</h4></th>
         <td><StateBadge status={item.execution_status}/></td><td><StateBadge status={item.qa_result}/></td>
         <td><span>{item.evidence_count} evidence record(s)</span><details id={detailId} open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>Result / evidence details</summary>
+          {executorKind === 'WEB_BROWSER' && <SealedBrowserPlanIdentity plan={item.browser_plan}/>}
           <EvidenceDetail test={item} p={p} c={c} runId={runId}/>
           <p>Overall expected behavior: {item.content.overall_expected_result}</p><h5>Steps and expected behavior snapshot</h5><ol className="test-steps">{item.content.steps.map(step=><li key={step.index}>{step.action} — Expected: {step.expected}</li>)}</ol>
           <h5>Required evidence description (preparation, not collected evidence)</h5><ul>{item.content.required_evidence.map((value,i)=><li key={i}>{value}</li>)}</ul>

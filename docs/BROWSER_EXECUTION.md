@@ -419,3 +419,34 @@ provider transport. It proves zero Target access during Generate/Accept, exact A
 seal, durable Results, PASS, QA FAIL and unavailable-target system failure. It uses
 no external site, source repository or real provider token. Broader browser authoring
 UX and Results UI expansion remain later Phase 5 tasks.
+
+
+## Task 5.5: stored browser Results presentation
+
+Run Results displays the stored WEB_BROWSER executor and Playwright/Chromium
+runtime versions/revision/adapter identity. It uses the immutable Run Target
+snapshot, never the current Target. Each browser Test disclosure shows the sealed
+plan origin/version and shortened hash; native Full plan hash disclosure exposes
+the full hash as inert wrapped text, with no network interaction. Plan operations,
+input values and mutable generation candidates are not displayed.
+
+Evidence uses only the existing bounded server policy presentation: navigation,
+text/visibility/URL assertion, snapshot step, Matched/Mismatch, recorded Chromium
+version, source/executor, host recording time and sequence. Observed URL/path,
+locator and expected/actual text are deliberately absent from this projection;
+Results does not guess them from the sealed plan or Target. Preparation expectations
+remain separately labeled snapshot content. No raw payload JSON, screenshots,
+DOM/console/network/trace viewer or extra evidence is introduced.
+
+COMPLETED + QA FAIL remains an assertion outcome, distinct from FAILED execution
+with the stored safe system/browser code and NOT_EVALUATED/PARTIAL results. Missing
+evidence is disclosed, not backfilled. Existing synthetic history stays synthetic;
+backend legacy compatibility identifies old Runs as SYNTHETIC. If wire identity or
+browser fields are missing, the UI shows unavailable rather than inferring them
+from a WEB Target, evidence prose or defaults.
+
+Only existing bounded Results/snapshot reads and explicit evidence expansion are
+used. No Generate/Accept/browser Start control, provider/browser/Target/DNS/source
+operation or new API is added. UI V3 styles, wrapping, native keyboard disclosures,
+dark/light tokens and pagination remain unchanged. Broader browser authoring,
+screenshots and richer evidence remain deferred.
