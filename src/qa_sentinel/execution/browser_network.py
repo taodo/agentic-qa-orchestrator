@@ -76,7 +76,8 @@ def origin(url):
 
 
 class PinnedNetwork:
-    def __init__(self,target, trusted_local_origin=None, *, redirect_limit=0):
+    def __init__(self,target, trusted_local_origin=None, *, redirect_limit=0, observation_only=False):
+        self.observation_only=observation_only
         self.target=target
         self.authority=origin(target.base_url)
         self.local=trusted_local_origin is not None and origin(web_base_url(trusted_local_origin))==self.authority
@@ -146,6 +147,13 @@ class PinnedNetwork:
     async def _fetch(self,request):
         checked_url(request.url)
         if origin(request.url)!=self.authority: raise BrowserExecutionError(BrowserErrorCode.NETWORK)
+        inspection_headers=None
+        if self.observation_only:
+            if request.method not in {"GET","HEAD"} or (urlsplit(request.url).query and request.is_navigation_request()):
+                raise BrowserExecutionError(BrowserErrorCode.NETWORK)
+            inspection_headers=await request.all_headers()
+            if any(k.lower() in {"authorization","cookie","proxy-authorization","x-api-key","x-auth-token"} for k in inspection_headers):
+                raise BrowserExecutionError(BrowserErrorCode.NETWORK)
         await self.addresses()  # Detect rebinding; connection never uses a second DNS resolution.
         scheme,host,port=self.authority
         address=sorted(self.pinned)[0]
@@ -168,7 +176,7 @@ class PinnedNetwork:
                 raise BrowserExecutionError(BrowserErrorCode.NETWORK)
             body=request.post_data_buffer or b""
             if len(body)>MAX_REQUEST_BODY_BYTES: raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
-            headers=await request.all_headers()
+            headers=inspection_headers if inspection_headers is not None else await request.all_headers()
             headers={k:v for k,v in headers.items() if k.lower() not in {"host","connection","content-length","accept-encoding","proxy-authorization","transfer-encoding"}}
             if len(headers)>MAX_HEADERS or sum(len(k.encode("latin-1"))+len(v.encode("latin-1"))+4 for k,v in headers.items())>MAX_HEADER_BYTES:
                 raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
@@ -196,6 +204,8 @@ class PinnedNetwork:
                             or any(ord(c)<32 and c!="\t" or ord(c)==127 for c in value)):
                         raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
                     response_headers[key]=value.strip()
+            if self.observation_only and "set-cookie" in response_headers:
+                raise BrowserExecutionError(BrowserErrorCode.NETWORK)
             if 300<=status<400:
                 if "set-cookie" in response_headers: raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
                 response_headers["location"]=self.redirect_destination(request.url,status,response_headers.get("location"))

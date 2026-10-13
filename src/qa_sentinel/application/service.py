@@ -93,12 +93,14 @@ def persistence_boundary():
 
 
 class QASentinelApplication:
-    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None, browser_executor=None, browser_plan_generator=None):
+    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None, browser_executor=None, browser_plan_generator=None, browser_observer=None, browser_grounding_reasoner=None):
         self._factory = session_factory
         self._requirement_extractor = requirement_extractor
         self._test_generator = test_generator
         self._browser_executor = browser_executor
         self._browser_plan_generator = browser_plan_generator
+        self._browser_observer = browser_observer
+        self._browser_grounding_reasoner = browser_grounding_reasoner
         self._synthetic_run_executor = synthetic_run_executor if synthetic_run_executor is not None else SyntheticRunExecutor()
         self._resolver = execution_resolver
         # Optional trusted host coordination, never supplied by HTTP/model inputs.
@@ -435,6 +437,19 @@ class QASentinelApplication:
     def get_browser_preparation(self, project_id, campaign_id, preparation_id):
         from .browser_preparation import read
         return read(self, project_id, campaign_id, preparation_id)
+
+    def ground_browser_preparation_item(self, project_id, campaign_id, preparation_id, item_id, attempt_id):
+        """Internal trusted-host composition only; no HTTP capability or Run creation."""
+        from .browser_grounding import ground
+        return ground(self, project_id, campaign_id, preparation_id, item_id, attempt_id)
+
+    def get_browser_grounding(self, project_id, campaign_id, grounding_id):
+        from .browser_grounding import read
+        return read(self, project_id, campaign_id, grounding_id)
+
+    def get_browser_grounding_observation(self, project_id, campaign_id, observation_id):
+        from .browser_grounding import read
+        return read(self, project_id, campaign_id, observation_id, observation=True)
 
     def get_campaign_test_specification_review(self, project_id, campaign_id, test_spec_id) -> ReviewState:
         return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION")

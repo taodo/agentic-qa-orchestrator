@@ -150,11 +150,11 @@ python -m pip install -e ".[browser]"
 python -m playwright install chromium
 ```
 
-Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration to current head 0016. Official Playwright is pinned to 1.63.0. Chromium is the only
+Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration to current head 0017. Official Playwright is pinned to 1.63.0. Chromium is the only
 engine; executable paths, profiles and launch arguments cannot be supplied by plans
 or operator request configuration. Fixed internal network safety switches are used.
 Perform operator DB migration explicitly with the existing documented Alembic
-configuration before opening the host; admission now requires 0016.
+configuration before opening the host; admission now requires 0017.
 
 For a controlled fixture, create PlaywrightBrowserExecutor(trusted_local_origin=
 "http://127.0.0.1:PORT") and inject it as browser_executor into the existing
@@ -332,7 +332,7 @@ Target != source repository != execution workspace. Example/demo Targets are
 replaceable validation fixtures, never hard-coded product dependencies.
 
 Prerequisites: explicitly install the existing browser extra and Chromium (above),
-manually migrate the operator DB to 0016, and use the normal Project/Target and
+manually migrate the operator DB to 0017, and use the normal Project/Target and
 Campaign preparation flow. Associate a WEB Target; import a current Test linked
 to approved Requirements; include one strict browser-facts-v1 JSON precondition
 using the existing CSV/Markdown importer; explicitly review/approve that Test.
@@ -585,7 +585,7 @@ and distinct from WEB_BROWSER; a WEB Target alone never chooses an executor.
 ### Source-free local setup
 
 Create/select an existing persisted Project and explicitly migrate its operator DB
-to head 0016 while stopped. Configure a browser-only local Project without dummy
+to head 0017 while stopped. Configure a browser-only local Project without dummy
 workspace paths or pytest targets:
 
 ```json
@@ -709,3 +709,9 @@ and persistence foundation. The existing manual Generate/Accept/Start workflow a
 0015 receipts retain their behavior. New preparation records do not inspect a Target,
 call a provider, launch Chromium or claim any execution/QA outcome. Automatic grounding,
 mixed-batch Run creation and normal non-technical UX remain later child tasks.
+
+### Task 5.8B: bounded machine grounding
+
+See [observation/grounding contracts and limits](BROWSER_GROUNDING.md). The internal
+capability reuses this secured session/transport, requires an active owned preparation
+attempt, and adds no public route, QA Run, synthetic fallback or final Run UX.

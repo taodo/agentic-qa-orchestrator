@@ -7,6 +7,8 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.GROUNDING_NOT_FOUND: (404, "Browser grounding artifact not found in this Campaign"),
+    Code.GROUNDING_RECONCILIATION_REQUIRED: (409, "Unresolved browser grounding requires explicit reconciliation"),
     Code.PREPARATION_NOT_FOUND: (404, "Browser preparation not found in this Campaign"),
     Code.PREPARATION_IDEMPOTENCY_CONFLICT: (409, "Preparation key belongs to different immutable inputs"),
     Code.PREPARATION_INVALID_STATE: (409, "Preparation lifecycle transition is invalid"),
