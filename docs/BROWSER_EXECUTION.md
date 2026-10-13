@@ -687,3 +687,16 @@ Automated HTTP/browser tests use disposable generic loopback fixtures and a fake
 provider, including both PASS and QA FAIL. No external Target or provider token is
 needed. Manual operator smoke should verify dark/light/mobile wrapping, keyboard
 facts authoring and the three separate clicks with an operator-approved Target.
+
+
+### Reserved facts authoring boundary
+
+`browser-facts-v1` is a reserved Test precondition contract. Generic Test edits
+cannot add, alter, reformat, duplicate or delete it. Submitted reserved strings
+must exactly match existing strings; omission carries existing facts forward
+unchanged while ordinary preconditions remain editable. The generic textarea
+shows only ordinary preconditions. Only the dedicated application facts command
+may replace reserved content, after ApprovedBrowserFacts validation and literal
+`non_secret: true` declaration, through the same immutable HUMAN_EDIT successor
+and fresh-approval lifecycle. Historical imported content remains readable; no
+migration, rewriting or broader import-contract change is introduced.

@@ -90,9 +90,13 @@ def test_readiness_blockers_never_call_provider(planning,http,kind):
     expected={'missing':'FACTS_MISSING','invalid':'FACTS_INVALID','no-target':'TARGET_NOT_WEB','not-approved':'TEST_NOT_APPROVED','provider':'PROVIDER_UNAVAILABLE'}[kind]
     if kind in {'missing','invalid'}:
         old=app.get_campaign_test_specification(p.id,c.id,spec.id)
-        from qa_sentinel.domain.test_specification import TestDesign
-        design={key:getattr(old,key) for key in TestDesign.model_fields};design['preconditions']=[] if kind=='missing' else ['{"contract_version":"browser-facts-v1"}']
-        spec=app.edit_campaign_test(p.id,c.id,spec.id,design=design,previous_hash=content_hash(old),reviewer_label='qa',note='grounding changed')
+        # Missing/legacy-invalid imported content is not created through a generic edit bypass.
+        from test_campaign_test_specifications import case,csv_text
+        value=case(refs=[str(id) for id in old.requirement_ids]);value['key']='READINESS-'+kind.upper()
+        value['preconditions']=[] if kind=='missing' else ['{"contract_version":"browser-facts-v1"}']
+        imported=app.import_campaign_tests(p.id,c.id,name='Legacy readiness fixture',format='CSV',content=csv_text([value]))
+        assert imported.status=='IMPORTED'
+        spec=next(t for t in app.list_campaign_test_specifications(p.id,c.id).items if t.key==value['key'])
         app.review_campaign_test_specification(p.id,c.id,spec.id,reviewer_label='qa')
     if kind=='no-target':app.associate_campaign_target(p.id,c.id,target_id=None)
     if kind=='not-approved':
@@ -199,3 +203,71 @@ def test_browser_only_missing_database_never_creates_it(config,tmp_path,monkeypa
     monkeypatch.setattr(composition,'bootstrap_database',lambda *a:pytest.fail('No migration/bootstrap'))
     with pytest.raises(HostError):composition.compose(value)
     assert not value.database.exists()
+
+@pytest.mark.parametrize('attempt',['inject','modify','reformat','duplicate'])
+def test_generic_api_rejects_reserved_facts_mutation(planning,http,attempt):
+    app,_,_,_,p,c,spec,mock,executor,_=planning;client,base=http
+    from qa_sentinel.domain.test_specification import TestDesign
+    old=app.get_campaign_test_specification(p.id,c.id,spec.id)
+    if attempt=='inject':
+        from test_campaign_test_specifications import case,csv_text
+        value=case(refs=[str(id) for id in old.requirement_ids]);value['key']='ORDINARY'
+        app.import_campaign_tests(p.id,c.id,name='Ordinary test',format='CSV',content=csv_text([value]))
+        old=next(t for t in app.list_campaign_test_specifications(p.id,c.id).items if t.key=='ORDINARY')
+    design={key:getattr(old,key) for key in TestDesign.model_fields}
+    raw=old.preconditions[0] if attempt!='inject' else json.dumps(FACTS)
+    if attempt=='modify':
+        changed=json.loads(raw);changed['input_values']=['unapproved'];raw=json.dumps(changed)
+    if attempt=='reformat':raw=json.dumps(json.loads(raw),separators=(',',':'))
+    design['preconditions']=[raw,raw] if attempt=='duplicate' else [raw]
+    body={'design':TestDesign.model_validate(design).model_dump(mode='json'),'previous_hash':content_hash(old),'reviewer_label':'qa','note':'Ordinary edit'}
+    before=app.list_campaign_test_specifications(p.id,c.id)
+    response=client.post(base.replace('/browser','')+f'/test-specifications/{old.id}/edits',json=body)
+    assert response.status_code==422,response.text
+    assert app.list_campaign_test_specifications(p.id,c.id)==before and app.get_campaign_test_specification(p.id,c.id,old.id)==old
+    assert len(mock.calls)==0 and executor.calls==[]
+
+@pytest.mark.parametrize('preconditions',[[],['Ordinary changed precondition']])
+def test_generic_omission_preserves_reserved_facts_exactly(planning,http,preconditions):
+    app,_,_,_,p,c,spec,mock,executor,_=planning;client,base=http
+    from qa_sentinel.domain.test_specification import TestDesign
+    old=app.get_campaign_test_specification(p.id,c.id,spec.id)
+    design={key:getattr(old,key) for key in TestDesign.model_fields};design.update(title='Ordinary title edit',preconditions=preconditions)
+    response=client.post(base.replace('/browser','')+f'/test-specifications/{old.id}/edits',json={'design':TestDesign.model_validate(design).model_dump(mode='json'),'previous_hash':content_hash(old),'reviewer_label':'qa','note':'Ordinary edit'})
+    assert response.status_code==201,response.text
+    successor=response.json();assert successor['preconditions']==preconditions+list(old.preconditions)
+    assert successor['review_status']=='READY_FOR_REVIEW' and successor['provenance']['origin']=='HUMAN_EDIT'
+    assert app.get_campaign_test_specification(p.id,c.id,old.id)==old
+    app.review_campaign_test_specification(p.id,c.id,successor['id'],reviewer_label='qa')
+    generated=client.post(base+'/tests/'+successor['id']+'/generate',json={})
+    assert generated.status_code==200 and generated.json()['status']=='SUCCEEDED'
+    context=json.loads(mock.calls[0]['input'][0]['content'])
+    assert context['approved_test']['preconditions']==preconditions+list(old.preconditions) and context['approved_browser_facts']==FACTS
+    assert len(mock.calls)==1 and executor.calls==[]
+
+@pytest.mark.parametrize('declaration',[None,False,1])
+def test_dedicated_application_requires_explicit_non_secret_boolean(planning,declaration):
+    app,_,_,_,p,c,spec,mock,executor,_=planning
+    from qa_sentinel.application import ApplicationError
+    old=app.get_campaign_test_specification(p.id,c.id,spec.id)
+    with pytest.raises(ApplicationError):app.edit_browser_facts(p.id,c.id,spec.id,facts=FACTS,previous_hash=content_hash(old),reviewer_label='qa',note='Facts',non_secret=declaration)
+    assert app.get_campaign_test_specification(p.id,c.id,spec.id)==old and len(mock.calls)==0 and executor.calls==[]
+
+@pytest.mark.parametrize('declaration',[None,False,1])
+def test_dedicated_api_requires_explicit_true_declaration(planning,http,declaration):
+    app,_,_,_,p,c,spec,mock,executor,_=planning;client,base=http
+    old=app.get_campaign_test_specification(p.id,c.id,spec.id)
+    body={'facts':FACTS,'previous_hash':content_hash(old),'reviewer_label':'qa','note':'Dedicated facts'}
+    if declaration is not None:body['non_secret']=declaration
+    assert client.post(base+f'/tests/{spec.id}/facts',json=body).status_code==422
+    assert app.get_campaign_test_specification(p.id,c.id,spec.id)==old and len(mock.calls)==0 and executor.calls==[]
+
+def test_dedicated_path_can_change_reserved_facts_after_declaration(planning,http):
+    app,_,_,_,p,c,spec,mock,executor,_=planning;client,base=http
+    old=app.get_campaign_test_specification(p.id,c.id,spec.id)
+    facts={**FACTS,'input_values':['Known non-secret example']}
+    result=client.post(base+f'/tests/{spec.id}/facts',json={'facts':facts,'non_secret':True,'previous_hash':content_hash(old),'reviewer_label':'qa','note':'Dedicated change'})
+    assert result.status_code==201,result.text
+    new=result.json();assert json.loads(new['preconditions'][-1])==facts
+    assert new['review_status']=='READY_FOR_REVIEW' and new['provenance']['origin']=='HUMAN_EDIT'
+    assert app.get_campaign_test_specification(p.id,c.id,spec.id)==old and len(mock.calls)==0 and executor.calls==[]

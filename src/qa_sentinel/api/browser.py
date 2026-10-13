@@ -2,7 +2,7 @@
 from typing import Literal
 from uuid import UUID
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from qa_sentinel.application.models import CollectionPage
 from qa_sentinel.application.browser_ux import ApprovedBrowserFacts, CandidateSummary, CandidateView, PlanningReadiness, candidate
 from qa_sentinel.application import QARun, TestSpecificationView
@@ -25,6 +25,12 @@ class FactsRequest(Empty):
     previous_hash: Hash
     reviewer_label: str=Field(min_length=1,max_length=64,strict=True)
     note: str=Field(min_length=1,max_length=1000,strict=True)
+
+    @field_validator('non_secret',mode='before')
+    @classmethod
+    def explicit_declaration(cls,value):
+        if value is not True:raise ValueError('Explicit non-secret declaration required')
+        return value
 
 def enabled(request,application,p):
     project=application.get_project(p)
@@ -49,7 +55,7 @@ def ready(project_id:UUID,campaign_id:UUID,test_id:UUID,request:Request,applicat
 
 @router.post('/tests/{test_id}/facts',response_model=TestSpecificationView,status_code=201)
 def facts(project_id:UUID,campaign_id:UUID,test_id:UUID,body:FactsRequest,application:Application):
-    return application.edit_browser_facts(project_id,campaign_id,test_id,**body.model_dump(exclude={'non_secret'}))
+    return application.edit_browser_facts(project_id,campaign_id,test_id,**body.model_dump())
 
 # This router is included only for the trusted local host, never bare/public API.
 local_router=APIRouter(prefix=router.prefix,tags=['Local Browser'],responses=ERROR_RESPONSES)

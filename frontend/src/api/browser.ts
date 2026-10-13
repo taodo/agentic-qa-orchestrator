@@ -26,3 +26,7 @@ export const startBrowserRun=(p:string,c:string,id:string)=>request<QARun>(path(
 export function existingFacts(test:CampaignTestSpecification):BrowserFacts|undefined {
   for(const text of test.preconditions){try{const value=JSON.parse(text);if(value?.contract_version==='browser-facts-v1')return value;}catch{/* Ordinary inert precondition. */}}
 }
+
+export function isReservedBrowserFacts(text:string):boolean {
+  try{const value=JSON.parse(text);return value!==null && typeof value==='object' && !Array.isArray(value) && value.contract_version==='browser-facts-v1';}catch{return false;}
+}

@@ -50,6 +50,13 @@ def candidate(app,p,c,record):
         **{key:None if metadata is None else getattr(metadata,key) for key in ('input_tokens','output_tokens','reasoning_tokens','total_tokens')},
         plan_hash=record.plan_hash,output=record.output,accepted_run_id=None if receipt is None else receipt.run_id)
 
+def is_reserved_facts(text):
+    """Use the same JSON discriminator as approved_facts, including invalid schemas."""
+    try:value=json.loads(text)
+    except (ValueError,TypeError):return False
+    return isinstance(value,dict) and value.get('contract_version')=='browser-facts-v1'
+
+
 def validate_facts(facts,test):
     facts=ApprovedBrowserFacts.model_validate(facts)
     if (len(facts.required_actions)!=len(test.steps) or not facts.required_actions[0]
@@ -81,17 +88,16 @@ def readiness(app,p,c,t,*,provider_available):
             if status=='AVAILABLE' and not provider_available:status='PROVIDER_UNAVAILABLE'
     return PlanningReadiness(status=status,test_id=t,target=target)
 
-def edit_facts(app,p,c,t,*,facts,previous_hash,reviewer_label,note):
+def edit_facts(app,p,c,t,*,facts,previous_hash,reviewer_label,note,non_secret=None):
+    if non_secret is not True:raise ApplicationError(Code.INVALID_INPUT)
     test=app.get_campaign_test_specification(p,c,t)
     try:
         facts=validate_facts(facts,test)
         # Existing precondition bounds are retained; never split/truncate approved facts.
         preconditions=[]
         for text in test.preconditions:
-            try:value=json.loads(text)
-            except ValueError:value=None
-            if not isinstance(value,dict) or value.get('contract_version')!='browser-facts-v1':preconditions.append(text)
+            if not is_reserved_facts(text):preconditions.append(text)
         preconditions.append(facts.model_dump_json())
         design=TestDesign.model_validate({**{key:getattr(test,key) for key in TestDesign.model_fields}, 'preconditions':preconditions})
     except ValueError:raise ApplicationError(Code.INVALID_INPUT) from None
-    return app.edit_campaign_test(p,c,t,design=design.model_dump(),previous_hash=previous_hash,reviewer_label=reviewer_label,note=note)
+    return app._edit_campaign_test(p,c,t,design=design.model_dump(),previous_hash=previous_hash,reviewer_label=reviewer_label,note=note,reserved_facts=facts)

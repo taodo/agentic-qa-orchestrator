@@ -143,7 +143,9 @@ unsupported. See [hardening details](BROWSER_EXECUTION.md#task-56-deterministic-
 ## Phase 5 Task 5.7: trusted local browser operator UX
 
 Structured Test Design facts use existing immutable HUMAN_EDIT successor/re-approval,
-including the accepted 512-character precondition bound. Execution separately exposes
+including the accepted 512-character precondition bound. Generic edits preserve reserved
+`browser-facts-v1` unchanged; only the validated dedicated path with explicit non-secret
+declaration may author it. Execution separately exposes
 Generate/read-only candidate/Accept; CREATED browser Run detail separately Starts.
 Typed bounded API routes reuse accepted application methods; real operations mount
 only locally, guarded by exact numeric loopback Host/peer and unsafe-request Origin.
