@@ -14,7 +14,7 @@ from .browser_network import PinnedNetwork, BrowserExecutionError, origin
 
 # Internal fixed safety settings, never selected by plan/operator input.
 SECURITY_ARGS=("--proxy-bypass-list=<-loopback>","--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1",
-               "--force-webrtc-ip-handling-policy=disable_non_proxied_udp")
+               "--force-webrtc-ip-handling-policy=disable_non_proxied_udp","--deny-permission-prompts")
 
 
 class PlaywrightBrowserExecutor:
@@ -62,8 +62,9 @@ class PlaywrightBrowserExecutor:
 
     async def _run(self,envelope,run):
         from playwright.async_api import async_playwright, Error, TimeoutError as PWTimeout
-        driver=browser=context=proxy=None
-        blocked=[];observations=[];outcome="PASS"
+        driver=browser=context=proxy=manager=None
+        blocked=[];observations=[];pending_redirect=[];outcome="PASS";closing=False;redirecting=False
+        redirect_interstitial=asyncio.Event()
         def record(code):
             if not blocked: blocked.append(code)
         async def deny(reader,writer):
@@ -72,49 +73,91 @@ class PlaywrightBrowserExecutor:
             writer.close()
         try:
             async with asyncio.timeout(envelope.plan.test_timeout_ms/1000):
-                network=PinnedNetwork(run.target_snapshot,self.trusted_local_origin)
+                network=PinnedNetwork(run.target_snapshot,self.trusted_local_origin,redirect_limit=envelope.plan.redirect_limit)
                 await network.addresses()
                 proxy=await asyncio.start_server(deny,"127.0.0.1",0)
                 proxy_url=f"http://127.0.0.1:{proxy.sockets[0].getsockname()[1]}"
-                driver=await async_playwright().start()
                 safe_env={k:v for k,v in os.environ.items() if k.upper() in {"SYSTEMROOT","WINDIR","SYSTEMDRIVE","TEMP","TMP","PATH","PATHEXT"}}
                 try:
+                    manager=async_playwright()
+                    driver=await manager.start()
                     browser=await driver.chromium.launch(headless=True,args=list(SECURITY_ARGS),proxy={"server":proxy_url,"bypass":""},env=safe_env,timeout=min(envelope.plan.test_timeout_ms,10000))
                     if browser.version!=self.identity.browser_version: raise BrowserExecutionError(BrowserErrorCode.INTERNAL)
-                    context=await browser.new_context(service_workers="block",accept_downloads=False,
+                    context=await browser.new_context(service_workers="block",accept_downloads=False,permissions=[],
                         proxy={"server":proxy_url,"bypass":""})
                     page=await context.new_page()
                 except BrowserExecutionError: raise
-                except Error: raise BrowserExecutionError(BrowserErrorCode.LAUNCH) from None
+                # Startup failures are bounded by phase, not by SDK exception type.
+                except Exception: raise BrowserExecutionError(BrowserErrorCode.LAUNCH) from None
+                async def abort(route):
+                    try: await route.abort()
+                    except Exception:
+                        if not closing: record(BrowserErrorCode.CRASH)
                 async def handle(route):
+                    nonlocal redirecting
                     try:
                         try: controlled = route.request.frame == page.main_frame
                         except Exception: raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED) from None
                         if not controlled:
                             raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
                         status,headers,body=await network.fetch(route.request)
+                        if 300<=status<400:
+                            # Never fulfill a 3xx: native redirect follow-ups can bypass routing.
+                            # A fresh controlled GET navigation follows each admitted hop exactly once.
+                            if (not route.request.is_navigation_request() or route.request.method!="GET" or pending_redirect):
+                                raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
+                            redirect_interstitial.clear()
+                            redirecting=True
+                            pending_redirect.append(headers["location"])
+                            await abort(route)
+                            return
                         await route.fulfill(status=status,headers=headers,body=body)
                     except BrowserExecutionError as error:
-                        record(error.code);await route.abort()
+                        record(error.code);await abort(route)
                     except Exception:
-                        record(BrowserErrorCode.INTERNAL);await route.abort()
+                        record(BrowserErrorCode.INTERNAL);await abort(route)
+                async def navigate(url,timeout):
+                    nonlocal redirecting
+                    while True:
+                        try: await page.goto(url,wait_until="load",timeout=timeout)
+                        except Error:
+                            if not pending_redirect or blocked: raise
+                        if blocked: raise BrowserExecutionError(blocked[0])
+                        if not pending_redirect:
+                            redirecting=False
+                            return
+                        await redirect_interstitial.wait()
+                        url=pending_redirect.pop()
                 await context.route("**/*",handle)
                 async def websocket(ws):
-                    record(BrowserErrorCode.UNSUPPORTED);await ws.close()
+                    record(BrowserErrorCode.UNSUPPORTED)
+                    try: await ws.close()
+                    except Exception: pass  # Already denied; never leak SDK exception text from event tasks.
                 await context.route_web_socket("**/*",websocket)
                 def popup(extra):
                     if extra!=page: record(BrowserErrorCode.UNSUPPORTED)
                 context.on("page",popup)
+                context.on("serviceworker",lambda _:record(BrowserErrorCode.UNSUPPORTED))
                 page.on("download",lambda _:record(BrowserErrorCode.UNSUPPORTED))
                 page.on("worker",lambda _:record(BrowserErrorCode.UNSUPPORTED))
                 page.on("frameattached",lambda _:record(BrowserErrorCode.UNSUPPORTED))
                 def navigation(frame):
+                    # Chrome creates this internal error document when the admitted redirect
+                    # source is deliberately aborted. It is not an external destination.
+                    if redirecting and frame==page.main_frame and frame.url=="chrome-error://chromewebdata/":
+                        redirect_interstitial.set()
+                        return
                     if frame.url!="about:blank":
                         try:
                             if origin(frame.url)!=network.authority: record(BrowserErrorCode.NETWORK)
-                        except BrowserExecutionError: record(BrowserErrorCode.NETWORK)
+                        except (BrowserExecutionError,ValueError): record(BrowserErrorCode.NETWORK)
                 page.on("framenavigated",navigation)
-                page.on("crash",lambda _:record(BrowserErrorCode.CRASH))
+                def unexpected_close(*_):
+                    if not closing: record(BrowserErrorCode.CRASH)
+                page.on("crash",unexpected_close)
+                page.on("close",unexpected_close)
+                context.on("close",unexpected_close)
+                browser.on("disconnected",unexpected_close)
                 for number,step in enumerate(envelope.plan.steps,1):
                     matched=True
                     assertion_observation=step.action in {"ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL"}
@@ -123,12 +166,14 @@ class PlaywrightBrowserExecutor:
                             action=step.action
                             loc=self.locator(page,step.locator) if hasattr(step,"locator") else None
                             if action=="NAVIGATE":
-                                await page.goto(relative_destination(run.target_snapshot.base_url,step.path),wait_until="load",timeout=step.timeout_ms)
+                                await navigate(relative_destination(run.target_snapshot.base_url,step.path),step.timeout_ms)
                             elif action=="CLICK":
                                 href=await loc.get_attribute("href",timeout=step.timeout_ms)
                                 if href and urlsplit(href).scheme and urlsplit(href).scheme not in {"http","https"}:
                                     raise BrowserExecutionError(BrowserErrorCode.NETWORK)
-                                await loc.click(timeout=step.timeout_ms)
+                                try: await loc.click(timeout=step.timeout_ms)
+                                except Error:
+                                    if not pending_redirect or blocked: raise
                             elif action=="FILL":
                                 if await loc.get_attribute("type",timeout=step.timeout_ms)=="password":
                                     raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
@@ -144,23 +189,33 @@ class PlaywrightBrowserExecutor:
                             elif action=="ASSERT_VISIBLE": matched=await loc.is_visible()==step.visible
                             elif action=="ASSERT_URL": matched=page.url==relative_destination(run.target_snapshot.base_url,step.path)
                             else: raise BrowserExecutionError(BrowserErrorCode.PLAN)
+                            if pending_redirect:
+                                if assertion_observation: raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
+                                await redirect_interstitial.wait()
+                                await navigate(pending_redirect.pop(),step.timeout_ms)
                             assertion_observation=False
                             await page.title()  # Protocol transport failure is infrastructure, not assertion mismatch.
-                    except (PWTimeout,TimeoutError):
+                    except PWTimeout:
                         if assertion_observation: matched=False
                         else: raise BrowserExecutionError(BrowserErrorCode.ACTION_TIMEOUT) from None
+                    except TimeoutError:
+                        raise BrowserExecutionError(BrowserErrorCode.ACTION_TIMEOUT) from None
                     except Error:
-                        raise BrowserExecutionError(blocked[0] if blocked else BrowserErrorCode.CRASH if not browser.is_connected() else BrowserErrorCode.UNREACHABLE) from None
+                        # Only the pinned transport can attest unreachable; SDK action text is untrusted.
+                        raise BrowserExecutionError(blocked[0] if blocked else BrowserErrorCode.CRASH if not browser.is_connected() else BrowserErrorCode.INTERNAL) from None
                     if blocked: raise BrowserExecutionError(blocked[0])
                     if step.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL"}:
                         observations.append((number,step.action,matched))
                     if not matched:
                         outcome="FAIL";break
-                if blocked: raise BrowserExecutionError(blocked[0])
+                # Drain admitted handlers within the overall test deadline before completion.
+                await context.unroute_all(behavior="wait")
+                if blocked or pending_redirect: raise BrowserExecutionError(blocked[0] if blocked else BrowserErrorCode.UNSUPPORTED)
         except BrowserExecutionError: raise
         except TimeoutError: raise BrowserExecutionError(BrowserErrorCode.TIMEOUT) from None
         except Exception: raise BrowserExecutionError(BrowserErrorCode.INTERNAL) from None
         finally:
+            closing=True
             cleanup_failed=False
             # A stalled context must not consume the browser/driver cleanup opportunity.
             for resource,deadline in ((context,1),(browser,2),(driver,2)):
@@ -169,6 +224,10 @@ class PlaywrightBrowserExecutor:
                         async with asyncio.timeout(deadline):
                             await (resource.stop() if resource is driver else resource.close())
                     except Exception: cleanup_failed=True
+            if manager is not None and driver is None:
+                try:
+                    async with asyncio.timeout(2): await manager.__aexit__(None,None,None)
+                except Exception: cleanup_failed=True
             if proxy:
                 proxy.close()
                 try:
@@ -176,6 +235,7 @@ class PlaywrightBrowserExecutor:
                 except Exception: cleanup_failed=True
             if proxy: proxy.close()
             if cleanup_failed: raise BrowserExecutionError(BrowserErrorCode.CLEANUP) from None
+        if blocked: raise BrowserExecutionError(blocked[0])
         evidence=[]
         for number,action,matched in observations:
             observation=BrowserObservation(category="NAVIGATION" if action=="NAVIGATE" else "ASSERTION",run_test_id=envelope.run_test_id,

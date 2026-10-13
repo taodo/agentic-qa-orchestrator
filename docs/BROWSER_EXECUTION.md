@@ -1,4 +1,4 @@
-# Browser execution contracts and Chromium runtime (Tasks 5.1–5.4)
+# Browser execution contracts and Chromium runtime (Tasks 5.1–5.6)
 
 Task 5.1 defined contracts and policy only. Task 5.2 implements Chromium execution through an explicit trusted internal application service; public/browser Start remains synthetic-only.
 
@@ -80,7 +80,8 @@ public request cannot enable it. No DNS lookup or Target probe is performed.
 Static strings do NOT secure redirects, DNS rebinding, public names resolving to
 private networks, service workers, popups, subresource requests or browser traffic.
 The Task 5.2 adapter adds same-origin/resolved-address policy for intercepted requests,
-including scheme/port checks and rebinding protection, and rejects all redirects.
+including scheme/port checks and rebinding protection. Task 5.6 adds bounded
+same-origin main-frame GET redirects through this same boundary, detailed below.
 It enforces actual overall/action deadlines, evidence budgets and cleanup; screenshots
 remain unsupported, as detailed below. Do not translate this policy pass into a reachability/health claim.
 
@@ -176,8 +177,9 @@ workers are blocked; WebSockets, extra frames/pages, popups and downloads are re
 No Playwright evaluate/JS injection, scripts/specs or arbitrary method dispatch exists.
 Application JavaScript may execute normally within this restricted browser context.
 
-Initial runtime refuses **all redirects**, rather than allowing a redirect path that
-bypasses interception. It also refuses chunked/compressed/unknown-length responses,
+Task 5.2 initially refused all redirects. Task 5.6 permits only the controlled
+same-origin navigation redirects detailed below. It still refuses
+chunked/compressed/unknown-length responses,
 attachments and responses over 4 MiB; request bodies are limited to 64 KiB, headers
 to 16 KiB, requests to 100/test and concurrent forwarding to eight. These constraints
 are explicit system/unsupported failures, never weakened assertions or fake success.
@@ -450,3 +452,124 @@ used. No Generate/Accept/browser Start control, provider/browser/Target/DNS/sour
 operation or new API is added. UI V3 styles, wrapping, native keyboard disclosures,
 dark/light tokens and pagination remain unchanged. Broader browser authoring,
 screenshots and richer evidence remain deferred.
+
+
+## Task 5.6: deterministic resilience and security hardening
+
+### Failure semantics and lifecycle
+
+Existing BrowserErrorCode values remain authoritative; no duplicate error family,
+API or schema is added:
+
+| Surface | Bounded system code / behavior |
+| --- | --- |
+| SDK/driver/browser/context/page startup | BROWSER_LAUNCH_FAILED; acquired resources still close |
+| DNS failure/deadline/worker exhaustion | BROWSER_DNS_FAILED |
+| TCP/no response or bounded proxy request deadline | BROWSER_TARGET_UNREACHABLE |
+| TLS/certificate validation | BROWSER_TLS_FAILED; strict original-host SNI/certificate verification |
+| Origin/private address/rebinding/peer mismatch | BROWSER_NETWORK_DENIED |
+| Redirect escape/malformed Location/loop budget | BROWSER_REDIRECT_DENIED |
+| Navigation/operation/protocol observation deadline | BROWSER_ACTION_TIMEOUT |
+| Whole Test deadline | BROWSER_TEST_TIMEOUT |
+| Unexpected page/context/browser closure/crash | BROWSER_CRASHED |
+| Unsupported capability/framing/header/body/request/resource bound | BROWSER_UNSUPPORTED_FEATURE |
+| Cleanup/finalization deadline/failure | BROWSER_CLEANUP_FAILED |
+| Non-network SDK action error (including invalid/ambiguous locators), unknown exception | BROWSER_INTERNAL_ERROR; recorded transport/policy errors and disconnected-browser CRASH retain precedence; raw SDK messages are never classified or exposed |
+
+A deterministically observed assertion mismatch remains COMPLETED + QA FAIL;
+subsequent selected Tests continue. A missing assertion condition reported by the
+SDK's bounded condition timeout retains the accepted assertion semantics, but an
+async execution/transport stall is a system action timeout. CLICK/FILL/other operation
+inability is never manufactured assertion evidence. HTTP 4xx/5xx responses with
+supported bounded framing are real responses: status alone neither fails the
+execution system nor invents QA FAIL; sealed assertions decide the QA outcome.
+Unsupported framing still fails independently of status.
+
+Run/test RUNNING and each prior result/evidence completion retain existing short
+committed transactions. No transaction spans browser/network work. Later runtime
+or cleanup failure preserves earlier committed results/evidence and leaves the
+uncertain Test unevaluated; no per-step buffered observation becomes a fabricated
+completion. No runtime step retry, new context after failure or duplicate evidence.
+
+The context drains admitted routing handlers within the overall deadline before
+completion. Failure from a late background request cannot silently become PASS.
+Route abort/websocket close errors are contained in safe event-task handling.
+Unexpected close/disconnect events are distinct from deliberate final cleanup.
+Context/browser/driver/proxy close deadlines remain independently 1/2/2/1 seconds;
+a failed partial driver startup also closes its SDK manager within two seconds.
+Cleanup failure remains a system failure, including after observed assertions.
+
+There is no accepted Campaign browser Stop/cancellation API. In-process async
+interruption still runs finally cleanup and propagates interruption without
+fabricating FAIL. Abrupt host/process termination cannot guarantee Python finally;
+RUNNING history is never silently replayed, and Start does not restart it. No new
+Stop/resume/reconciliation product workflow is introduced here.
+
+### Controlled same-origin redirects
+
+The sealed plan's existing redirect_limit (0–5; unchanged default 3) now bounds
+cumulative HTTP redirect hops across the Test. Zero denies all redirects; loops
+terminate at the budget. Accepted statuses are 301/302/303/307/308; other 3xx,
+missing/ambiguous Location, unsafe scheme, credentials, fragment, controls,
+malformed/deep escapes, changed scheme/host/port and overlong destinations reject.
+Relative and absolute same-origin Locations may include queries, but URLs/query
+values/headers are ephemeral transport data and never error/evidence text.
+
+Origin remains the immutable Target snapshot, never a live Target. Each followed
+request revalidates DNS/address sets, private/mixed/global policy and rebinding,
+connects to the pinned literal IP, verifies the peer, and uses strict original-host
+TLS. The trusted local exception is still only the exact sealed numeric loopback
+origin. No general cross-origin, private-network or named-site allowlist exists.
+
+Chromium never receives a 3xx response. Playwright native redirect handling may
+skip interception; the runtime withholds the response, deliberately aborts that
+navigation, waits within the same action deadline for Chromium's internal abort
+interstitial commit, then issues one fresh controlled navigation to the validated
+Location. Each hop is fetched once; the terminal response is not fetched twice,
+the original operation is not retried, the same page/context is retained, and
+ASSERT_URL sees the actual terminal URL. The internal handoff has no evidence.
+Unexpected/non-internal transitions remain denied. No invented HTML/error document
+or JavaScript injection is used.
+
+Initial compatibility is deliberately **main-frame GET navigation only**, including
+GET navigation initiated by CLICK. Non-GET redirects, subresource redirects and
+redirect Set-Cookie semantics are unsupported rather than silently rewriting a
+method/replaying a body, losing cookie changes or allowing native egress. Fragments,
+authentication and broader redirect compatibility remain deferred. Task 5.3 AI
+candidate validation remains unchanged and requires redirect_limit=0; positive
+budgets are available through the already accepted manual/deterministic plan path.
+Historical seals/Run snapshots are not rewritten or rerun.
+
+### Resource bounds and unsupported capabilities
+
+- 100 requests/Test, including all redirect hops; eight concurrent forwards.
+- 100 headers and 16 KiB wire headers in each direction. Strict HTTP status/header
+  syntax and duplicate rejection prevent ambiguous framing/Location handling.
+- Request body 64 KiB; response body 4 MiB; new aggregate reserved response budget
+  32 MiB/Test, including concurrent/incomplete transfers.
+- Full admitted request lifetime 15 seconds; existing DNS/connect/drain/header/body
+  sub-deadlines are 2/3/3/5/5 seconds, all subordinate to action/overall deadlines.
+- Existing plan action/overall, evidence count/size and cleanup budgets are unchanged.
+  HEAD and HTTP 204/205 have honest no-body handling; ordinary bodies need a bounded
+  unambiguous Content-Length.
+
+Chunked/compressed/unknown-length bodies and attachments remain explicitly
+unsupported. Adding safe chunk/decompression parsing needs separately reviewed
+wire/decoded byte and framing accounting; no unbounded compatibility shortcut was
+added. Duplicate response headers, including multi-Set-Cookie, fail closed.
+
+Popups, downloads, frames, workers/service workers and sockets remain blocked with
+safe unsupported failures. Context permissions are explicitly empty and a fixed
+internal deny-permission-prompts Chromium safety switch refuses permission prompts;
+no plan/operator browser flags, clipboard/geolocation/device grants, credentials,
+password filling, arbitrary evaluate/JS, extensions, screenshots/video/trace or
+filesystem actions are enabled. Site JavaScript may execute under the accepted
+restricted browser, but no generated code or runtime AI is added. This remains a
+controlled browser boundary, not an OS sandbox or universal website compatibility
+claim.
+
+Primary references: [Playwright redirect routing caveat](https://playwright.dev/python/docs/api/class-page#page-route)
+and [Chromium permission denial switch](https://chromium.googlesource.com/chromium/src/+/refs/heads/main/components/permissions/switches.cc).
+Deterministic local HTTP/SDK/TLS/DNS doubles and real local Chromium tests cover
+redirects, failures, limits, cleanup, FAIL continuation and preserved history. No
+public internet/provider tokens are used in automated validation.
