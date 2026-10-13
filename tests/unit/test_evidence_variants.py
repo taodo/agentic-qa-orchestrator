@@ -13,8 +13,8 @@ from qa_sentinel.domain.campaign_content import Frozen
 def test_closed_discriminated_schema_and_unknown_variants_fail_closed():
     schema=EvidenceDraft.model_json_schema()['properties']['payload']
     assert schema['discriminator']['propertyName']=='variant'
-    assert set(schema['discriminator']['mapping'])=={'synthetic-observation-v1'}
-    assert len(schema['oneOf'])==1
+    assert set(schema['discriminator']['mapping'])=={'synthetic-observation-v1','browser-observation-v1'}
+    assert len(schema['oneOf'])==2
     class Unreviewed(Frozen): pass
     with pytest.raises(ValueError,match='Unregistered'): evidence_policy(Unreviewed())
     payload=SyntheticObservation(position=1,outcome='PASS')

@@ -132,7 +132,7 @@ class QARunRepository:
         changed = self.session.execute(update(QARunRow).where(QARunRow.id == str(before.id),
             QARunRow.project_id == str(before.project_id), QARunRow.campaign_id == str(before.campaign_id),
             QARunRow.execution_status == before.execution_status).values(**after.model_dump(
-                include={"execution_status", "qa_outcome", "started_at", "completed_at", "execution_error_code"})))
+                include={"execution_status", "qa_outcome", "started_at", "completed_at", "execution_error_code", "browser_error_code"})))
         if changed.rowcount != 1:
             raise RunLifecycleError("RUN_INVALID_STATE")
         return after
@@ -140,8 +140,8 @@ class QARunRepository:
     def start(self, run):
         return self._save_run_state(run, start_run(run))
 
-    def finish(self, run, *, failed=False):
-        return self._save_run_state(run, finish_run(run, self.all_entries(run, "tests"), failed=failed))
+    def finish(self, run, *, failed=False, browser_error_code=None):
+        return self._save_run_state(run, finish_run(run, self.all_entries(run, "tests"), failed=failed, browser_error_code=browser_error_code))
 
     def _save_test_state(self, run, before, after):
         if run.execution_status != "RUNNING":
@@ -159,6 +159,7 @@ class QARunRepository:
 
     def complete_test(self, run, test, result):
         result = TestExecutionResult.model_validate(result.model_dump())
+        if result.executor_kind != run.executor_kind: raise ValueError("Run executor mismatch")
         for draft in result.evidence:
             draft.validate_snapshot(test)
         completed = self._save_test_state(run, test, finish_test(test, result.qa_result))

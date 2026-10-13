@@ -1,11 +1,12 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useId, useState, type ReactNode } from 'react';
 
 // The same disclosure interaction for Requirements and Test Cases.
 export function PreparationRow({ id, initialOpen=false, children }: {
   id:string; initialOpen?:boolean; children:(state:{open:boolean;setOpen:(value:boolean)=>void;detailId:string})=>ReactNode;
 }) {
   const [open,setOpen]=useState(initialOpen), detailId=useId();
-  useEffect(()=>setOpen(initialOpen),[initialOpen]);
+  // Initialize before paint so a delayed passive effect cannot undo a row interaction.
+  useLayoutEffect(()=>setOpen(initialOpen),[initialOpen]);
   return <tr id={id} tabIndex={0} aria-expanded={open} aria-controls={detailId} className={open?'preparation-row is-expanded':'preparation-row'}
     onClick={event=>{
       if(event.defaultPrevented || !(event.target instanceof Element))return;

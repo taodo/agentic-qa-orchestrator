@@ -89,10 +89,11 @@ def persistence_boundary():
 
 
 class QASentinelApplication:
-    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None):
+    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None, browser_executor=None):
         self._factory = session_factory
         self._requirement_extractor = requirement_extractor
         self._test_generator = test_generator
+        self._browser_executor = browser_executor
         self._synthetic_run_executor = synthetic_run_executor if synthetic_run_executor is not None else SyntheticRunExecutor()
         self._resolver = execution_resolver
         # Optional trusted host coordination, never supplied by HTTP/model inputs.
@@ -613,6 +614,14 @@ class QASentinelApplication:
             return CollectionPage[ExecutionCandidate](items=items,total_returned=len(items),truncated=len(tests)>limit)
 
     def create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None, test_specification_ids=None) -> QARun:
+        return self._create_qa_run(project_id,campaign_id,idempotency_key=idempotency_key,note=note,test_specification_ids=test_specification_ids)
+
+    def create_browser_qa_run(self, project_id, campaign_id, *, idempotency_key, plans, note=None) -> QARun:
+        if self._browser_executor is None: raise ApplicationError(Code.RUN_INVALID_STATE)
+        return self._create_qa_run(project_id,campaign_id,idempotency_key=idempotency_key,note=note,
+            test_specification_ids=tuple(plans),browser_plans=plans)
+
+    def _create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None, test_specification_ids=None, browser_plans=None) -> QARun:
         project_id, campaign_id = map(identifier, (project_id, campaign_id))
         try:
             command = CreateQARun(idempotency_key=idempotency_key, note=note, test_specification_ids=test_specification_ids)
@@ -626,6 +635,12 @@ class QASentinelApplication:
             campaign = self._campaign(uow, project_id, campaign_id)
             existing = uow.qa_runs.by_key(project_id, campaign_id, command.idempotency_key)
             if existing is not None:
+                if (existing.executor_kind == "WEB_BROWSER") != (browser_plans is not None):
+                    raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
+                if browser_plans is not None:
+                    prior=uow.qa_runs.all_entries(existing,"tests")
+                    if any(t.browser_plan.plan != browser_plans[t.content.id] for t in prior if t.content.id in browser_plans):
+                        raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
                 if existing.note != command.note:
                     raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
                 if command.test_specification_ids is not None:
@@ -647,6 +662,10 @@ class QASentinelApplication:
                 from qa_sentinel.domain.target import TargetSnapshot
                 target_snapshot = None if campaign.target_id is None else TargetSnapshot.capture(self._target(uow, project_id, campaign.target_id))
                 prepared = prepare_run(campaign, readiness, command, uow.qa_runs.next_number(campaign_id), reqs, specs, target_snapshot)
+                if browser_plans is not None:
+                    from .browser_runs import seal
+                    prepared=seal(prepared,browser_plans,self._browser_executor.identity,
+                        self._browser_executor.policy_for(target_snapshot))
                 uow.qa_runs.add(prepared)
             except SnapshotSizeError:
                 raise ApplicationError(Code.RUN_SNAPSHOT_SIZE_LIMIT) from None
@@ -669,17 +688,27 @@ class QASentinelApplication:
         return run
 
     def start_qa_run(self, project_id, campaign_id, run_id) -> QARun:
+        return self._start_qa_run(project_id,campaign_id,run_id)
+
+    def start_browser_qa_run(self, project_id, campaign_id, run_id) -> QARun:
+        return self._start_qa_run(project_id,campaign_id,run_id,allow_browser=True)
+
+    def _start_qa_run(self, project_id, campaign_id, run_id, *, allow_browser=False) -> QARun:
         project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             uow.session.connection(execution_options={"qa_job_write": True})
             run = self._qa_run(uow, project_id, campaign_id, run_id)
+            if (run.executor_kind == "WEB_BROWSER") != allow_browser:
+                raise ApplicationError(Code.RUN_INVALID_STATE)
+            if allow_browser and (self._browser_executor is None or run.runtime_identity != self._browser_executor.identity):
+                raise ApplicationError(Code.RUN_INVALID_STATE)
             if run.execution_status != "CREATED":
                 raise ApplicationError(Code.RUN_INVALID_STATE)
             prepared = uow.qa_runs.preparation(run)
             if any(t.execution_status != "NOT_STARTED" for t in prepared.tests):
                 raise ApplicationError(Code.RUN_INVALID_STATE)
             uow.qa_runs.start(run)
-            uow.commit()  # Claim is durable before any synthetic evaluation.
+            uow.commit()  # Claim is durable before any executor evaluation.
         try:
             for snapshot in prepared.tests:
                 with persistence_boundary(), UnitOfWork(self._factory) as uow:
@@ -687,23 +716,27 @@ class QASentinelApplication:
                     run = uow.qa_runs.get(project_id, campaign_id, run_id)
                     running = uow.qa_runs.start_test(run, uow.qa_runs.test(run, snapshot.id))
                     uow.commit()
-                result = execute_synthetic(self._synthetic_run_executor, running)  # Pure; no open DB transaction.
+                result = (self._browser_executor.execute(running.browser_plan,run,running) if allow_browser else
+                    execute_synthetic(self._synthetic_run_executor, running))  # No open DB transaction.
                 with persistence_boundary(), UnitOfWork(self._factory) as uow:
                     uow.session.connection(execution_options={"qa_job_write": True})
                     run = uow.qa_runs.get(project_id, campaign_id, run_id)
                     uow.qa_runs.complete_test(run, uow.qa_runs.test(run, snapshot.id), result)
                     uow.commit()  # Durable result AND evidence before processing the next test, including FAIL.
             return self._finish_qa_run(project_id, campaign_id, run_id)
-        except Exception:
+        except Exception as error:
             # No raw exception text/evidence; earlier committed test results survive.
-            return self._finish_qa_run(project_id, campaign_id, run_id, failed=True)
+            from qa_sentinel.execution.playwright_browser import BrowserExecutionError
+            from qa_sentinel.domain.browser_execution import BrowserErrorCode
+            safe_code = (error.code if isinstance(error,BrowserExecutionError) else BrowserErrorCode.INTERNAL) if allow_browser else None
+            return self._finish_qa_run(project_id, campaign_id, run_id, failed=True, browser_error_code=safe_code)
 
-    def _finish_qa_run(self, project_id, campaign_id, run_id, *, failed=False):
+    def _finish_qa_run(self, project_id, campaign_id, run_id, *, failed=False, browser_error_code=None):
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             uow.session.connection(execution_options={"qa_job_write": True})
             run = uow.qa_runs.get(project_id, campaign_id, run_id)
             try:
-                result = uow.qa_runs.finish(run, failed=failed)
+                result = uow.qa_runs.finish(run, failed=failed, browser_error_code=browser_error_code)
             except RunLifecycleError:
                 raise ApplicationError(Code.RUN_INVALID_STATE) from None
             uow.commit()

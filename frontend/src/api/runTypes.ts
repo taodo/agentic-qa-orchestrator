@@ -2,6 +2,8 @@ import type { CampaignReadiness, CampaignRequirement, CampaignTestSpecification,
 export type RunStatus = 'CREATED' | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export type RunOutcome = 'NOT_EVALUATED' | 'PASS' | 'FAIL' | 'PARTIAL';
 export interface QARun {
+  executor_kind?: 'SYNTHETIC' | 'WEB_BROWSER';
+  browser_error_code?: string | null;
   target_snapshot?: import('./targets').TargetSnapshot | null;
   id: string; project_id: string; campaign_id: string; run_number: number; idempotency_key: string; note: string | null;
   snapshot_version: string; snapshot_hash: string; requirement_count: number; test_count: number;
@@ -16,7 +18,7 @@ export interface RunTest {
 }
 
 // Closed wire payload variants; generic presentation uses only the server projection.
-export type RunEvidencePayload = {variant:'synthetic-observation-v1';strategy:'synthetic-position-v1';position:number;outcome:'PASS'|'FAIL'|'SKIP'};
+export type RunEvidencePayload = {variant:'synthetic-observation-v1';strategy:'synthetic-position-v1';position:number;outcome:'PASS'|'FAIL'|'SKIP'} | {variant:'browser-observation-v1';category:'NAVIGATION'|'ASSERTION';run_test_id:string;plan_hash:string;step_number:number;action:'NAVIGATE'|'ASSERT_TEXT'|'ASSERT_VISIBLE'|'ASSERT_URL';matched:boolean;outcome:'PASS'|'FAIL';browser_version:string};
 export interface EvidencePresentation {
   variant:string;display_label:string;details:{label:string;value:string}[];
 }

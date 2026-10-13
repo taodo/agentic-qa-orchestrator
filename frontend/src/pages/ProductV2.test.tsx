@@ -96,6 +96,16 @@ it('shows saved Results as synthetic without provider or start calls',async()=>{
 });
 
 
+it('reads browser history truthfully without detail fan-out or execution',async()=>{
+  routes(url=>url===api+'/runs?limit=50'?response(page([{...run,executor_kind:'WEB_BROWSER',execution_status:'COMPLETED',qa_outcome:'PASS'}])):undefined);open('results');
+  await screen.findByRole('link',{name:'RUN-001'});
+  expect(screen.getByText('Saved execution history')).toBeInTheDocument();
+  expect(screen.queryByText('SYNTHETIC · saved history')).not.toBeInTheDocument();
+  expect(screen.queryByText(/truthful SYNTHETIC outcomes/)).not.toBeInTheDocument();
+  expect(writes()).toHaveLength(0);
+  expect(vi.mocked(fetch).mock.calls.some(([url])=>String(url).includes('/runs/'+run.id))).toBe(false);
+});
+
 it('opens Project Settings as a read-only host snapshot',async()=>{
   routes(url=>url===`/api/v1/projects/${project.id}`?response(project):undefined);
   render(<MemoryRouter initialEntries={[`/projects/${project.id}/settings`]}><App/></MemoryRouter>);

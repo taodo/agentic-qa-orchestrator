@@ -56,7 +56,7 @@ human approval; no browser ID fan-out or selection persistence. Run result CSV/X
 uses only existing persisted snapshots/results and batched evidence counts, at most
 1,000 rows/4 MiB, with the existing literal spreadsheet writer.
 Migration 0012 is additive; downgrade refuses audit loss. Local validation and
-non-migrating runtime opening now require 0013 (the configured operator DB, not the
+non-migrating runtime opening now require 0014 (the configured operator DB, not the
 checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
 
@@ -72,15 +72,19 @@ Target editing/association, approval, recovery, synthetic execution, API/securit
 provider/token contracts, migrations and dependencies are unchanged. See
 [workspace conventions](WORKSPACE_UI.md#ui-v3-foundation).
 
-## Phase 5 Task 5.1: browser contracts only
+## Phase 5 Tasks 5.1–5.2: browser contracts and trusted Chromium runtime
 
-Strict inert browser action/locator plans, snapshot-bound candidate hashes and pure
-navigation/resource policy exist; no browser runtime, provider, Target network call
-or source workspace is involved. Existing immutable synthetic evidence identity
-maps to explicit executor kind in the typed result/read boundary, without a migration
-or historical rewrite. Public Run Start remains synthetic-only. Browser execution
-is unavailable and cannot fall back to synthetic. See [browser foundation](BROWSER_EXECUTION.md)
-for limits, runtime security gaps and Task 5.2 handoff.
+Strict typed browser plans are implemented by the optional official Playwright
+Chromium adapter through an explicit internal application path. Public Start and
+normal demo/hosted composition remain synthetic-only. Migration 0014 seals executor
+and SDK/Chromium version identity plus exact per-test plan/provenance, preserving old
+synthetic fingerprints. Reuse existing Run lifecycle and atomic result/evidence
+completion; assertion FAIL continues, system failures carry bounded safe codes.
+Runtime forwards only same-origin pinned-address HTTP(S); direct browser traffic,
+redirects, unsupported frames/downloads/sockets fail closed. No source dependency,
+AI planner, screenshots or broad UI changes. Minimal read labels distinguish stored
+executor identity. See [browser execution](BROWSER_EXECUTION.md) for installation,
+security/response limitations, controlled local fixture and later-task handoff.
 
 ## Target Under Test foundation
 
@@ -93,11 +97,12 @@ Source-code repository access is optional for black-box Target execution.
 Run creation freezes a hash-covered `web-target-snapshot-v1` with identity, name,
 environment and URL; Results uses that snapshot, never the mutable Target. Legacy
 Campaigns/Runs keep honest absent values and their original snapshot hashes.
-Current executor remains SYNTHETIC: no URL is visited, checked or resolved.
+Public host execution remains SYNTHETIC; Target metadata reads never visit, check
+or resolve a URL. The trusted internal Chromium executor is described above.
 Migration 0013 adds Target/association tables and a nullable Run snapshot without
 rewriting legacy Campaigns. Used Target/history data prevents downgrade. Local
-start/validation requires 0013 and never auto-migrates. No dependencies added.
-API/ANDROID/IOS and browser/API/mobile executors are planned, not implemented.
+start/validation requires 0014 and never auto-migrates. No dependencies added.
+API/ANDROID/IOS and API/mobile executors are planned; Chromium is available only through the internal service described above.
 See [Target contracts and URL policy](TARGET_UNDER_TEST.md).
 
 ## Phase 2 complete: accepted preparation boundary
@@ -106,8 +111,8 @@ Tasks 2.1–2.4 provide Project-owned Campaigns, immutable specification sources
 structured Requirements, imported/generated executor-neutral Test Specifications,
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
-preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. No real
-Campaign executor exists. Migration head is 0013; see
+preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. Public Campaign Start remains synthetic-only; the trusted internal Chromium path
+is described above. Migration head is 0014; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11

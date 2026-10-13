@@ -513,6 +513,9 @@ class QARunRow(Base):
     snapshot_version: Mapped[str] = mapped_column(String(32), nullable=False)
     snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     target_snapshot: Mapped[Any | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    executor_kind: Mapped[str] = mapped_column(String(16), nullable=False, server_default="SYNTHETIC")
+    runtime_identity: Mapped[Any | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    browser_error_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     campaign_snapshot: Mapped[Any] = mapped_column(JSON, nullable=False)
     readiness_at_creation: Mapped[Any] = mapped_column(JSON, nullable=False)
     requirement_count: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -563,6 +566,7 @@ class QARunTestRow(Base):
     content: Mapped[Any] = mapped_column(JSON, nullable=False)
     approval: Mapped[Any] = mapped_column(JSON, nullable=False)
     linked_requirement_snapshot_ids: Mapped[Any] = mapped_column(JSON, nullable=False)
+    browser_plan: Mapped[Any | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     execution_status: Mapped[str] = mapped_column(String(16), nullable=False)
     qa_result: Mapped[str] = mapped_column(String(16), nullable=False)
 
@@ -672,3 +676,9 @@ event.listen(QARunRow.__table__, "after_create", DDL(
     "CREATE TRIGGER qa_run_target_no_update BEFORE UPDATE OF target_snapshot ON qa_runs "
     "WHEN NEW.target_snapshot IS NOT OLD.target_snapshot "
     "BEGIN SELECT RAISE(ABORT, 'Run target snapshot is immutable'); END"))
+
+
+for _table, _fields in ((QARunRow, "executor_kind,runtime_identity"), (QARunTestRow, "browser_plan")):
+    event.listen(_table.__table__, "after_create", DDL(
+        f"CREATE TRIGGER {_table.__tablename__}_executor_seal BEFORE UPDATE OF {_fields} ON {_table.__tablename__} "
+        "BEGIN SELECT RAISE(ABORT, 'Execution seal is immutable'); END"))

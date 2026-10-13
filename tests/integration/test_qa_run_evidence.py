@@ -208,7 +208,7 @@ def test_0011_upgrade_reopen_empty_downgrade_and_evidence_guard(ready):
     with pytest.raises(RuntimeError,match='cannot erase persisted Run evidence'):command.downgrade(config,'0010')
     assert result_view(ready,historical)==saved
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0013'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0014'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 
@@ -221,15 +221,25 @@ def test_historical_completed_0010_run_gets_no_fabricated_evidence(ready):
     run=create(ready)
     command.downgrade(config,'0010')
     # Reproduce the accepted pre-evidence lifecycle in the old schema only.
+    from sqlalchemy import Table, MetaData, select
+    from qa_sentinel.domain.qa_run import QARunTest
+    from qa_sentinel.domain.qa_run_lifecycle import start_run, start_test, finish_run
     with UnitOfWork(factory) as uow:
-        running=uow.qa_runs.start(run)
-        test=uow.qa_runs.start_test(running,uow.qa_runs.all_entries(run,'tests')[0])
-        uow.qa_runs._save_test_state(running,test,finish_test(test,'FAIL'))
-        historical=uow.qa_runs.finish(running)
+        old_runs=Table('qa_runs',MetaData(),autoload_with=uow.session.connection())
+        old_tests=Table('qa_run_tests',MetaData(),autoload_with=uow.session.connection())
+        row=dict(uow.session.execute(select(old_tests)).mappings().one())
+        test=QARunTest.model_validate({key:value for key,value in row.items() if key in QARunTest.model_fields})
+        running=start_run(run)
+        completed=finish_test(start_test(test),'FAIL')
+        historical=finish_run(running,[completed])
+        fields={'execution_status','qa_outcome','started_at','completed_at','execution_error_code'}
+        uow.session.execute(old_runs.update().values(**historical.model_dump(mode='json',include=fields)))
+        uow.session.execute(old_tests.update().values(execution_status='COMPLETED',qa_result='FAIL'))
         uow.commit()
-    # At 0010, inspect existing test rows directly, not current Run/Campaign joins.
+    # Current ORM intentionally requires head; reflect only this historical schema.
     with UnitOfWork(factory) as uow:
-        before=tuple(uow.qa_runs.all_entries(historical,"tests"))
+        row=dict(uow.session.execute(select(old_tests)).mappings().one())
+        before=(QARunTest.model_validate({key:value for key,value in row.items() if key in QARunTest.model_fields}),)
     command.upgrade(config,'head');command.check(config)
     url=str(engine.url);engine.dispose()
     reopened=create_engine(url)
