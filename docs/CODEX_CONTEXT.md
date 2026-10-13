@@ -81,7 +81,7 @@ and SDK/Chromium version identity plus exact per-test plan/provenance, preservin
 synthetic fingerprints. Reuse existing Run lifecycle and atomic result/evidence
 completion; assertion FAIL continues, system failures carry bounded safe codes.
 Runtime forwards only same-origin pinned-address HTTP(S); direct browser traffic,
-redirects, unsupported frames/downloads/sockets fail closed. No source dependency,
+unsafe redirects and unsupported frames/downloads/sockets fail closed. No source dependency,
 screenshots or broad UI changes. Minimal read labels distinguish stored
 executor identity. See [browser execution](BROWSER_EXECUTION.md) for installation,
 security/response limitations, controlled local fixture and later-task handoff.
@@ -126,6 +126,19 @@ absent identity is unavailable. Status remains authoritative and separate from Q
 outcome. No backend/API/dependency/migration change, new execution controls or
 runtime/model/Target access. UI V3 is unchanged; native disclosures/wrapping and
 explicit bounded evidence reads are reused. See [browser Results](BROWSER_EXECUTION.md#task-55-stored-browser-results-presentation).
+
+## Phase 5 Task 5.6: browser resilience/security
+
+Existing pinned transport supports sealed-budget same-origin main-frame GET
+redirects via controlled navigation handoff, never native redirect bypass.
+Every hop retains DNS/IP/peer/TLS checks; cross-origin/unsafe, non-GET/subresource
+and cookie-changing redirects fail closed. HTTP status alone is not QA outcome.
+Strict header/framing and aggregate response limits, safe startup/closure/event
+handling, draining and independent cleanup deadlines preserve earlier evidence.
+Assertion mismatch remains QA FAIL; execution stalls remain system failures.
+No retry/runtime AI, source dependency, migration/API/frontend/dependency changes
+or Stop workflow. Chunked/compressed bodies and broader browser capabilities remain
+unsupported. See [hardening details](BROWSER_EXECUTION.md#task-56-deterministic-resilience-and-security-hardening).
 
 ## Target Under Test foundation
 
