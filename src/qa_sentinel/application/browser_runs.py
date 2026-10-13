@@ -4,14 +4,14 @@ from qa_sentinel.domain.qa_run import QARun, QARunTest, PreparedQARun, snapshot_
 from qa_sentinel.execution.browser_policy import digest, run_test_snapshot_digest
 
 
-def seal(prepared, plans, identity, policy):
+def seal(prepared, plans, identity, policy, *, origin="MANUAL"):
     run=QARun.model_validate({**prepared.run.model_dump(),"executor_kind":"WEB_BROWSER","runtime_identity":identity})
     if set(plans)!={t.content.id for t in prepared.tests}: raise ValueError("Exact manual plan selection required")
     tests=[]
     for test in prepared.tests:
         plan=BrowserExecutionPlan.model_validate(plans[test.content.id].model_dump())
         envelope=BrowserPlanEnvelope(project_id=run.project_id,campaign_id=run.campaign_id,run_id=run.id,
-            run_test_id=test.id,origin="MANUAL",plan=plan,plan_hash=digest(plan),
+            run_test_id=test.id,origin=origin,plan=plan,plan_hash=digest(plan),
             test_snapshot_hash=run_test_snapshot_digest(test),target_snapshot_hash=digest(run.target_snapshot))
         policy.validate_envelope(envelope,run,test)
         tests.append(QARunTest.model_validate({**test.model_dump(),"browser_plan":envelope}))

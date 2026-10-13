@@ -1,4 +1,4 @@
-# Browser execution contracts and Chromium runtime (Tasks 5.1–5.2)
+# Browser execution contracts and Chromium runtime (Tasks 5.1–5.3)
 
 Task 5.1 defined contracts and policy only. Task 5.2 implements Chromium execution through an explicit trusted internal application service; public/browser Start remains synthetic-only.
 
@@ -93,8 +93,8 @@ SHA-256 of canonical versioned plan content and its bounds, immutable Test snaps
 Target snapshot. validate_envelope consumes authoritative detached repository Run
 and Test records, checks ownership and all hashes, revalidates models and admission.
 The plan is frozen; execution must revalidate the exact sealed plan against those
-records, never a live Target or changed Test design. AI is a provenance label only;
-no planner/provider call exists. No claim that a candidate plan was human-approved
+records, never a live Target or changed Test design. Task 5.3 adds a separate reasoning-only generator, described below.
+Static validation and the deterministic runtime never invoke a model. No claim that a candidate plan was human-approved
 or executed is made. The approved Test receipt identifies approved source content;
 plan_hash identifies validated executable intent, not equivalent approval.
 
@@ -128,7 +128,8 @@ Creation/start are explicit internal service methods, not new public endpoints:
 create_browser_qa_run and start_browser_qa_run. Configure the application with a
 PlaywrightBrowserExecutor only in trusted local code. Existing API Start refuses
 WEB_BROWSER Runs, and normal host/demo/preview/hosted composition never constructs
-this executor. There is no browser start/authoring UI or AI planner.
+this executor. There is no public browser start/authoring UI. The separate Task 5.3
+internal candidate generator is described below.
 
 The Run seals executor_kind=WEB_BROWSER and adapter version, engine CHROMIUM,
 official SDK version, Chromium revision and expected browser version. Every Test
@@ -148,11 +149,11 @@ python -m pip install -e ".[browser]"
 python -m playwright install chromium
 ```
 
-Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration. Official Playwright is pinned to 1.63.0. Chromium is the only
+Browser download is separate. No browser installation/download happens during startup or tests; configured local startup refuses outdated schemas and requires explicit operator migration to current head 0015. Official Playwright is pinned to 1.63.0. Chromium is the only
 engine; executable paths, profiles and launch arguments cannot be supplied by plans
 or operator request configuration. Fixed internal network safety switches are used.
 Perform operator DB migration explicitly with the existing documented Alembic
-configuration before opening the host; admission now requires 0014.
+configuration before opening the host; admission now requires 0015.
 
 For a controlled fixture, create PlaywrightBrowserExecutor(trusted_local_origin=
 "http://127.0.0.1:PORT") and inject it as browser_executor into the existing
@@ -211,11 +212,108 @@ SDK-double cleanup/error tests remain active without browsers. Real integration 
 skip only if the package/binary is genuinely unavailable; the implementation validation
 actually installed and ran Chromium against the controlled local server.
 
-AI browser planning, broader safe network/response compatibility, authentication,
-self-healing and the first external campaign remain later separately authorized tasks.
-Task 5.3 is not implemented here.
+Broader safe network/response compatibility, authentication, self-healing and the
+first external campaign remain later separately authorized tasks.
 
 
 Runtime API references: [Playwright routing](https://playwright.dev/python/docs/api/class-route),
 [BrowserContext isolation/routing](https://playwright.dev/python/docs/api/class-browsercontext),
 [Chromium WebRTC IP handling](https://chromium.googlesource.com/chromium/src/+/376fc41e87a058f7a7b300b0ec3a4982b4ec0960/components/policy/resources/templates/policy_definitions/Miscellaneous/WebRtcIPHandling.yaml).
+
+
+## Task 5.3: reasoning-only generation and explicit acceptance
+
+```text
+Approved immutable Test + receipt + immutable WEB Target
+    -> bounded BrowserPlanGenerator / existing ModelAdapter (no tools)
+    -> strict BrowserPlanOutput candidate, never generated code
+    -> schema + static policy + approved-fact/literal-intent validation
+    -> durable AI generation record (not evidence or authorization)
+    -> explicit acceptance: same Task 5.2 seal + append-only receipt, one transaction
+    -> separately invoked deterministic Start; no runtime model call
+```
+
+Only internal application methods are provided: generate_browser_plan,
+retry_browser_plan_generation, get/list_browser_plan_generations,
+get_browser_plan_acceptance and accept_browser_plan_generation. Inject an explicit
+BrowserPlanGenerator(adapter, ModelSettings(...)) into trusted application code.
+No model default is added; public/demo/hosted composition and HTTP Start remain
+unchanged. Generation never starts a browser, resolves a Target, reads DOM/source,
+or creates a Run/evidence/legacy Task/job. Acceptance creates one selected-test
+WEB_BROWSER Run in CREATED; start_browser_qa_run remains a separate operation.
+
+### Grounding limitation: explicit approved facts, not guessed page structure
+
+There is no DOM inspection, semantic locator oracle or natural-language classifier.
+A Test can supply one strict JSON precondition with contract_version=browser-facts-v1.
+It is ordinary immutable Test content, reviewed through the existing human Test
+approval; there is no new facts approval workflow or public configuration route.
+Example (non-secret operator-known facts):
+
+```json
+{"contract_version":"browser-facts-v1","required_actions":[["NAVIGATE"]],"locators":[{"strategy":"ROLE","role":"heading","name":"Courses","exact":true}],"paths":["/courses"],"input_values":[]}
+```
+
+required_actions contains the exact non-assertion operation sequence for each
+one-based approved QA Test step. Total required operations are at most 50. Locators,
+paths and literal input/key/condition/check values must come from these supplied
+facts; the configured Target base path is also a known navigation destination.
+The model cannot manufacture additional facts. Output step_bindings maps each
+plan step to an approved Test step, in nondecreasing order. The validator requires
+all approved operations and an exact assertion for every step expectation, plus
+the overall expected result. Supported literal expectations are exact ASSERT_TEXT,
+ASSERT_URL for an authorized literal path, or VISIBLE/HIDDEN. Substring assertions,
+unlisted locators/values/paths, missing operations/expectations and unsupported
+runtime features are rejected. Navigation must be first; redirects/screenshots
+must be zero. There is no automatic assertion weakening or retry-until-pass.
+
+General human prose may be insufficient to safely compile into literal browser
+assertions. Return CANNOT_PLAN/insufficient-information rather than guessing.
+Matching allowed facts does not prove their semantic association with every human
+step; the trusted caller must review the candidate before explicitly accepting it.
+Refining a Test/facts uses existing review/version boundaries, never silent model
+edits. No credentials are supported; operator facts/test values must be non-secret.
+
+### Provenance, recovery and compatibility
+
+Migration 0015 adds browser_plan_generations and browser_plan_acceptances only.
+Generation snapshots include the approved Test/receipt, Target and SHA-256 hashes,
+AI origin, prompt contract browser-plan-generator-v1, configured ModelSettings,
+provider-reported ModelMetadata (independent model identity and authoritative usage),
+timestamps/status, safe failure code and validated plan/hash. Missing usage remains
+unknown/null; it is not fabricated zero or estimated pricing. No chain-of-thought,
+raw response/request, refusal prose, credentials or prompt logs are stored.
+These internal records are not folded into existing extraction/test-design usage
+collections or execution evidence. Per-generation usage is readable here.
+
+STARTED commits before one provider call, with no transaction spanning it. Context
+contains complete immutable inputs and actual schema/capabilities, at most 60,000
+characters / 196,608 UTF-8 bytes. Accounting uses actual rendered context; overflow
+fails honestly without truncation. Domain records are capped at 256 KiB; the SQL
+JSON envelope also has a one-MiB serialization ceiling. Reads/lists are scoped and
+bounded to at most 50 records in deterministic timestamp/UUID order.
+
+No automatic retries. Explicit transient/malformed/incomplete-response retry makes
+an immutable linked candidate using identical input snapshots/settings/prompt,
+maximum three attempts and one child per predecessor. Provider credentials/refusal,
+policy/grounding/insufficient-input failures cannot be retried this way. Unresolved
+STARTED attempts require reconciliation and are never silently replayed. New explicit
+generation creates a different identity; it never rewrites a candidate or sealed Run.
+
+Explicit acceptance rereads the candidate in the existing reserved Run creation
+transaction, rechecks current eligible approved content/receipt and exact Target
+hash, revalidates policy/grounding, and seals the exact plan with origin AI. A separate
+immutable receipt binds generation ID to Run/Test/plan hash. Stale input or identity
+mismatch refuses acceptance before commit. Replaying the same acceptance key returns
+the original Run; a different candidate/key cannot repurpose its history. No model
+or browser is called by acceptance. Runtime only executes the stored Task 5.2 plan.
+
+Terminal generation history and acceptance receipts cannot update/delete. Downgrade
+refuses any planning history; empty downgrade/re-upgrade is supported. Operator
+migration remains explicit/manual, never startup. Existing 0014 browser envelopes
+and fingerprints are unchanged; no new nullable envelope field alters old hashes.
+SYNTHETIC and Task 5.2 runtime/network/FAIL/evidence rules remain unchanged.
+
+No frontend/dependency changes, public planning/acceptance UX, external campaign,
+DOM/screenshot AI planning or locator healing. Task 5.4 and Hermes/Jev/Phase 6 remain
+separate future work.

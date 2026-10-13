@@ -682,3 +682,51 @@ for _table, _fields in ((QARunRow, "executor_kind,runtime_identity"), (QARunTest
     event.listen(_table.__table__, "after_create", DDL(
         f"CREATE TRIGGER {_table.__tablename__}_executor_seal BEFORE UPDATE OF {_fields} ON {_table.__tablename__} "
         "BEGIN SELECT RAISE(ABORT, 'Execution seal is immutable'); END"))
+
+
+class BrowserPlanGenerationRow(Base):
+    __tablename__='browser_plan_generations'
+    __table_args__=(
+        UniqueConstraint('id','campaign_id','project_id',name='uq_browser_generation_owner'),
+        UniqueConstraint('previous_id',name='uq_browser_generation_retry'),
+        ForeignKeyConstraint(['test_id','campaign_id','project_id'],['campaign_test_specifications.id','campaign_test_specifications.campaign_id','campaign_test_specifications.project_id'],name='fk_browser_generation_test',deferrable=True,initially='DEFERRED'),
+        ForeignKeyConstraint(['target_id','project_id'],['targets_under_test.id','targets_under_test.project_id'],name='fk_browser_generation_target',deferrable=True,initially='DEFERRED'),
+        ForeignKeyConstraint(['previous_id','campaign_id','project_id'],['browser_plan_generations.id','browser_plan_generations.campaign_id','browser_plan_generations.project_id'],name='fk_browser_generation_retry',deferrable=True,initially='DEFERRED'),
+        CheckConstraint("status IN ('STARTED','SUCCEEDED','FAILED') AND json_extract(payload,'$.status')=status AND length(payload)<=1048576",name='ck_browser_generation_payload'),
+        Index('ix_browser_generation_owner','project_id','campaign_id','started_at','id'),
+    )
+    id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    project_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    test_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    target_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    previous_id:Mapped[str | None]=mapped_column(String(36),nullable=True)
+    status:Mapped[str]=mapped_column(String(16),nullable=False)
+    started_at:Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+    payload:Mapped[Any]=mapped_column(JSON,nullable=False)
+
+class BrowserPlanAcceptanceRow(Base):
+    __tablename__='browser_plan_acceptances'
+    __table_args__=(
+        ForeignKeyConstraint(['generation_id','campaign_id','project_id'],['browser_plan_generations.id','browser_plan_generations.campaign_id','browser_plan_generations.project_id'],name='fk_browser_acceptance_generation',deferrable=True,initially='DEFERRED'),
+        ForeignKeyConstraint(['run_id','campaign_id','project_id'],['qa_runs.id','qa_runs.campaign_id','qa_runs.project_id'],name='fk_browser_acceptance_run',deferrable=True,initially='DEFERRED'),
+        UniqueConstraint('run_id',name='uq_browser_acceptance_run'),
+        UniqueConstraint('run_test_id',name='uq_browser_acceptance_test'),
+    )
+    generation_id:Mapped[str]=mapped_column(String(36),primary_key=True)
+    project_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    campaign_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    run_id:Mapped[str]=mapped_column(String(36),nullable=False)
+    run_test_id:Mapped[str]=mapped_column(String(36),ForeignKey('qa_run_tests.id',deferrable=True,initially='DEFERRED'),nullable=False)
+    plan_hash:Mapped[str]=mapped_column(String(64),nullable=False)
+    accepted_at:Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+
+_BROWSER_INPUTS="'$.status','$.finished_at','$.error_code','$.metadata','$.output','$.plan_hash'"
+BROWSER_GENERATION_TRIGGER=("CREATE TRIGGER browser_generation_seal BEFORE UPDATE ON browser_plan_generations WHEN "
+    "OLD.status!='STARTED' OR NEW.status NOT IN ('SUCCEEDED','FAILED') OR NEW.id!=OLD.id OR NEW.project_id!=OLD.project_id OR NEW.campaign_id!=OLD.campaign_id OR NEW.test_id!=OLD.test_id OR NEW.target_id!=OLD.target_id OR NEW.previous_id IS NOT OLD.previous_id OR NEW.started_at!=OLD.started_at OR "
+    f"json_remove(NEW.payload,{_BROWSER_INPUTS})!=json_remove(OLD.payload,{_BROWSER_INPUTS}) "
+    "BEGIN SELECT RAISE(ABORT,'Planning history is immutable'); END")
+event.listen(BrowserPlanGenerationRow.__table__,'after_create',DDL(BROWSER_GENERATION_TRIGGER))
+for _table in (BrowserPlanGenerationRow,BrowserPlanAcceptanceRow):
+    event.listen(_table.__table__,'after_create',DDL(f"CREATE TRIGGER {_table.__tablename__}_no_delete BEFORE DELETE ON {_table.__tablename__} BEGIN SELECT RAISE(ABORT,'Planning history is immutable'); END"))
+event.listen(BrowserPlanAcceptanceRow.__table__,'after_create',DDL("CREATE TRIGGER browser_acceptance_seal BEFORE UPDATE ON browser_plan_acceptances BEGIN SELECT RAISE(ABORT,'Acceptance is immutable'); END"))

@@ -89,11 +89,12 @@ def persistence_boundary():
 
 
 class QASentinelApplication:
-    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None, browser_executor=None):
+    def __init__(self, session_factory, execution_resolver: ProjectExecutionResolver, *, execution_admission=None, execution_notify=None, requirement_extractor=None, test_generator=None, synthetic_run_executor=None, browser_executor=None, browser_plan_generator=None):
         self._factory = session_factory
         self._requirement_extractor = requirement_extractor
         self._test_generator = test_generator
         self._browser_executor = browser_executor
+        self._browser_plan_generator = browser_plan_generator
         self._synthetic_run_executor = synthetic_run_executor if synthetic_run_executor is not None else SyntheticRunExecutor()
         self._resolver = execution_resolver
         # Optional trusted host coordination, never supplied by HTTP/model inputs.
@@ -613,6 +614,43 @@ class QASentinelApplication:
                 items.append(ExecutionCandidate(test=test,content_hash=content_hash(test),eligible=reason is None,reason=reason))
             return CollectionPage[ExecutionCandidate](items=items,total_returned=len(items),truncated=len(tests)>limit)
 
+    def generate_browser_plan(self, project_id, campaign_id, test_id):
+        from .browser_generation import generate
+        return generate(self,project_id,campaign_id,test_id)
+
+    def retry_browser_plan_generation(self, project_id, campaign_id, generation_id):
+        from .browser_generation import generate
+        return generate(self,project_id,campaign_id,None,previous_id=generation_id)
+
+    def get_browser_plan_generation(self, project_id, campaign_id, generation_id):
+        project_id,campaign_id,generation_id=map(identifier,(project_id,campaign_id,generation_id))
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            record=uow.browser_plans.get(project_id,campaign_id,generation_id)
+            if record is None:raise ApplicationError(Code.BROWSER_PLAN_NOT_FOUND)
+            return record
+
+    def list_browser_plan_generations(self, project_id, campaign_id, *, limit=20):
+        project_id,campaign_id=map(identifier,(project_id,campaign_id));limit=list_limit(limit,50)
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            rows=uow.browser_plans.list(project_id,campaign_id,limit)
+            return CollectionPage(items=tuple(rows[:limit]),total_returned=min(len(rows),limit),truncated=len(rows)>limit)
+
+    def get_browser_plan_acceptance(self, project_id, campaign_id, generation_id):
+        project_id,campaign_id,generation_id=map(identifier,(project_id,campaign_id,generation_id))
+        with persistence_boundary(),UnitOfWork(self._factory) as uow:
+            self._campaign(uow,project_id,campaign_id)
+            if uow.browser_plans.get(project_id,campaign_id,generation_id) is None:raise ApplicationError(Code.BROWSER_PLAN_NOT_FOUND)
+            return uow.browser_plans.acceptance(project_id,campaign_id,generation_id)
+
+    def accept_browser_plan_generation(self, project_id, campaign_id, generation_id, *, idempotency_key, note=None):
+        if self._browser_executor is None:raise ApplicationError(Code.RUN_INVALID_STATE)
+        record=self.get_browser_plan_generation(project_id,campaign_id,generation_id)
+        if record.status!='SUCCEEDED':raise ApplicationError(Code.BROWSER_PLAN_PROVENANCE_MISMATCH)
+        return self._create_qa_run(project_id,campaign_id,idempotency_key=idempotency_key,note=note,
+            test_specification_ids=(record.test.id,),browser_generation_id=record.id)
+
     def create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None, test_specification_ids=None) -> QARun:
         return self._create_qa_run(project_id,campaign_id,idempotency_key=idempotency_key,note=note,test_specification_ids=test_specification_ids)
 
@@ -621,7 +659,7 @@ class QASentinelApplication:
         return self._create_qa_run(project_id,campaign_id,idempotency_key=idempotency_key,note=note,
             test_specification_ids=tuple(plans),browser_plans=plans)
 
-    def _create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None, test_specification_ids=None, browser_plans=None) -> QARun:
+    def _create_qa_run(self, project_id, campaign_id, *, idempotency_key, note=None, test_specification_ids=None, browser_plans=None, browser_generation_id=None) -> QARun:
         project_id, campaign_id = map(identifier, (project_id, campaign_id))
         try:
             command = CreateQARun(idempotency_key=idempotency_key, note=note, test_specification_ids=test_specification_ids)
@@ -633,8 +671,18 @@ class QASentinelApplication:
             # snapshot and protected numbering. No external execution in this UoW.
             uow.session.connection(execution_options={"qa_job_write": True})
             campaign = self._campaign(uow, project_id, campaign_id)
+            generation=acceptance=None
+            if browser_generation_id is not None:
+                generation=uow.browser_plans.get(project_id,campaign_id,browser_generation_id)
+                if generation is None or generation.status!='SUCCEEDED':raise ApplicationError(Code.BROWSER_PLAN_PROVENANCE_MISMATCH)
+                browser_plans={generation.test.id:generation.output.plan}
+                acceptance=uow.browser_plans.acceptance(project_id,campaign_id,generation.id)
             existing = uow.qa_runs.by_key(project_id, campaign_id, command.idempotency_key)
             if existing is not None:
+                if generation is not None and (acceptance is None or acceptance.run_id!=existing.id):
+                    raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
+                if generation is None and any(t.browser_plan is not None and t.browser_plan.origin=='AI' for t in uow.qa_runs.all_entries(existing,'tests')):
+                    raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
                 if (existing.executor_kind == "WEB_BROWSER") != (browser_plans is not None):
                     raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
                 if browser_plans is not None:
@@ -650,6 +698,7 @@ class QASentinelApplication:
                 elif existing.snapshot_version != "qa-run-snapshot-v1":
                     raise ApplicationError(Code.RUN_IDEMPOTENCY_CONFLICT)
                 return existing  # Replay original intent, even if preparation changed.
+            if acceptance is not None:raise ApplicationError(Code.BROWSER_PLAN_ALREADY_ACCEPTED)
             readiness = assess_readiness(campaign, uow.campaign_reviews.readiness_counts(project_id, campaign_id))
             if command.test_specification_ids is None and readiness.status != "READY":
                 raise ApplicationError(Code.CAMPAIGN_NOT_READY_FOR_RUN)
@@ -664,9 +713,21 @@ class QASentinelApplication:
                 prepared = prepare_run(campaign, readiness, command, uow.qa_runs.next_number(campaign_id), reqs, specs, target_snapshot)
                 if browser_plans is not None:
                     from .browser_runs import seal
+                    if generation is not None:
+                        from qa_sentinel.domain.browser_generation import input_hash
+                        from qa_sentinel.execution.browser_policy import digest
+                        from qa_sentinel.agents.browser_plan_generation import validate_candidate
+                        candidate_test=prepared.tests[0]
+                        if target_snapshot is None or generation.target_hash!=digest(target_snapshot) or generation.test_hash!=input_hash(candidate_test.content,candidate_test.approval):
+                            raise ApplicationError(Code.BROWSER_PLAN_PROVENANCE_MISMATCH)
+                        validate_candidate(generation,generation.output,self._browser_executor.policy_for(target_snapshot))
                     prepared=seal(prepared,browser_plans,self._browser_executor.identity,
-                        self._browser_executor.policy_for(target_snapshot))
+                        self._browser_executor.policy_for(target_snapshot),origin='AI' if generation is not None else 'MANUAL')
                 uow.qa_runs.add(prepared)
+                if generation is not None:
+                    from qa_sentinel.domain.browser_generation import BrowserPlanAcceptance
+                    uow.browser_plans.accept(BrowserPlanAcceptance(generation_id=generation.id,project_id=project_id,campaign_id=campaign_id,
+                        run_id=prepared.run.id,run_test_id=prepared.tests[0].id,plan_hash=generation.plan_hash))
             except SnapshotSizeError:
                 raise ApplicationError(Code.RUN_SNAPSHOT_SIZE_LIMIT) from None
             except ReviewError:

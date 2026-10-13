@@ -7,6 +7,12 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.BROWSER_PLAN_NOT_FOUND: (404, "Browser plan generation not found in this Campaign"),
+    Code.BROWSER_PLAN_PROVENANCE_MISMATCH: (409, "Browser plan inputs do not match approved preparation"),
+    Code.BROWSER_PLAN_RETRY_EXHAUSTED: (409, "Browser plan retry budget is exhausted"),
+    Code.BROWSER_PLAN_RETRY_NOT_ALLOWED: (409, "Browser plan generation is not eligible for retry"),
+    Code.BROWSER_PLAN_RECONCILIATION_REQUIRED: (409, "Unresolved browser plan generation requires reconciliation"),
+    Code.BROWSER_PLAN_ALREADY_ACCEPTED: (409, "Browser plan generation already has an immutable acceptance"),
     Code.TARGET_NOT_FOUND: (404, "Target not found in the requested Project"),
     Code.DOCUMENT_INVALID: (422, "Document format or contents are unsupported, malformed, empty or unsafe"),
     Code.RUN_SELECTION_INVALID: (409, "Select only current approved tests with valid approved source Requirements"),

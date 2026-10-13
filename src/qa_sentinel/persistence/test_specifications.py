@@ -108,6 +108,9 @@ class TestSpecificationRepository:
         for link in bounded:links[link.test_spec_id].append(link.requirement_id)
         return [CampaignTestSpecification.model_validate({**{name:getattr(r,name) for name in CampaignTestSpecification.model_fields if name!='requirement_ids'},'requirement_ids':links[r.id]}) for r in rows]
 
+    def is_current(self,id):
+        return self.session.scalar(select(TestSpecificationRow.id).where(TestSpecificationRow.id==str(id),current_test())) is not None
+
     def specification(self,id):
         row=self.session.get(TestSpecificationRow,str(id))
         return None if row is None else self._specs([row])[0]
