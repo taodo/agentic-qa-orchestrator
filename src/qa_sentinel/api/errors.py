@@ -7,6 +7,10 @@ from .models import ErrorEnvelope, ErrorDetail
 
 
 ERROR_MAPPING = {
+    Code.PREPARATION_NOT_FOUND: (404, "Browser preparation not found in this Campaign"),
+    Code.PREPARATION_IDEMPOTENCY_CONFLICT: (409, "Preparation key belongs to different immutable inputs"),
+    Code.PREPARATION_INVALID_STATE: (409, "Preparation lifecycle transition is invalid"),
+    Code.PREPARATION_SIZE_LIMIT: (413, "Complete selected preparation exceeds the bounded size"),
     Code.BROWSER_PLAN_NOT_FOUND: (404, "Browser plan generation not found in this Campaign"),
     Code.BROWSER_PLAN_PROVENANCE_MISMATCH: (409, "Browser plan inputs do not match approved preparation"),
     Code.BROWSER_PLAN_RETRY_EXHAUSTED: (409, "Browser plan retry budget is exhausted"),

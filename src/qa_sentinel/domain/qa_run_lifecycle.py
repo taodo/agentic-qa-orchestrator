@@ -16,13 +16,13 @@ def start_run(run):
 def start_test(test):
     if test.execution_status != "NOT_STARTED" or test.qa_result != "NOT_EVALUATED":
         raise RunLifecycleError("RUN_INVALID_STATE")
-    return QARunTest.model_validate({**test.model_dump(), "execution_status": "RUNNING"})
+    return QARunTest.model_validate({**test.model_dump(), "snapshot_version": test.snapshot_version, "execution_status": "RUNNING"})
 
 
 def finish_test(test, result):
     if test.execution_status != "RUNNING" or result not in {QAResult.PASS, QAResult.FAIL, QAResult.SKIP}:
         raise RunLifecycleError("RUN_INVALID_STATE")
-    return QARunTest.model_validate({**test.model_dump(), "execution_status": "COMPLETED", "qa_result": result})
+    return QARunTest.model_validate({**test.model_dump(), "snapshot_version": test.snapshot_version, "execution_status": "COMPLETED", "qa_result": result})
 
 
 def finish_run(run, tests, *, failed=False, browser_error_code=None):

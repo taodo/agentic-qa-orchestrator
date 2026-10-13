@@ -497,9 +497,13 @@ class QARunRow(Base):
         UniqueConstraint("id", "campaign_id", "project_id", name="uq_qa_runs_owner"),
         UniqueConstraint("campaign_id", "run_number", name="uq_qa_runs_number"),
         UniqueConstraint("campaign_id", "idempotency_key", name="uq_qa_runs_idempotency"),
-        CheckConstraint("run_number >= 1 AND requirement_count BETWEEN 1 AND 1000 AND test_count BETWEEN 1 AND 1000", name="ck_qa_runs_counts"),
+        CheckConstraint("run_number >= 1 AND requirement_count BETWEEN 0 AND 1000 AND test_count BETWEEN 1 AND 1000 AND (snapshot_version='qa-run-browser-v3' OR requirement_count>=1)", name="ck_qa_runs_counts"),
         CheckConstraint("length(idempotency_key) BETWEEN 1 AND 128 AND length(snapshot_hash)=64 AND (note IS NULL OR length(note) BETWEEN 1 AND 1000)", name="ck_qa_runs_bounds"),
-        CheckConstraint("snapshot_version IN ('qa-run-snapshot-v1','qa-run-selection-v2')", name="ck_qa_runs_version"),
+        CheckConstraint("snapshot_version IN ('qa-run-snapshot-v1','qa-run-selection-v2','qa-run-browser-v3')", name="ck_qa_runs_version"),
+        UniqueConstraint("preparation_id", name="uq_qa_run_preparation"),
+        ForeignKeyConstraint(["preparation_id", "campaign_id", "project_id"], ["browser_preparations.id", "browser_preparations.campaign_id", "browser_preparations.project_id"], name="fk_qa_run_preparation", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("snapshot_version!='qa-run-browser-v3' OR (executor_kind='WEB_BROWSER' AND runtime_identity IS NOT NULL AND target_snapshot IS NOT NULL)", name="ck_qa_runs_browser_version"),
+        CheckConstraint("preparation_id IS NULL OR (snapshot_version='qa-run-browser-v3' AND executor_kind='WEB_BROWSER')", name="ck_qa_run_preparation"),
         CheckConstraint("execution_error_code IS NULL OR execution_error_code='RUN_EXECUTION_FAILED'", name="ck_qa_runs_error"),
         CheckConstraint("execution_status IN ('CREATED','QUEUED','RUNNING','COMPLETED','STOPPED','FAILED')", name="ck_qa_runs_execution"),
         CheckConstraint("qa_outcome IN ('NOT_EVALUATED','PASS','FAIL','PARTIAL')", name="ck_qa_runs_outcome"),
@@ -510,6 +514,7 @@ class QARunRow(Base):
     run_number: Mapped[int] = mapped_column(Integer, nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    preparation_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     snapshot_version: Mapped[str] = mapped_column(String(32), nullable=False)
     snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     target_snapshot: Mapped[Any | None] = mapped_column(JSON(none_as_null=True), nullable=True)
@@ -730,3 +735,38 @@ event.listen(BrowserPlanGenerationRow.__table__,'after_create',DDL(BROWSER_GENER
 for _table in (BrowserPlanGenerationRow,BrowserPlanAcceptanceRow):
     event.listen(_table.__table__,'after_create',DDL(f"CREATE TRIGGER {_table.__tablename__}_no_delete BEFORE DELETE ON {_table.__tablename__} BEGIN SELECT RAISE(ABORT,'Planning history is immutable'); END"))
 event.listen(BrowserPlanAcceptanceRow.__table__,'after_create',DDL("CREATE TRIGGER browser_acceptance_seal BEFORE UPDATE ON browser_plan_acceptances BEGIN SELECT RAISE(ABORT,'Acceptance is immutable'); END"))
+
+
+class BrowserPreparationRow(Base):
+    __tablename__ = "browser_preparations"
+    __table_args__ = (
+        UniqueConstraint("id", "campaign_id", "project_id", name="uq_browser_preparation_owner"),
+        UniqueConstraint("campaign_id", "idempotency_key", name="uq_browser_preparation_key"),
+        ForeignKeyConstraint(["campaign_id", "project_id"], ["qa_campaigns.id", "qa_campaigns.project_id"], name="fk_browser_preparation_campaign", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["target_id", "project_id"], ["targets_under_test.id", "targets_under_test.project_id"], name="fk_browser_preparation_target", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("contract_version='browser-preparation-v1' AND browser_mode IN ('HEADLESS','HEADED') AND selected_count BETWEEN 1 AND 500 AND length(selection_hash)=64 AND length(idempotency_key) BETWEEN 1 AND 128", name="ck_browser_preparation_bounds"),
+        CheckConstraint("status IN ('CREATED','PREPARING','COMPLETED','FAILED') AND json_extract(payload,'$.status')=status AND json_extract(payload,'$.id')=id AND json_extract(payload,'$.project_id')=project_id AND json_extract(payload,'$.campaign_id')=campaign_id AND json_extract(payload,'$.target_snapshot.target_id')=target_id AND json_extract(payload,'$.browser_mode')=browser_mode AND json_extract(payload,'$.idempotency_key')=idempotency_key AND json_extract(payload,'$.selection_hash')=selection_hash AND json_extract(payload,'$.contract_version')=contract_version AND json_extract(payload,'$.selected_count')=selected_count AND json_array_length(payload,'$.items')=selected_count AND length(CAST(payload AS BLOB))<=16777216", name="ck_browser_preparation_payload"),
+        Index("ix_browser_preparation_owner", "project_id", "campaign_id", "created_at", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    contract_version: Mapped[str] = mapped_column(String(32), nullable=False)
+    browser_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    selection_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    selected_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    payload: Mapped[Any] = mapped_column(JSON, nullable=False)
+
+event.listen(BrowserPreparationRow.__table__, "after_create", DDL("CREATE TRIGGER browser_preparation_no_delete BEFORE DELETE ON browser_preparations BEGIN SELECT RAISE(ABORT,'Preparation history is immutable'); END"))
+
+event.listen(BrowserPreparationRow.__table__, "after_create", DDL("CREATE TRIGGER browser_preparation_insert BEFORE INSERT ON browser_preparations WHEN NEW.status!='CREATED' OR EXISTS (SELECT 1 FROM json_each(NEW.payload,'$.items') item WHERE json_extract(item.value,'$.status')!='PENDING' OR NOT EXISTS(SELECT 1 FROM campaign_test_specifications t WHERE t.id=json_extract(item.value,'$.original_test_id') AND t.project_id=NEW.project_id AND t.campaign_id=NEW.campaign_id)) BEGIN SELECT RAISE(ABORT,'Preparation requires pending owned Tests'); END"))
+
+event.listen(BrowserPreparationRow.__table__, "after_create", DDL("CREATE TRIGGER browser_preparation_seal BEFORE UPDATE ON browser_preparations WHEN OLD.status IN ('COMPLETED','FAILED') OR NEW.id!=OLD.id OR NEW.project_id!=OLD.project_id OR NEW.campaign_id!=OLD.campaign_id OR NEW.target_id!=OLD.target_id OR NEW.contract_version!=OLD.contract_version OR NEW.browser_mode!=OLD.browser_mode OR NEW.idempotency_key!=OLD.idempotency_key OR NEW.selection_hash!=OLD.selection_hash OR NEW.selected_count!=OLD.selected_count OR NEW.created_at!=OLD.created_at OR (OLD.status='PREPARING' AND json_extract(NEW.payload,'$.started_at') IS NOT json_extract(OLD.payload,'$.started_at')) OR json_remove(NEW.payload,'$.items','$.status','$.started_at','$.finished_at','$.error_code')!=json_remove(OLD.payload,'$.items','$.status','$.started_at','$.finished_at','$.error_code') OR json_extract(NEW.payload,'$.started_at') IS NULL OR (NEW.status='COMPLETED' AND (json_extract(NEW.payload,'$.finished_at') IS NULL OR json_extract(NEW.payload,'$.error_code') IS NOT NULL OR EXISTS (SELECT 1 FROM json_each(NEW.payload,'$.items') i WHERE json_extract(i.value,'$.status') NOT IN ('RUNNABLE','NEEDS_ATTENTION','SYSTEM_ERROR')))) OR (NEW.status='FAILED' AND (json_extract(NEW.payload,'$.finished_at') IS NULL OR COALESCE(json_extract(NEW.payload,'$.error_code'),'') NOT IN ('PREPARATION_SYSTEM_ERROR','PREPARATION_INTERRUPTED'))) OR NOT ((OLD.status='CREATED' AND NEW.status='PREPARING') OR (OLD.status='PREPARING' AND NEW.status IN ('PREPARING','COMPLETED','FAILED'))) OR EXISTS (SELECT 1 FROM json_each(NEW.payload,'$.items') n JOIN json_each(OLD.payload,'$.items') o ON n.key=o.key WHERE json_remove(n.value,'$.status','$.attempt_id','$.started_at','$.finished_at','$.reason_code','$.grounding_id','$.observation_hash','$.plan_hash')!=json_remove(o.value,'$.status','$.attempt_id','$.started_at','$.finished_at','$.reason_code','$.grounding_id','$.observation_hash','$.plan_hash') OR (n.value!=o.value AND NOT (OLD.status='PREPARING' AND NEW.status='PREPARING' AND ((json_extract(o.value,'$.status')='PENDING' AND json_extract(n.value,'$.status')='PREPARING') OR (json_extract(o.value,'$.status')='PREPARING' AND json_extract(n.value,'$.status') IN ('RUNNABLE','NEEDS_ATTENTION','SYSTEM_ERROR') AND json_extract(n.value,'$.attempt_id')=json_extract(o.value,'$.attempt_id') AND json_extract(n.value,'$.started_at')=json_extract(o.value,'$.started_at')))))) BEGIN SELECT RAISE(ABORT,'Preparation seal or lifecycle violation'); END"))
+
+event.listen(QARunRow.__table__, "after_create", DDL("CREATE TRIGGER qa_run_preparation_seal BEFORE UPDATE OF preparation_id ON qa_runs WHEN NEW.preparation_id IS NOT OLD.preparation_id BEGIN SELECT RAISE(ABORT,'Run preparation link is immutable'); END"))
+
+event.listen(QARunRow.__table__, "after_create", DDL("CREATE TRIGGER qa_run_preparation_ready BEFORE INSERT ON qa_runs WHEN NEW.preparation_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM browser_preparations p WHERE p.id=NEW.preparation_id AND p.project_id=NEW.project_id AND p.campaign_id=NEW.campaign_id AND p.status='COMPLETED' AND EXISTS (SELECT 1 FROM json_each(p.payload,'$.items') i WHERE json_extract(i.value,'$.status')='RUNNABLE')) BEGIN SELECT RAISE(ABORT,'Run requires completed runnable preparation'); END"))

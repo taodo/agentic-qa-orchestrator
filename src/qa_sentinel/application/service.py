@@ -69,7 +69,11 @@ def task_view(record, detail=False):
 
 
 def record_view(record, view):
-    return view.model_validate(record.model_dump(include=set(view.model_fields)))
+    values = record.model_dump(include=set(view.model_fields))
+    version = view.model_fields.get("snapshot_version")
+    if version is not None and version.exclude:
+        values["snapshot_version"] = record.snapshot_version
+    return view.model_validate(values)
 
 
 def page(records, limit, view):
@@ -374,7 +378,7 @@ class QASentinelApplication:
             raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
         return record
 
-    def _review(self, project_id, campaign_id, object_id, kind, command=None):
+    def _review(self, project_id, campaign_id, object_id, kind, command=None, *, policy=None):
         project_id, campaign_id, object_id = map(identifier, (project_id, campaign_id, object_id))
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             if command is not None:
@@ -393,7 +397,7 @@ class QASentinelApplication:
                         raise ReviewError("REVIEW_NOT_REVIEWABLE")
                 if kind == "TEST_SPECIFICATION" and any(not uow.campaign_content.is_current(id) for id in record.requirement_ids):
                     raise ReviewError("REVIEW_NOT_REVIEWABLE")
-                result = uow.campaign_reviews.approve(record, kind, command)
+                result = uow.campaign_reviews.approve(record, kind, command, policy=policy)
             except ReviewError as error:
                 raise ApplicationError(Code(str(error))) from None
             uow.commit()
@@ -416,6 +420,21 @@ class QASentinelApplication:
     def review_campaign_test_specification(self, project_id, campaign_id, test_spec_id, *, reviewer_label, note=None, action="APPROVE") -> ReviewState:
         return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION",
             self._approval_command(reviewer_label, note, action))
+
+    def review_source_free_campaign_test(self, project_id, campaign_id, test_spec_id, *, reviewer_label, note=None):
+        """Explicit human approval policy for the new source-free browser path only."""
+        from qa_sentinel.domain.campaign_review import SOURCE_FREE_APPROVAL_POLICY
+        return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION",
+            self._approval_command(reviewer_label, note, "APPROVE"), policy=SOURCE_FREE_APPROVAL_POLICY)
+
+    def create_browser_preparation(self, project_id, campaign_id, *, idempotency_key, test_specification_ids, browser_mode="HEADLESS"):
+        from .browser_preparation import create
+        return create(self, project_id, campaign_id, idempotency_key=idempotency_key,
+            test_specification_ids=test_specification_ids, browser_mode=browser_mode)
+
+    def get_browser_preparation(self, project_id, campaign_id, preparation_id):
+        from .browser_preparation import read
+        return read(self, project_id, campaign_id, preparation_id)
 
     def get_campaign_test_specification_review(self, project_id, campaign_id, test_spec_id) -> ReviewState:
         return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION")
@@ -878,7 +897,7 @@ class QASentinelApplication:
             items = []
             for test in tests.items:
                 count, records = evidence.get(str(test.id), (0, []))
-                items.append(QARunTestResult(**test.model_dump(), evidence_count=count,
+                items.append(QARunTestResult(**test.model_dump(), snapshot_version=run.snapshot_version, evidence_count=count,
                     evidence=CollectionPage(items=evidence_page(records, EVIDENCE_PREVIEW_LIMIT).items, total_returned=len(records), truncated=count > len(records))))
             return QARunResults(run=run, summary=QARunResultSummary(**uow.qa_runs.result_counts(run)),
                 tests=CollectionPage(items=tuple(items), total_returned=len(items), truncated=tests.truncated))

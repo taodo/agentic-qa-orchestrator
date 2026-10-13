@@ -14,7 +14,7 @@ def seal(prepared, plans, identity, policy, *, origin="MANUAL"):
             run_test_id=test.id,origin=origin,plan=plan,plan_hash=digest(plan),
             test_snapshot_hash=run_test_snapshot_digest(test),target_snapshot_hash=digest(run.target_snapshot))
         policy.validate_envelope(envelope,run,test)
-        tests.append(QARunTest.model_validate({**test.model_dump(),"browser_plan":envelope}))
+        tests.append(QARunTest.model_validate({**test.model_dump(),"snapshot_version":run.snapshot_version,"browser_plan":envelope}))
     run=QARun.model_validate({**run.model_dump(),"snapshot_hash":snapshot_fingerprint(run.campaign_snapshot,
-        prepared.requirements,tests,run.snapshot_version,run.target_snapshot,run.runtime_identity)})
+        prepared.requirements,tests,run.snapshot_version,run.target_snapshot,run.runtime_identity,run.preparation_id)})
     return PreparedQARun(run=run,requirements=prepared.requirements,tests=tuple(tests))

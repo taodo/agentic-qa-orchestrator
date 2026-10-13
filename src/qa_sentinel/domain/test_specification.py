@@ -178,6 +178,8 @@ class CampaignTestSpecification(TestDesign):
             raise ValueError('Unlinked import requires explicit traceability marker')
         if self.unresolved_requirement_refs and not any(m.kind=='UNRESOLVED_REQUIREMENT' for m in self.information_markers):
             raise ValueError('Unknown references must be explicit')
-        if self.information_markers and self.review_status!=TestReviewStatus.NEEDS_CLARIFICATION:
+        informational_only = (not self.requirement_ids and not self.unresolved_requirement_refs
+            and all(m.kind == 'MISSING_TRACEABILITY' for m in self.information_markers))
+        if self.information_markers and not informational_only and self.review_status!=TestReviewStatus.NEEDS_CLARIFICATION:
             raise ValueError('Unresolved information requires clarification')
         return self
