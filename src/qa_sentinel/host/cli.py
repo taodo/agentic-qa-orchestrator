@@ -14,8 +14,13 @@ class TargetArgumentParser(argparse.ArgumentParser):
         self.exit(2, "Target status: TARGET_NOT_READY\nSafe error: TARGET_ARGUMENTS_INVALID\n")
 
 
-def parser(*, target_errors=False):
-    kind = TargetArgumentParser if target_errors else argparse.ArgumentParser
+class BrowserArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        self.exit(2, "Safe error: HOST_BROWSER_ARGUMENTS_INVALID\n")
+
+
+def parser(*, target_errors=False, browser_errors=False):
+    kind = BrowserArgumentParser if browser_errors else TargetArgumentParser if target_errors else argparse.ArgumentParser
     value = kind(prog="qa-sentinel", description="Local host or explicitly protected demo preview.")
     commands = value.add_subparsers(dest="command", required=True)
     serve = commands.add_parser("serve", help="Serve locally or as an explicitly protected demo preview",
@@ -63,6 +68,26 @@ def parser(*, target_errors=False):
         target.add_argument("--test-cwd", default=".")
         target.add_argument("--pytest-target", action="append", required=True)
         target.add_argument("--timeout-seconds", type=float, default=120)
+    web = setup.add_parser("web", help="Explicit trusted local WEB planning, acceptance, Start and stored results; no workspace")
+    operations = web.add_subparsers(dest="web_command", required=True)
+    for name in ("generate", "candidate", "accept", "start", "results"):
+        operation = operations.add_parser(name)
+        operation.add_argument("--database", type=Path, required=True, help="Existing manually migrated operator database")
+        operation.add_argument("--project-id", type=UUID, required=True)
+        operation.add_argument("--campaign-id", type=UUID, required=True)
+        if name in {"generate", "accept", "start"}:
+            operation.add_argument("--trusted-local-origin", help="Optional exact numeric loopback origin for a controlled local fixture only")
+        if name == "generate":
+            operation.add_argument("--test-id", type=UUID, required=True)
+            operation.add_argument("--model", help="Explicit configured model; default is the existing Planner role configuration")
+        if name in {"candidate", "accept"}:
+            operation.add_argument("--generation-id", type=UUID, required=True)
+        if name == "accept":
+            operation.add_argument("--idempotency-key", required=True)
+        if name in {"start", "results"}:
+            operation.add_argument("--run-id", type=UUID, required=True)
+        if name == "results":
+            operation.add_argument("--after-position", type=int, default=0)
     return value
 
 
@@ -92,9 +117,13 @@ def configuration(args) -> HostConfig:
 
 def main(argv=None):
     arguments = list(sys.argv[1:] if argv is None else argv)
-    command_parser = parser(target_errors=arguments[:2] in (["local", "target-check"], ["local", "target-test"]))
+    command_parser = parser(target_errors=arguments[:2] in (["local", "target-check"], ["local", "target-test"]),
+        browser_errors=arguments[:2] == ["local", "web"])
     args = command_parser.parse_args(arguments)
     if args.command == "local":
+        if args.local_command == "web":
+            from .browser import browser_command
+            return browser_command(args)
         if args.local_command == "start":
             from .start import start_local
             return start_local(args.config)

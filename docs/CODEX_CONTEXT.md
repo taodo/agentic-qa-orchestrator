@@ -100,7 +100,21 @@ explicit transient retries preserve inputs/settings with maximum three attempts.
 Acceptance separately revalidates fresh approval/Target and atomically creates the
 exact AI-origin Task 5.2 seal/receipt; Start stays separate and deterministic.
 Public host/demo/preview/hosted composition stays unchanged. No frontend/dependency
-changes or 5.4 external campaign. See [contracts and limitations](BROWSER_EXECUTION.md#task-53-reasoning-only-generation-and-explicit-acceptance).
+changes. See [contracts and limitations](BROWSER_EXECUTION.md#task-53-reasoning-only-generation-and-explicit-acceptance).
+
+## Phase 5 Task 5.4: trusted local generic WEB composition
+
+`local web generate/candidate/accept/start/results` composes the existing browser
+application boundaries against an explicitly selected existing migrated DB and
+Project/Campaign/Test IDs. No source workspace, new API or host-mode change.
+Generate alone configures the existing Planner/provider; Candidate and Results
+are bounded persisted reads; Accept seals without Target access; separate Start
+alone invokes Chromium, using the immutable Target and exact AI-origin plan.
+QA assertion FAIL completes normally; system errors fail without synthetic fallback.
+Demo/public composition remains synthetic-only. Two disposable, different local
+WEB fixtures prove the same production path; no example-site special cases.
+No migrations/dependencies/frontend changes; browser UX and broader compatibility
+remain deferred. See [operator commands](BROWSER_EXECUTION.md#task-54-generic-controlled-local-end-to-end-flow).
 
 ## Target Under Test foundation
 
