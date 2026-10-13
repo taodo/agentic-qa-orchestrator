@@ -273,7 +273,7 @@ def test_preparation_schema_migration_roundtrip_and_history_refusal(source_free)
     command.check(config)
     command.downgrade(config,"0015")
     assert "browser_preparations" not in inspect(engine).get_table_names()
-    command.upgrade(config,"0016");command.check(config)
+    command.upgrade(config,"head");command.check(config)
     assert "browser_preparations" in inspect(engine).get_table_names()
     approve_source_free(source_free);record=prepare(source_free)
     with pytest.raises(RuntimeError,match="cannot erase"):
@@ -299,7 +299,7 @@ def test_upgrade_preserves_historical_fingerprints_triggers_and_results(ready):
     with engine.connect() as db:
         assert before_triggers <= set(db.scalars(text("SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name='qa_runs'")))
         assert not db.exec_driver_sql("PRAGMA foreign_key_check").all()
-    command.check(config)
+    command.upgrade(config,"head");command.check(config)
 
 
 def test_no_traceability_approval_blocks_unsafe_downgrade(source_free):

@@ -23,7 +23,7 @@ def create(app, project_id, campaign_id, **arguments):
             raise ApplicationError(Code.TARGET_NOT_FOUND)
         target = TargetSnapshot.capture(app._target(uow, project_id, campaign.target_id))
         try:
-            BrowserExecutionPolicy().validate_target(target)  # Pure static validation, no resolver/SDK.
+            (BrowserExecutionPolicy() if app._browser_observer is None else app._browser_observer.policy_for(target)).validate_target(target)  # Pure static validation, no resolver/SDK.
         except ValueError:
             raise ApplicationError(Code.INVALID_INPUT) from None
         rows = list(uow.session.scalars(select(TestSpecificationRow).where(

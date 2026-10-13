@@ -51,9 +51,30 @@ class BrowserPlanGenerator:
         return ModelRequest(**self.settings.model_dump(),agent_name=AgentName.PLANNER,system_instructions=INSTRUCTIONS,user_input=context,
             context_selection=ContextSelection(original_chars=len(context),selected_chars=len(context),selected_bytes=len(context.encode('utf-8'))))
 
+    def prepare_system(self,record,observation,test,approval):
+        from .browser_grounding import validated_constraints, test_intent
+        from qa_sentinel.domain.browser_generation import input_hash
+        constraints=validated_constraints(record,observation,test,approval)
+        context=json.dumps({'prompt_version':'browser-plan-system-grounding-v1',
+            'test_hash':input_hash(test,approval),'target_hash':record.scope.target_hash,
+            'approved_test_intent':test_intent(test,record.scope.target),'target':record.scope.target.model_dump(mode='json'),
+            'system_grounding':constraints.model_dump(mode='json'),
+            'capabilities':{'plan_schema':BrowserPlanOutput.model_json_schema(),'redirects':False,'screenshots':False,
+                'inspection':False,'tools':False,'source_access':False}},ensure_ascii=False,sort_keys=True,separators=(',',':'))
+        if len(context)>60000 or len(context.encode('utf-8'))>196608:raise ModelError(ProviderErrorCategory.CONTEXT_LIMIT)
+        instructions=INSTRUCTIONS.replace('explicit approved_browser_facts','validated system_grounding').replace(
+            'approved step\'s required_actions','system-grounded step\'s required_actions')
+        instructions+=' System grounding is machine observation provenance, not human Browser Facts. Preserve action_manifest and step_bindings exactly; do not choose different allowed locators/values.'
+        return ModelRequest(**self.settings.model_dump(),agent_name=AgentName.PLANNER,system_instructions=instructions,user_input=context,
+            context_selection=ContextSelection(original_chars=len(context),selected_chars=len(context),selected_bytes=len(context.encode('utf-8'))))
+
     def generate(self,request):return self.adapter.generate(request,BrowserPlanOutput)
 
 def validate_candidate(record,output,policy:BrowserExecutionPolicy):
+    return _validate_with_facts(record,output,policy,approved_facts(record.test))
+
+
+def _validate_with_facts(record,output,policy,facts):
     if type(output) is not BrowserPlanOutput:raise ValueError('BROWSER_PLAN_INVALID_OUTPUT')
     output=BrowserPlanOutput.model_validate(output.model_dump())
     if output.disposition=='CANNOT_PLAN':raise ValueError('BROWSER_PLAN_INSUFFICIENT_INFORMATION')
@@ -63,7 +84,6 @@ def validate_candidate(record,output,policy:BrowserExecutionPolicy):
     captures=sum(s.action in {'NAVIGATE','ASSERT_TEXT','ASSERT_VISIBLE','ASSERT_URL'} for s in plan.steps)
     if plan.steps[0].action!='NAVIGATE' or plan.redirect_limit or plan.screenshot_limit or captures>plan.evidence_limit:
         raise ValueError('BROWSER_PLAN_POLICY_REJECTED')
-    facts=approved_facts(record.test)
     paths={urlsplit(record.target.base_url).path or '/'} | (set(facts.paths) if facts else set())
     locators=() if facts is None else facts.locators
     inputs=() if facts is None else facts.input_values
@@ -88,4 +108,17 @@ def validate_candidate(record,output,policy:BrowserExecutionPolicy):
     if tuple(tuple(actions) for actions in operations)!=facts.required_actions:raise ValueError('BROWSER_PLAN_GROUNDING_REJECTED')
     if covered!=set(range(1,len(record.test.steps)+1)) or record.test.overall_expected_result not in assertions:
         raise ValueError('BROWSER_PLAN_GROUNDING_REJECTED')
+    return output
+
+
+def validate_system_candidate(record,observation,test,approval,output,policy):
+    from types import SimpleNamespace
+    from .browser_grounding import validated_constraints
+    from qa_sentinel.domain.browser_grounding import GroundingLimitation
+    constraints=validated_constraints(record,observation,test,approval)
+    if policy!=record.scope.policy:raise GroundingLimitation("POLICY_REJECTED")
+    output=_validate_with_facts(SimpleNamespace(test=test,target=record.scope.target),output,policy,constraints)
+    # Legacy global allowlists are necessary but insufficient for observation-local step mapping.
+    if output.step_bindings!=constraints.step_bindings or tuple(action.model_dump(exclude={'timeout_ms'}) for action in output.plan.steps)!=tuple(action.model_dump(exclude={'timeout_ms'}) for action in constraints.action_manifest):
+        raise GroundingLimitation("INVALID_REFERENCE")
     return output

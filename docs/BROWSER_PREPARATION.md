@@ -77,7 +77,7 @@ approvals, Target and plan hashes. This is a validation hook, not orchestration;
 ## Migration and safety
 
 Migration 0016 preserves existing rows and Run triggers while conditionally evolving
-snapshot counts/version constraints. Runtime preflight now requires 0016. Stop the
+snapshot counts/version constraints. Runtime preflight now requires 0017. Stop the
 host and explicitly migrate the configured operator DB with the existing documented
 Alembic procedure. Normal startup never migrates automatically. Downgrade to 0015
 refuses source-free approval, preparation or browser-v3 history rather than erasing
@@ -89,3 +89,8 @@ BrowserExecutionPolicy/0015 planning receipts is introduced. Browser mode is rec
 intent only; actual headed runtime wiring belongs to 5.8D. Machine observations and
 safe structured grounding belong to 5.8B. Phase 5 remains product-incomplete pending
 those child tasks and the parent epic's manual acceptance smoke.
+
+Task 5.8B now backs future grounding hooks with explicit immutable observation and
+grounding receipts; see [grounding](BROWSER_GROUNDING.md). It does not itself finish
+items as RUNNABLE or create/seal a QA Run. The no-side-effect statements above describe
+the 5.8A create/read foundation; explicit B grounding is a separate trusted internal call.

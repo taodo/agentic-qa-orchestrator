@@ -220,3 +220,19 @@ def test_request_header_bound_includes_transport_owned_headers(monkeypatch):
     wire_transport(monkeypatch)
     with pytest.raises(BrowserExecutionError,match='BROWSER_UNSUPPORTED_FEATURE'):
         asyncio.run(PinnedNetwork(target()).fetch(WireRequest(headers={f'x-{i}':'v' for i in range(97)})))
+
+
+@pytest.mark.parametrize("method",["POST","PUT","DELETE"])
+def test_inspection_transport_never_performs_mutating_request(monkeypatch,method):
+    calls,writers=wire_transport(monkeypatch)
+    with pytest.raises(BrowserExecutionError,match='BROWSER_NETWORK_DENIED'):
+        asyncio.run(PinnedNetwork(target(),observation_only=True).fetch(WireRequest(method=method)))
+    assert calls==writers==[]
+
+
+@pytest.mark.parametrize("key",["authorization","cookie","proxy-authorization","x-api-key","x-auth-token"])
+def test_inspection_transport_rejects_secret_headers(monkeypatch,key):
+    calls,writers=wire_transport(monkeypatch)
+    with pytest.raises(BrowserExecutionError,match='BROWSER_NETWORK_DENIED'):
+        asyncio.run(PinnedNetwork(target(),observation_only=True).fetch(WireRequest(headers={key:"synthetic-sensitive-value"})))
+    assert calls==writers==[]
