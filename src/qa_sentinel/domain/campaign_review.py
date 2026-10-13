@@ -86,13 +86,29 @@ class ReviewError(ValueError):
     pass
 
 
-def approve(record, kind, command):
+SOURCE_FREE_APPROVAL_POLICY = "source-free-browser-test-v1"
+
+
+def source_free_reviewable(record):
+    """Missing links are information; unresolved explicit references remain blockers."""
+    return (not record.unresolved_requirement_refs
+        and not any(m.kind != "MISSING_TRACEABILITY" for m in record.information_markers)
+        and (not record.information_markers or not record.requirement_ids)
+        and bool(record.required_evidence) and record.overall_expected_result is not None
+        and all(step.expected is not None for step in record.steps))
+
+
+def approve(record, kind, command, *, policy=None):
     # Revalidation also rejects model_copy() bypasses of the immutable contract.
     record = type(record).model_validate(record.model_dump())
-    if record.review_status != "READY_FOR_REVIEW" or record.information_markers:
-        raise ReviewError("REVIEW_NOT_REVIEWABLE")
-    if kind == "TEST_SPECIFICATION" and (not record.requirement_ids or record.unresolved_requirement_refs):
-        raise ReviewError("REVIEW_NOT_REVIEWABLE")
+    if policy == SOURCE_FREE_APPROVAL_POLICY and kind == "TEST_SPECIFICATION":
+        if record.review_status not in {"READY_FOR_REVIEW", "NEEDS_CLARIFICATION"} or not source_free_reviewable(record):
+            raise ReviewError("REVIEW_NOT_REVIEWABLE")
+    else:
+        if policy is not None or record.review_status != "READY_FOR_REVIEW" or record.information_markers:
+            raise ReviewError("REVIEW_NOT_REVIEWABLE")
+        if kind == "TEST_SPECIFICATION" and (not record.requirement_ids or record.unresolved_requirement_refs):
+            raise ReviewError("REVIEW_NOT_REVIEWABLE")
     return ApprovalEvidence(object_id=record.id, object_kind=kind, project_id=record.project_id,
         campaign_id=record.campaign_id, reviewer_label=command.reviewer_label, note=command.note,
         content_hash=content_hash(record))

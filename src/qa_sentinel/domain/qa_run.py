@@ -17,6 +17,7 @@ from .test_specification import CampaignTestSpecification
 MAX_SNAPSHOT_RECORDS = 1000
 MAX_SNAPSHOT_BYTES = 16 * 1024 * 1024
 SNAPSHOT_VERSION = "qa-run-snapshot-v1"
+BROWSER_SNAPSHOT_VERSION = "qa-run-browser-v3"
 IdempotencyKey = Annotated[str, StringConstraints(strict=True, pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")]
 RunNote = Annotated[str, StringConstraints(strict=True, min_length=1, max_length=1000)]
 
@@ -78,7 +79,7 @@ class QARun(Frozen):
     run_number: int = Field(ge=1, strict=True)
     idempotency_key: IdempotencyKey
     note: RunNote | None = None
-    snapshot_version: Literal["qa-run-snapshot-v1", "qa-run-selection-v2"] = SNAPSHOT_VERSION
+    snapshot_version: Literal["qa-run-snapshot-v1", "qa-run-selection-v2", "qa-run-browser-v3"] = SNAPSHOT_VERSION
     snapshot_hash: Hash
     target_snapshot: TargetSnapshot | None = None
     executor_kind: ExecutorKind = ExecutorKind.SYNTHETIC
@@ -86,7 +87,8 @@ class QARun(Frozen):
     browser_error_code: BrowserErrorCode | None = None
     campaign_snapshot: CampaignSnapshot
     readiness_at_creation: Readiness
-    requirement_count: int = Field(ge=1, le=MAX_SNAPSHOT_RECORDS, strict=True)
+    preparation_id: UUID | None = None
+    requirement_count: int = Field(ge=0, le=MAX_SNAPSHOT_RECORDS, strict=True)
     test_count: int = Field(ge=1, le=MAX_SNAPSHOT_RECORDS, strict=True)
     execution_status: RunExecutionStatus = RunExecutionStatus.CREATED
     qa_outcome: QAOutcome = QAOutcome.NOT_EVALUATED
@@ -97,6 +99,10 @@ class QARun(Frozen):
 
     @model_validator(mode="after")
     def snapshot_owner(self):
+        if self.snapshot_version != BROWSER_SNAPSHOT_VERSION and (self.requirement_count == 0 or self.preparation_id is not None):
+            raise ValueError("Historical snapshots require Requirements and no preparation link")
+        if self.snapshot_version == BROWSER_SNAPSHOT_VERSION and self.executor_kind != "WEB_BROWSER":
+            raise ValueError("Browser-v3 is not a Synthetic escape hatch")
         if self.executor_kind == "SYNTHETIC" and (self.runtime_identity is not None or self.browser_error_code is not None):
             raise ValueError("Synthetic identity cannot contain browser claims")
         if self.executor_kind == "WEB_BROWSER" and (self.target_snapshot is None or self.runtime_identity is None):
@@ -124,8 +130,10 @@ class QARun(Frozen):
         return self
 
 
-def validate_approval(content, approval, kind):
-    if (approval is None or content.review_status != "APPROVED" or content.information_markers
+def validate_approval(content, approval, kind, *, source_free=False):
+    from .campaign_review import source_free_reviewable
+    blocked = not source_free_reviewable(content) if source_free and kind == "TEST_SPECIFICATION" else bool(content.information_markers)
+    if (approval is None or content.review_status != "APPROVED" or blocked
             or (approval.object_id, approval.project_id, approval.campaign_id, approval.object_kind)
             != (content.id, content.project_id, content.campaign_id, kind)
             or approval.content_hash != content_hash(content)):
@@ -155,7 +163,9 @@ class QARunTest(Frozen):
     position: int = Field(ge=1, le=MAX_SNAPSHOT_RECORDS, strict=True)
     content: CampaignTestSpecification
     approval: ApprovalEvidence
-    linked_requirement_snapshot_ids: tuple[UUID, ...] = Field(min_length=1, max_length=20)
+    # Context is supplied by the owning Run, excluded from historical bytes/DB rows.
+    snapshot_version: Literal["qa-run-snapshot-v1", "qa-run-selection-v2", "qa-run-browser-v3"] = Field(default=SNAPSHOT_VERSION, exclude=True)
+    linked_requirement_snapshot_ids: tuple[UUID, ...] = Field(max_length=20)
     execution_status: RunTestExecutionStatus = RunTestExecutionStatus.NOT_STARTED
     qa_result: QAResult = QAResult.NOT_EVALUATED
     browser_plan: BrowserPlanEnvelope | None = None
@@ -164,9 +174,11 @@ class QARunTest(Frozen):
     def approved(self):
         if (self.execution_status == "COMPLETED") != (self.qa_result != "NOT_EVALUATED"):
             raise ValueError("QA results require completed test execution")
-        validate_approval(self.content, self.approval, "TEST_SPECIFICATION")
-        if (self.original_test_specification_id != self.content.id or not self.content.requirement_ids
-                or self.content.unresolved_requirement_refs):
+        source_free = self.snapshot_version == BROWSER_SNAPSHOT_VERSION
+        validate_approval(self.content, self.approval, "TEST_SPECIFICATION", source_free=source_free)
+        if (self.original_test_specification_id != self.content.id or self.content.unresolved_requirement_refs
+                or (not source_free and (not self.content.requirement_ids or not self.linked_requirement_snapshot_ids))
+                or (bool(self.content.requirement_ids) != bool(self.linked_requirement_snapshot_ids))):
             raise ValueError("Invalid test snapshot")
         return self
 
@@ -175,7 +187,7 @@ def canonical_json(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode("utf-8")
 
 
-def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION, target_snapshot=None, runtime_identity=None):
+def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION, target_snapshot=None, runtime_identity=None, preparation_id=None):
     # Run identities, caller intent, wall-clock snapshot/approval timestamps and live
     # readiness counts are excluded. Accepted approval hashes are retained as stable
     # content-version identities (including their original immutable creation time).
@@ -194,13 +206,27 @@ def snapshot_fingerprint(campaign, requirements, tests, version=SNAPSHOT_VERSION
     if runtime_identity is not None:
         payload["executor_kind"] = "WEB_BROWSER"
         payload["runtime_identity"] = runtime_identity.model_dump(mode="json")
+    if preparation_id is not None:
+        payload["preparation_id"] = str(preparation_id)
     return sha256(canonical_json(payload)).hexdigest()
 
 
 class PreparedQARun(Frozen):
     run: QARun
-    requirements: tuple[QARunRequirement, ...] = Field(min_length=1, max_length=MAX_SNAPSHOT_RECORDS)
+    requirements: tuple[QARunRequirement, ...] = Field(max_length=MAX_SNAPSHOT_RECORDS)
     tests: tuple[QARunTest, ...] = Field(min_length=1, max_length=MAX_SNAPSHOT_RECORDS)
+
+    @model_validator(mode="before")
+    @classmethod
+    def owning_version(cls, value):
+        if isinstance(value, dict):
+            value = dict(value)
+            run = value.get("run")
+            version = run.snapshot_version if isinstance(run, QARun) else (run or {}).get("snapshot_version", SNAPSHOT_VERSION)
+            value["tests"] = tuple(QARunTest.model_validate({
+                **(test.model_dump() if isinstance(test, QARunTest) else test), "snapshot_version": version})
+                for test in value.get("tests", ()))
+        return value
 
     @model_validator(mode="after")
     def complete(self):
@@ -242,7 +268,7 @@ class PreparedQARun(Frozen):
                     envelope.target_snapshot_hash != fingerprint(run.target_snapshot.model_dump(mode="json")) or
                     envelope.test_snapshot_hash != fingerprint(test.model_dump(mode="json",exclude={"execution_status","qa_result","browser_plan"}))):
                 raise ValueError("Browser plan provenance inconsistent")
-        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version, run.target_snapshot, run.runtime_identity):
+        if run.snapshot_hash != snapshot_fingerprint(run.campaign_snapshot, self.requirements, self.tests, run.snapshot_version, run.target_snapshot, run.runtime_identity, run.preparation_id):
             raise ValueError("Snapshot fingerprint inconsistent")
         if len(canonical_json(self.model_dump(mode="json"))) > MAX_SNAPSHOT_BYTES:
             raise SnapshotSizeError()

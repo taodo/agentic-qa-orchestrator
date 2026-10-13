@@ -5,6 +5,7 @@ from .operations import OperationalQueries
 from .execution_jobs import ExecutionJobRepository
 from .qa_runs import QARunRepository
 from .browser_generations import BrowserPlanRepository
+from .browser_preparations import BrowserPreparationRepository
 from .campaigns import QACampaignRepository
 from .targets import TargetRepository
 from .campaign_review import CampaignReviewRepository
@@ -32,6 +33,7 @@ class UnitOfWork:
         self.targets = TargetRepository(self.session)
         self.qa_runs = QARunRepository(self.session)
         self.browser_plans = BrowserPlanRepository(self.session)
+        self.browser_preparations = BrowserPreparationRepository(self.session)
         self.campaign_reviews = CampaignReviewRepository(self.session)
         self.campaign_content = CampaignContentRepository(self.session)
         self.test_specifications = TestSpecificationRepository(self.session)

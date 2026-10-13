@@ -78,7 +78,7 @@ class BrowserExecutionPolicy(Frozen):
     def validate_envelope(self, envelope, run, test):
         envelope = BrowserPlanEnvelope.model_validate(envelope.model_dump())
         run = QARun.model_validate(run.model_dump())
-        test = QARunTest.model_validate(test.model_dump())
+        test = QARunTest.model_validate({**test.model_dump(), "snapshot_version": run.snapshot_version})
         target = run.target_snapshot
         if (target is None or test.run_id != run.id or
                 (test.content.project_id, test.content.campaign_id) != (run.project_id, run.campaign_id) or

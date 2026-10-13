@@ -235,7 +235,7 @@ def test_browser_composition_missing_key_and_stale_schema_do_not_migrate(web_set
     with pytest.raises(browser.HostError, match="HOST_MODEL_KEY_REQUIRED"): browser.compose_browser(database, generate=True)
     with engine.begin() as db: db.execute(text("UPDATE alembic_version SET version_num='0014'"))
     with pytest.raises(browser.SchemaNotReady) as error: browser.compose_browser(database)
-    assert (error.value.current, error.value.required) == ("0014", "0015")
+    assert (error.value.current, error.value.required) == ("0014", "0016")
 
 
 def test_production_composition_has_no_fixture_specific_strings():

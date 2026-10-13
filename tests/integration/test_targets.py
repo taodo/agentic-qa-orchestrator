@@ -77,9 +77,9 @@ def test_0012_populated_upgrade_legacy_reopen_and_downgrade_guard(review):
     before_admission = Path(path).read_bytes()
     with pytest.raises(SchemaNotReady) as exc:open_existing_database(path)
     assert Path(path).read_bytes() == before_admission
-    assert (exc.value.current,exc.value.required)==("0012","0015")
+    assert (exc.value.current,exc.value.required)==("0012","0016")
     command.upgrade(config,"head");command.check(config)
-    assert ScriptDirectory.from_config(config).get_current_head()==CURRENT_REVISION=="0015"
+    assert ScriptDirectory.from_config(config).get_current_head()==CURRENT_REVISION=="0016"
     reopened,refactory=open_existing_database(path)
     try:
         resumed=QASentinelApplication(refactory,ProjectExecutionResolver(ProjectRuntimeRegistry([]),[]))

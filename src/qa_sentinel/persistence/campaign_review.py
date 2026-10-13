@@ -46,18 +46,18 @@ class CampaignReviewRepository:
         return ReviewState(project_id=record.project_id, campaign_id=record.campaign_id, object_id=record.id,
             object_kind=kind, review_status=record.review_status, evidence=self.evidence(record, kind))
 
-    def approve(self, record, kind, command):
+    def approve(self, record, kind, command, *, policy=None):
         # Caller reserves the accepted SQLite writer before reading; no external work.
         evidence = self.evidence(record, kind)
         if evidence is not None:
             if (evidence.reviewer_label, evidence.note) != (command.reviewer_label, command.note):
                 raise ReviewError("REVIEW_CONFLICT")
             return self.state(record, kind)
-        evidence = approve(record, kind, command)
+        evidence = approve(record, kind, command, policy=policy)
         object_table, review_table = self._types(kind)
         changed = self.session.execute(update(object_table).where(object_table.id == str(record.id),
             object_table.campaign_id == str(record.campaign_id), object_table.project_id == str(record.project_id),
-            object_table.review_status == "READY_FOR_REVIEW").values(review_status="APPROVED", updated_at=evidence.approved_at))
+            object_table.review_status == record.review_status).values(review_status="APPROVED", updated_at=evidence.approved_at))
         if changed.rowcount != 1: raise ReviewError("REVIEW_CONFLICT")
         values = evidence.model_dump(mode="json", exclude={"object_kind"})
         values["approved_at"] = evidence.approved_at

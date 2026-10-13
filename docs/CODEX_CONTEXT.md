@@ -56,7 +56,7 @@ human approval; no browser ID fan-out or selection persistence. Run result CSV/X
 uses only existing persisted snapshots/results and batched evidence counts, at most
 1,000 rows/4 MiB, with the existing literal spreadsheet writer.
 Migration 0012 is additive; downgrade refuses audit loss. Local validation and
-non-migrating runtime opening now require 0015 (the configured operator DB, not the
+non-migrating runtime opening now require 0016 (the configured operator DB, not the
 checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
 
@@ -155,6 +155,26 @@ accepted Run Start need no provider key, generation capability does. Existing so
 configs remain compatible. No runtime/policy/approval/Run/evidence/dependency/migration
 change. See [operator workflow](BROWSER_EXECUTION.md#task-57-trusted-local-operator-ui).
 
+## Phase 5 Task 5.8A: source-free preparation foundation
+
+Internal `review_source_free_campaign_test` explicitly applies
+`source-free-browser-test-v1` human approval: absent Requirement traceability remains
+informational; unresolved explicit references and real information blockers reject.
+Legacy review/readiness and v1/v2 Run validation remain strict.
+`qa-run-browser-v3` permits legitimate zero-Requirement WEB snapshots only, retaining
+exact approval/link/Target/runtime/plan seals and deterministic versioned fingerprints.
+A nonserialized Run Test version context preserves historical fingerprint bytes.
+
+Separate `browser-preparation-v1` persists the ordered 1–500 approved Test selection,
+Target snapshot, HEADLESS/HEADED intent, idempotency and bounded per-item preparation
+states. Internal create/get application methods are inert; no new HTTP/UX execution
+route. CREATED → PREPARING → COMPLETED/FAILED; item attempt identity precedes future
+work and terminal outcomes cannot be rewritten. Interrupted STARTED work is retained,
+never replayed. Migration 0016 adds immutable preparation storage and a scoped unique
+future QARun link; it refuses downgrade when new approval/preparation/v3 history exists.
+No inspection, grounding, mixed-batch materialization, mode/runtime wiring, provider
+call or execution evidence is introduced. See [preparation contracts](BROWSER_PREPARATION.md).
+
 ## Target Under Test foundation
 
 **Target != Workspace != Executor.** Project-owned WEB Targets hold only typed
@@ -170,7 +190,7 @@ Public host execution remains SYNTHETIC; Target metadata reads never visit, chec
 or resolve a URL. The trusted internal Chromium executor is described above.
 Migration 0013 adds Target/association tables and a nullable Run snapshot without
 rewriting legacy Campaigns. Used Target/history data prevents downgrade. Local
-start/validation requires 0015 and never auto-migrates. No dependencies added.
+start/validation requires 0016 and never auto-migrates. No dependencies added.
 API/ANDROID/IOS and API/mobile executors are planned; Chromium is available only through the internal service described above.
 See [Target contracts and URL policy](TARGET_UNDER_TEST.md).
 
@@ -181,7 +201,7 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. Public Campaign Start remains synthetic-only; the trusted internal Chromium path
-is described above. Migration head is 0015; see
+is described above. Migration head is 0016; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11

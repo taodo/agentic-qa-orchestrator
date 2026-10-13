@@ -11,8 +11,11 @@ from .campaign_content import requirement_from, row_values
 from .test_specifications import TestSpecificationRepository
 
 
-def from_row(row, contract):
-    return contract.model_validate({name: getattr(row, name) for name in contract.model_fields})
+def from_row(row, contract, *, snapshot_version=None):
+    values = {name: getattr(row, name) for name, field in contract.model_fields.items() if not field.exclude}
+    if snapshot_version is not None and contract is QARunTest:
+        values["snapshot_version"] = snapshot_version
+    return contract.model_validate(values)
 
 
 class QARunRepository:
@@ -84,6 +87,18 @@ class QARunRepository:
             raise ValueError("Run creation cannot execute")
         if any(t.execution_status != "NOT_STARTED" or t.qa_result != "NOT_EVALUATED" for t in prepared.tests):
             raise ValueError("Run creation cannot evaluate tests")
+        if run.preparation_id is not None:
+            from .browser_preparations import BrowserPreparationRepository
+            source = BrowserPreparationRepository(self.session).get(run.project_id, run.campaign_id, run.preparation_id)
+            if source is None or source.status != "COMPLETED" or source.target_snapshot != run.target_snapshot:
+                raise ValueError("Run preparation provenance mismatch")
+            runnable = {item.original_test_id: item for item in source.items if item.status == "RUNNABLE"}
+            if not runnable or set(runnable) != {test.content.id for test in prepared.tests}:
+                raise ValueError("Run must retain the exact runnable subset")
+            for test in prepared.tests:
+                item = runnable[test.content.id]
+                if test.content != item.test or test.approval != item.approval or test.browser_plan.plan_hash != item.plan_hash:
+                    raise ValueError("Run preparation seal mismatch")
         self.session.add(QARunRow(**row_values(run)))
         for entries, table in ((prepared.requirements, QARunRequirementRow), (prepared.tests, QARunTestRow)):
             for entry in entries:
@@ -104,7 +119,7 @@ class QARunRepository:
     def entries(self, run, kind, limit, after_position):
         # Keyset pagination permits reconstruction without unbounded detail fan-out.
         table, contract = (QARunTestRow, QARunTest) if kind == "tests" else (QARunRequirementRow, QARunRequirement)
-        return [from_row(r, contract) for r in self.session.scalars(select(table).where(
+        return [from_row(r, contract, snapshot_version=run.snapshot_version) for r in self.session.scalars(select(table).where(
             table.run_id == str(run.id), table.project_id == str(run.project_id), table.campaign_id == str(run.campaign_id),
             table.position > after_position).order_by(table.position).limit(self._limit(limit)))]
 
@@ -113,7 +128,7 @@ class QARunRepository:
         rows = self.session.scalars(select(table).where(table.run_id == str(run.id),
             table.project_id == str(run.project_id), table.campaign_id == str(run.campaign_id))
             .order_by(table.position).limit(MAX_SNAPSHOT_RECORDS + 1))
-        entries = tuple(from_row(r, contract) for r in rows)
+        entries = tuple(from_row(r, contract, snapshot_version=run.snapshot_version) for r in rows)
         if len(entries) > MAX_SNAPSHOT_RECORDS:
             raise SnapshotSizeError()
         return entries
@@ -126,7 +141,7 @@ class QARunRepository:
             QARunTestRow.run_id == str(run.id), QARunTestRow.project_id == str(run.project_id), QARunTestRow.campaign_id == str(run.campaign_id)))
         if row is None:
             raise RunLifecycleError("RUN_INVALID_STATE")
-        return from_row(row, QARunTest)
+        return from_row(row, QARunTest, snapshot_version=run.snapshot_version)
 
     def _save_run_state(self, before, after):
         changed = self.session.execute(update(QARunRow).where(QARunRow.id == str(before.id),
