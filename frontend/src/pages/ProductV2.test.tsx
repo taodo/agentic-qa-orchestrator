@@ -244,3 +244,21 @@ it('pins explicit page approval to displayed versions and never retries a stale 
   expect(chosen).toEqual({criteria:{search:'',status:'ALL'},ids:[specification.id,blockedSpecification.id],expected_versions:{[specification.id]:`${good.content_hash}:${specification.review_status}`,[blockedSpecification.id]:`${blocked.content_hash}:${blockedSpecification.review_status}`}});
   expect(writes()).toHaveLength(2);
 });
+
+it('hides reserved browser facts from generic preconditions and edits ordinary text only',async()=>{
+  const facts=JSON.stringify({contract_version:'browser-facts-v1',required_actions:[['NAVIGATE']],locators:[],paths:['/'],input_values:[]});
+  const test={...specification,preconditions:['Ordinary setup',facts]};let submitted:Record<string,unknown>|undefined;
+  routes((url,options)=>{
+    if(url.includes('/test-design?'))return response({items:[{...good,test,approvable:true}],total:1,page:1,page_size:10,total_pages:1});
+    if(url.endsWith(`/test-specifications/${test.id}/edits`)){submitted=JSON.parse(options!.body as string);return response({...test,id:'successor',review_status:'READY_FOR_REVIEW'});}
+    return undefined;
+  });open('test-design');const row=(await screen.findByRole('heading',{name:test.title})).closest('tr')!;
+  fireEvent.click(within(row).getByText('Review / edit',{selector:'summary'}));fireEvent.click(within(row).getByRole('button',{name:'Edit / provide facts'}));
+  const form=within(row).getByRole('form',{name:'Edit PAY'}),preconditions=within(form).getByLabelText('Preconditions (one per line)');
+  expect(preconditions).toHaveValue('Ordinary setup');expect(preconditions).not.toHaveValue(expect.stringContaining('browser-facts-v1'));
+  expect(within(form).getByText(/Existing browser facts are preserved by the server/)).toBeInTheDocument();
+  fireEvent.change(preconditions,{target:{value:'Changed ordinary setup'}});
+  fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa'}});fireEvent.change(within(form).getByLabelText('Facts / reason for this change'),{target:{value:'Ordinary change'}});
+  fireEvent.submit(form);await waitFor(()=>expect(submitted).toBeDefined());
+  expect((submitted!.design as Record<string,unknown>).preconditions).toEqual(['Changed ordinary setup']);expect(writes()).toHaveLength(1);
+});

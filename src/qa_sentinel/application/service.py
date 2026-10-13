@@ -528,6 +528,10 @@ class QASentinelApplication:
         except ValueError: raise ApplicationError(Code.INVALID_INPUT) from None
 
     def edit_campaign_test(self, project_id, campaign_id, test_id, *, design, previous_hash, reviewer_label, note):
+        return self._edit_campaign_test(project_id,campaign_id,test_id,design=design,previous_hash=previous_hash,
+            reviewer_label=reviewer_label,note=note)
+
+    def _edit_campaign_test(self, project_id, campaign_id, test_id, *, design, previous_hash, reviewer_label, note, reserved_facts=None):
         import json
         from uuid import uuid4
         from sqlalchemy import select
@@ -548,6 +552,21 @@ class QASentinelApplication:
             current = uow.session.scalar(select(TestSpecificationRow.id).where(TestSpecificationRow.id==str(test_id),current_test()))
             if current is None or previous_hash != content_hash(old) or design.key != old.key or old.unresolved_requirement_refs:
                 raise ApplicationError(Code.REVIEW_CONFLICT)
+            from .browser_ux import is_reserved_facts, validate_facts
+            existing = tuple(text for text in old.preconditions if is_reserved_facts(text))
+            submitted = tuple(text for text in design.preconditions if is_reserved_facts(text))
+            if reserved_facts is None:
+                # Generic omission cannot delete facts; explicit raw submissions may only retain exact bytes.
+                if submitted and submitted != existing: raise ApplicationError(Code.INVALID_INPUT)
+                preconditions = tuple(text for text in design.preconditions if not is_reserved_facts(text)) + existing
+            else:
+                # Only the validated dedicated application path supplies this internal typed value.
+                try: expected = (validate_facts(reserved_facts,old).model_dump_json(),)
+                except ValueError: raise ApplicationError(Code.INVALID_INPUT) from None
+                if submitted != expected: raise ApplicationError(Code.INVALID_INPUT)
+                preconditions = design.preconditions
+            try: design = TestDesign.model_validate({**design.model_dump(),"preconditions":preconditions})
+            except ValueError: raise ApplicationError(Code.INVALID_INPUT) from None
             prior_edit = uow.session.scalar(select(TestEditRow).where(TestEditRow.test_id==str(test_id)))
             version = 2 if prior_edit is None else prior_edit.version+1
             if version > 10: raise ApplicationError(Code.REVIEW_CONFLICT)
@@ -613,6 +632,20 @@ class QASentinelApplication:
                     reason = "Approval, supported expected behavior and current approved source Requirements are required."
                 items.append(ExecutionCandidate(test=test,content_hash=content_hash(test),eligible=reason is None,reason=reason))
             return CollectionPage[ExecutionCandidate](items=items,total_returned=len(items),truncated=len(tests)>limit)
+
+    def edit_browser_facts(self, project_id, campaign_id, test_id, **command):
+        from .browser_ux import edit_facts
+        return edit_facts(self,project_id,campaign_id,test_id,**command)
+
+    def browser_planning_readiness(self, project_id, campaign_id, test_id, *, provider_available):
+        from .browser_ux import readiness
+        return readiness(self,project_id,campaign_id,test_id,provider_available=provider_available)
+
+    def generate_ready_browser_plan(self, project_id, campaign_id, test_id, *, provider_available):
+        state=self.browser_planning_readiness(project_id,campaign_id,test_id,provider_available=provider_available)
+        if state.status=='PROVIDER_UNAVAILABLE':raise ApplicationError(Code.GENERATION_NOT_CONFIGURED)
+        if state.status!='AVAILABLE':raise ApplicationError(Code.BROWSER_PLAN_PROVENANCE_MISMATCH)
+        return self.generate_browser_plan(project_id,campaign_id,test_id)
 
     def generate_browser_plan(self, project_id, campaign_id, test_id):
         from .browser_generation import generate

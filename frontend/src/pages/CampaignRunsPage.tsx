@@ -1,3 +1,4 @@
+import { BrowserRunStart } from '../components/BrowserPlanning';
 import { BrowserRunIdentity } from '../components/BrowserRunIdentity';
 import { ResultDistribution } from '../components/CommandVisuals';
 import { TargetSummary } from '../components/Targets';
@@ -78,6 +79,7 @@ function RunDetail({runId}:{runId:string}) {
       {run.data.execution_status === 'CREATED' && run.data.executor_kind === 'SYNTHETIC' && <button className="button--primary" disabled={action.busy || action.error?.code === 'HOST_AUTH_REQUIRED'} onClick={() => void action.run(async () => {
         try { return await startRun(p,c,runId); } catch (error) { await refresh(); throw error; }
       }, async () => { await refresh(); })}>{action.busy ? 'Running synthetic execution…' : 'Start Synthetic Run'}</button>}
+      {run.data.execution_status==='CREATED' && run.data.executor_kind==='WEB_BROWSER' && <BrowserRunStart p={p} c={c} run={run.data} refresh={refresh}/>}
       {action.busy && <p role="status">Results refresh when synchronous execution completes.</p>}
       {run.data.execution_status === 'RUNNING' && <p>Execution is RUNNING. Refresh to inspect saved progress. Restart/resume is unavailable.</p>}
     </section>}

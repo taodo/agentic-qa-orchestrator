@@ -1,3 +1,6 @@
+import { isReservedBrowserFacts } from '../api/browser';
+import { BrowserFactsForm } from '../components/BrowserFactsForm';
+import { BrowserPlanning } from '../components/BrowserPlanning';
 import { CampaignTransition } from '../components/CampaignTransition';
 import { MetricIcon } from '../components/CommandVisuals';
 import { RecentRuns } from '../components/RecentRuns';
@@ -150,7 +153,7 @@ function DesignTestRow({row,selected,disabled,select,changed}:{row:DesignRow;sel
 
 function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;changed:()=>Promise<void>;open?:boolean;toggle?:()=>void}) {
   const {projectId:p,campaignId:c,base}=useCampaign();const test=row.test;
-  const [editing,setEditing]=useState(false),[title,setTitle]=useState(test.title),[steps,setSteps]=useState(test.steps),[expected,setExpected]=useState(test.overall_expected_result??''),[resolved,setResolved]=useState(false),[priority,setPriority]=useState(test.priority),[preconditions,setPreconditions]=useState(test.preconditions.join('\n')),[evidence,setEvidence]=useState(test.required_evidence.join('\n'));
+  const [editing,setEditing]=useState(false),[title,setTitle]=useState(test.title),[steps,setSteps]=useState(test.steps),[expected,setExpected]=useState(test.overall_expected_result??''),[resolved,setResolved]=useState(false),[priority,setPriority]=useState(test.priority),[preconditions,setPreconditions]=useState(test.preconditions.filter(text=>!isReservedBrowserFacts(text)).join('\n')),[evidence,setEvidence]=useState(test.required_evidence.join('\n'));
   const action=usePreparationAction<CampaignTestSpecification>();
   const audit=usePreparationAction<Awaited<ReturnType<typeof testEditEvidence>>>();
   return <details open={open}><summary onClick={toggle?e=>{e.preventDefault();toggle();}:undefined}>{test.information_markers.length?'Add information':'Review / edit'}</summary>
@@ -159,6 +162,7 @@ function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;
     <details><summary>Supporting source findings</summary>{test.requirement_ids.map((id,i)=><p key={id}><Link to={`${base}/requirements?requirement_id=${encodeURIComponent(id)}`}>View supporting finding {i+1} and its source evidence</Link></p>)}</details>
     {'eligible' in row && !row.eligible && <p className="hint">Execution: {row.reason}</p>}
     {!!test.unresolved_requirement_refs.length && <p className="notice">Resolve supporting source links in Audit before editing this test. Human facts cannot invent traceability.</p>}
+    <BrowserFactsForm p={p} c={c} test={test} hash={row.content_hash} changed={changed}/>
     <button disabled={!!test.unresolved_requirement_refs.length} onClick={()=>setEditing(!editing)}>Edit / provide facts</button>{editing && <form aria-label={`Edit ${test.key}`} onSubmit={event=>{event.preventDefault();const data=new FormData(event.currentTarget);
       const {key,test_type,information_markers}=test;
       const required_evidence=evidence.split("\n").filter(Boolean), preconditionLines=preconditions.split("\n").filter(Boolean);
@@ -166,7 +170,7 @@ function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;
         design:{key,title,test_type,priority,preconditions:preconditionLines,steps,overall_expected_result:expected||null,required_evidence,information_markers:resolved?[]:information_markers}}),async()=>{setEditing(false);await changed();});
     }}><fieldset disabled={action.busy}><legend>Human-reviewed test version</legend><p>Saving creates a new version and requires fresh approval. Original PRD and earlier Run evidence stay unchanged. Enter facts, never credentials.</p>
       <label>Title<input value={title} maxLength={200} required onChange={e=>setTitle(e.target.value)}/></label>
-      <label>Priority<select value={priority} onChange={e=>setPriority(e.target.value as typeof priority)}>{["LOW","MEDIUM","HIGH","CRITICAL"].map(value=><option key={value}>{value}</option>)}</select></label><label>Preconditions (one per line)<textarea value={preconditions} onChange={e=>setPreconditions(e.target.value)} maxLength={10240}/></label><label>Required evidence (one per line)<textarea value={evidence} onChange={e=>setEvidence(e.target.value)} maxLength={10240}/></label>
+      <label>Priority<select value={priority} onChange={e=>setPriority(e.target.value as typeof priority)}>{["LOW","MEDIUM","HIGH","CRITICAL"].map(value=><option key={value}>{value}</option>)}</select></label><p className="hint">Ordinary preconditions only. Existing browser facts are preserved by the server; use Prepare browser facts to change them.</p><label>Preconditions (one per line)<textarea value={preconditions} onChange={e=>setPreconditions(e.target.value)} maxLength={10240}/></label><label>Required evidence (one per line)<textarea value={evidence} onChange={e=>setEvidence(e.target.value)} maxLength={10240}/></label>
       {steps.map((step,i)=><div key={step.index}><label>Step {step.index}<textarea maxLength={2000} required value={step.action} onChange={e=>setSteps(steps.map((s,j)=>j===i?{...s,action:e.target.value}:s))}/></label><label>Expected for step {step.index}<textarea maxLength={2000} value={step.expected??''} onChange={e=>setSteps(steps.map((s,j)=>j===i?{...s,expected:e.target.value||null}:s))}/></label></div>)}
       <label>Overall expected result<textarea maxLength={4000} value={expected} onChange={e=>setExpected(e.target.value)}/></label><label>Reviewer label<input name="reviewer_label" required maxLength={64}/></label><label>Facts / reason for this change<textarea name="note" required maxLength={1000}/></label>
       {!!test.information_markers.length && <label><input type="checkbox" checked={resolved} onChange={e=>setResolved(e.target.checked)}/>The facts above resolve the listed missing information. Backend completeness and traceability checks still apply.</label>}
@@ -188,7 +192,8 @@ export function ExecutionPage() {
       try{await startRun(p,c,run.id);}finally{navigate(runsPath(p,c,run.id));}
     });
   }
-  return <><SectionHeader title="Execution"/><CampaignTarget/><aside className="notice synthetic-notice"><strong>SYNTHETIC execution only</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
+  return <><SectionHeader title="Execution"/><CampaignTarget/><aside className="notice synthetic-notice"><strong>SYNTHETIC fixture execution</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
+    <BrowserPlanning key={`${p}/${c}`} p={p} c={c} tests={rows.map(row=>row.test)}/>
     <section className="panel"><p>Select approved eligible tests. Whole-workspace readiness does not block unrelated eligible tests.</p>
       <div className="actions"><button disabled={!!intent || action.busy || new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)]).size>500} onClick={()=>setSelected([...new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)])])}>Select all eligible on this page</button><button disabled={!!intent || action.busy} onClick={()=>setSelected([])}>Clear selection</button><span role="status">Selected: {selected.length} across pages (maximum 500)</span>
       <button className="button--primary" disabled={(!selected.length && !intent) || action.busy || action.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void runSelected()}>{action.busy?'Creating / running…':intent?'Retry same create intent':'Run selected (Synthetic)'}</button></div>

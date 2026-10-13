@@ -58,6 +58,9 @@ def create_host_app(config: HostConfig, *, existing_database=False):
     composed = compose(config, existing_database=True) if existing_database else compose(config)
     try:
         app = create_api_app(composed.application)
+        if config.mode == "local":
+            from .browser_http import add_browser_http
+            add_browser_http(app,config)
         if credentials is not None:
             app.add_middleware(PreviewAccess, credentials=credentials)
         if operator is not None:

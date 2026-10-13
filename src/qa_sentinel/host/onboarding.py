@@ -22,15 +22,23 @@ def model_key_present() -> bool:
 class Readiness:
     project_keys: tuple[str, ...]
     model_ready: bool
+    browser_only_keys: tuple[str, ...] = ()
+
+    @property
+    def ready(self):
+        return self.model_ready or set(self.project_keys)==set(self.browser_only_keys)
 
     def render(self) -> str:
         lines = []
         for key in self.project_keys:
+            if key in self.browser_only_keys:
+                lines.extend((f"Project: {key}", "Project identity: FOUND", "Browser-only: source workspace and pytest not configured"))
+                continue
             lines.extend((f"Project: {key}", "Project identity: FOUND", "Workspace: VALID",
                 "Repository read boundary: VALID", "Mutation boundary: VALID", "Pytest targets: VALID"))
         lines.extend(("Frontend build: FOUND", "Database: READY",
             f"OPENAI_API_KEY: {'PRESENT' if self.model_ready else 'MISSING'}",
-            f"Overall: {'READY' if self.model_ready else 'NOT READY'}"))
+            f"Overall: {'READY' if self.ready else 'NOT READY'}"))
         return "\n".join(lines)
 
 
@@ -41,7 +49,7 @@ def validate_local(config: HostConfig) -> Readiness:
     validate_frontend(config)
     try:
         for project in config.projects:
-            real_components(project)
+            if not project.browser_only: real_components(project)
     except HostError:
         raise
     except (ValueError, OSError, RuntimeError):
@@ -67,7 +75,7 @@ def validate_local(config: HostConfig) -> Readiness:
     finally:
         if engine is not None:
             engine.dispose()
-    return Readiness(tuple(p.key for p in config.projects), model_key_present())
+    return Readiness(tuple(p.key for p in config.projects), model_key_present(), tuple(p.key for p in config.projects if p.browser_only))
 
 
 def config_target(path: Path, config: HostConfig) -> Path:
@@ -77,7 +85,7 @@ def config_target(path: Path, config: HostConfig) -> Path:
     source_roots = tuple(source / name for name in ("src", "frontend", "tests", "alembic"))
     if (target.suffix.casefold() != ".json" or target == config.database or
         target.is_relative_to(config.frontend_dist) or
-        any(target.is_relative_to(p.workspace_root) for p in config.projects) or
+        any(target.is_relative_to(p.workspace_root) for p in config.projects if not p.browser_only) or
         any(target.is_relative_to(root) for root in source_roots) or
         any(part.casefold() in PROTECTED or part.casefold().startswith(".env.") or
             "credential" in part.casefold() or "secret" in part.casefold() for part in target.parts) or
@@ -150,7 +158,7 @@ def local_command(args) -> int:
             return 0  # Config generation needs no model key; validate readiness separately.
         report = validate_local(load_local_config(args.config))
         print(report.render())
-        return 0 if report.model_ready else 1
+        return 0 if report.ready else 1
     except Exception as exc:
         code = str(exc) if isinstance(exc, HostError) else "HOST_LOCAL_VALIDATION_FAILED"
         print(f"Overall: NOT READY ({code})", file=sys.stderr)

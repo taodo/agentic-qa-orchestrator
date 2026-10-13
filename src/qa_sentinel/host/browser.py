@@ -1,4 +1,4 @@
-"""Explicit trusted local composition; never installed into HTTP/demo hosts.
+"""Explicit trusted local CLI composition; demo hosts never configure browser services.
 
 Only generate configures a provider. Only Start invokes the browser. Existing
 application methods own scoping, lifecycle, provenance and durable evidence.
