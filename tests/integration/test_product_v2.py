@@ -75,7 +75,7 @@ def test_migration_roundtrip_and_no_audit_erasure(review):
     command.downgrade(config,'0011');command.upgrade(config,'head');command.check(config)
     with engine.connect() as db:
         assert not db.exec_driver_sql('PRAGMA foreign_key_check').all()
-        assert db.scalar(text('SELECT version_num FROM alembic_version'))=='0014'
+        assert db.scalar(text('SELECT version_num FROM alembic_version'))=='0015'
     app,p,c,test=approve_selected(review)
     app.create_qa_run(p.id,c.id,idempotency_key='v2',test_specification_ids=[test.id])
     with pytest.raises(RuntimeError,match='cannot discard'):command.downgrade(config,'0011')
@@ -290,5 +290,5 @@ def test_downgrade_refuses_to_collapse_distinct_source_provenance(review):
     with pytest.raises(RuntimeError, match='cannot collapse'):
         command.downgrade(config, '0011')
     with engine.connect() as db:
-        assert db.scalar(text('SELECT version_num FROM alembic_version')) == '0014'
+        assert db.scalar(text('SELECT version_num FROM alembic_version')) == '0015'
         assert db.scalar(text('SELECT count(*) FROM campaign_sources WHERE content_hash=:hash'), {'hash':one.content_hash}) == 2

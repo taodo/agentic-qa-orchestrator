@@ -208,7 +208,7 @@ def test_0011_upgrade_reopen_empty_downgrade_and_evidence_guard(ready):
     with pytest.raises(RuntimeError,match='cannot erase persisted Run evidence'):command.downgrade(config,'0010')
     assert result_view(ready,historical)==saved
     with engine.connect() as connection:
-        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0014'
+        assert connection.scalar(text('SELECT version_num FROM alembic_version'))=='0015'
         assert not connection.exec_driver_sql('PRAGMA foreign_key_check').all()
 
 

@@ -56,7 +56,7 @@ human approval; no browser ID fan-out or selection persistence. Run result CSV/X
 uses only existing persisted snapshots/results and batched evidence counts, at most
 1,000 rows/4 MiB, with the existing literal spreadsheet writer.
 Migration 0012 is additive; downgrade refuses audit loss. Local validation and
-non-migrating runtime opening now require 0014 (the configured operator DB, not the
+non-migrating runtime opening now require 0015 (the configured operator DB, not the
 checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
 
@@ -82,9 +82,25 @@ synthetic fingerprints. Reuse existing Run lifecycle and atomic result/evidence
 completion; assertion FAIL continues, system failures carry bounded safe codes.
 Runtime forwards only same-origin pinned-address HTTP(S); direct browser traffic,
 redirects, unsupported frames/downloads/sockets fail closed. No source dependency,
-AI planner, screenshots or broad UI changes. Minimal read labels distinguish stored
+screenshots or broad UI changes. Minimal read labels distinguish stored
 executor identity. See [browser execution](BROWSER_EXECUTION.md) for installation,
 security/response limitations, controlled local fixture and later-task handoff.
+
+## Phase 5 Task 5.3: browser plan generation
+
+Trusted internal BrowserPlanGenerator uses the existing provider-neutral structured
+adapter, with no tools/DOM/browser/source access. A bounded immutable approved
+Test/receipt + Target becomes a strict candidate, not approval/execution evidence.
+Explicit typed facts in approved Test preconditions ground locators/routes/values
+and required operations; literal assertions retain every approved expectation.
+Insufficient prose/facts fails safely rather than guessing. No runtime LLM/healing.
+Migration 0015 stores bounded immutable candidate provenance/provider usage and
+append-only acceptance receipts. STARTED precedes one model call, outside DB tx;
+explicit transient retries preserve inputs/settings with maximum three attempts.
+Acceptance separately revalidates fresh approval/Target and atomically creates the
+exact AI-origin Task 5.2 seal/receipt; Start stays separate and deterministic.
+Public host/demo/preview/hosted composition stays unchanged. No frontend/dependency
+changes or 5.4 external campaign. See [contracts and limitations](BROWSER_EXECUTION.md#task-53-reasoning-only-generation-and-explicit-acceptance).
 
 ## Target Under Test foundation
 
@@ -101,7 +117,7 @@ Public host execution remains SYNTHETIC; Target metadata reads never visit, chec
 or resolve a URL. The trusted internal Chromium executor is described above.
 Migration 0013 adds Target/association tables and a nullable Run snapshot without
 rewriting legacy Campaigns. Used Target/history data prevents downgrade. Local
-start/validation requires 0014 and never auto-migrates. No dependencies added.
+start/validation requires 0015 and never auto-migrates. No dependencies added.
 API/ANDROID/IOS and API/mobile executors are planned; Chromium is available only through the internal service described above.
 See [Target contracts and URL policy](TARGET_UNDER_TEST.md).
 
@@ -112,7 +128,7 @@ structured Requirements, imported/generated executor-neutral Test Specifications
 explicit human approval receipts and scoped derived traceability/readiness.
 Campaign APPROVED remains independent of readiness READY. Task 3.3 adds QA Run
 preparation snapshots; Task 3.4 adds a pure synthetic lifecycle shell. Public Campaign Start remains synthetic-only; the trusted internal Chromium path
-is described above. Migration head is 0014; see
+is described above. Migration head is 0015; see
 [review contracts](CAMPAIGN_REVIEW.md) and [QA Run contracts](QA_RUNS.md).
 
 ## Current Phase 3 increment: Task 3.11
