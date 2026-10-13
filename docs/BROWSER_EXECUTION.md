@@ -573,3 +573,117 @@ and [Chromium permission denial switch](https://chromium.googlesource.com/chromi
 Deterministic local HTTP/SDK/TLS/DNS doubles and real local Chromium tests cover
 redirects, failures, limits, cleanup, FAIL continuation and preserved history. No
 public internet/provider tokens are used in automated validation.
+
+
+## Task 5.7: trusted local operator UI
+
+The existing UI now exposes the accepted browser pipeline in **local mode only**.
+Use the existing Project → Target → Campaign flow; no named site has special status.
+UI V3 layout/styles remain unchanged. Synthetic selection/start remains available
+and distinct from WEB_BROWSER; a WEB Target alone never chooses an executor.
+
+### Source-free local setup
+
+Create/select an existing persisted Project and explicitly migrate its operator DB
+to head 0015 while stopped. Configure a browser-only local Project without dummy
+workspace paths or pytest targets:
+
+```json
+{
+  "database": "C:/operator/state.sqlite3",
+  "frontend_dist": "C:/checkout/agentic-qa-orchestrator/frontend/dist",
+  "host": "127.0.0.1",
+  "port": 8000,
+  "projects": [{"key": "your-existing-project", "browser_only": true}]
+}
+```
+
+Use `qa-sentinel local validate --config ./local.json`, then
+`qa-sentinel local start --config ./local.json`. Start rebuilds the frontend as
+before. This configuration performs no repository/MutationService/pytest composition
+or validation. It never creates Projects, bootstraps or auto-migrates the DB,
+installs browsers/dependencies or executes tests during onboarding. The optional
+accepted Playwright extra and Chromium must be installed explicitly as documented
+above. A missing SDK yields unavailable browser capability; a missing Chromium
+binary produces the accepted bounded launch failure at explicit Start.
+
+Browser-only hosting may start without provider credentials, allowing stored
+candidate reads, acceptance, Results and already accepted Run Start. Generation
+requires OPENAI_API_KEY supplied in the **server process environment only**, never
+JSON, Test facts or frontend forms. The UI receives AVAILABLE/UNAVAILABLE capability,
+not the key/environment. Existing source/pytest local configs (no browser_only flag)
+retain their workspace, interpreter, command and key validation. Configurations
+containing browser-only Projects always require an existing migrated DB, including
+lower-level serve. Source-only lower-level bootstrap behavior is unchanged.
+`local init` remains the existing source/pytest config initializer; author the bounded
+browser-only JSON above explicitly. The CLI `local web` remains available.
+
+### Explicit preparation and execution
+
+1. In **Test Design**, open a Test's review and choose **Prepare browser facts**.
+   Author ordered required operations per Test step, one of the six accepted
+   locator strategies (ROLE/LABEL/TEXT/TEST_ID/PLACEHOLDER/CSS), relative paths and
+   non-secret input values. Nothing is inferred, suggested or fetched from a site.
+   Saving validates ApprovedBrowserFacts, exact locator matching, step/action bounds
+   and navigation paths server-side. The first required operation is NAVIGATE.
+   The whole canonical facts object must fit the **existing 512-character Test
+   precondition limit**; it is never split or truncated. Larger grounding remains
+   unsupported, rather than changing the approval/persistence contract.
+2. Saving creates an immutable **HUMAN_EDIT successor Test**, supersedes the current
+   version through the accepted edit evidence boundary, and requires fresh explicit
+   approval. The original approved Test, receipt and old Run snapshots remain intact.
+   Approve the successor through the existing human Test approval controls. Facts
+   are part of its content hash and later generation/seal provenance, not a side store.
+   Passwords, credentials, cookies and authentication flows remain unsupported.
+   The form requires an explicit non-secret operator declaration; it does not claim
+   to infer whether arbitrary human input is secret. Runtime password filling still
+   fails closed under the accepted policy.
+3. In **Execution**, use **WEB_BROWSER preparation** to select one current Test.
+   Server readiness distinguishes missing WEB Target, unapproved/superseded Test,
+   missing/invalid facts, static policy rejection and unavailable provider capability.
+   No readiness/capability read resolves DNS, probes a Target, invokes a model or
+   launches Chromium. Click **Generate Browser Plan** explicitly; it persists the
+   accepted one-attempt generation and may call the configured model, never the Target.
+4. Review the **read-only candidate**: stored Test/Target identity and hashes,
+   ordered actions, locators/paths/inputs, step bindings and limits. Configured and
+   provider-reported models stay separate; each provider token category remains
+   unknown when absent. No raw provider response, reasoning, SDK object or persistence
+   JSON is exposed. Candidate history is loaded explicitly, limited to 20 records;
+   detail is loaded on request. Generation failure/STARTED history is never auto-retried.
+5. Click **Accept Browser Plan** separately. The accepted application method
+   revalidates current Test/Target approval, seals the exact candidate and creates a
+   CREATED WEB_BROWSER Run without model, browser or Target access. A failed response
+   retains the acceptance idempotency key for explicit retry. No generated plan editing.
+6. On that Run, separately click **Start Browser Run**. Only this operation launches
+   Chromium/accesses the immutable Run Target. It has no model/API-key dependency
+   and executes only the sealed plan. Busy actions prevent duplicate clicks; no
+   auto-generation, acceptance, Start or runtime retry occurs. Completion refreshes
+   the existing bounded Results/evidence. COMPLETED + QA FAIL remains a QA outcome;
+   system failures preserve prior evidence and the accepted safe browser error code.
+
+### HTTP/security boundary
+
+New scoped routes live under `/api/v1/projects/{p}/campaigns/{c}/browser`:
+- Inert typed resources: GET capability; GET tests/{t}/readiness;
+  POST tests/{t}/facts (immutable human edit, never model/browser).
+- **Local host only**: POST tests/{t}/generate; GET generations (20 summaries);
+  GET generations/{g}; POST generations/{g}/accept (idempotency_key);
+  POST runs/{r}/start. Existing Results/evidence APIs are reused.
+
+Real operations are absent in demo/preview-demo/hosted-demo and bare API composition.
+Local browser requests require a numeric loopback peer and the exact configured
+numeric loopback Host/port; unsafe requests additionally require matching Origin.
+Present foreign/null Origin is rejected on reads too. This prevents cross-site
+browser writes and DNS rebinding; there is no CORS/private-network allowlist or
+request-selected runtime/URL/browser policy. Use the advertised loopback URL and
+same-origin built UI. Requests are bounded to 32 KiB before parsing; accepted typed
+schemas reject extra code/command fields. Candidate responses use a named bounded
+projection, not raw records; source/env/provider details remain server-side.
+
+All Task 5.6 network/redirect/DNS/IP pinning, unsupported-capability, cleanup and
+evidence restrictions remain unchanged. No screenshots, autonomous inspection,
+self-healing, generated code or public browser execution service is introduced.
+Automated HTTP/browser tests use disposable generic loopback fixtures and a fake
+provider, including both PASS and QA FAIL. No external Target or provider token is
+needed. Manual operator smoke should verify dark/light/mobile wrapping, keyboard
+facts authoring and the three separate clicks with an operator-approved Target.

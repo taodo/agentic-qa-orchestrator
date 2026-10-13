@@ -99,7 +99,7 @@ def start_local(path):
         print("Frontend: build completed.\nLocal environment:", flush=True)
         report = onboarding.validate_local(config)
         print(report.render(), flush=True)
-        if not report.model_ready:
+        if not report.ready:
             print("Set OPENAI_API_KEY in the current process environment, then start again. The key is presence-checked only; never put it in JSON.", file=sys.stderr)
             return 1
         from .cli import serve_config

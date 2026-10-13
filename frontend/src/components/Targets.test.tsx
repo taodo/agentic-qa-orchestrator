@@ -49,7 +49,7 @@ it('shows a legacy Campaign honestly and explicitly associates a Target without 
   fireEvent.submit(screen.getByRole('form',{name:'Campaign Target selection'}));
   await within(await screen.findByRole('region',{name:'Target Under Test'})).findByText('https://staging.example.com');expect(mutations()).toHaveLength(1);
   expect(mutations()[0][1]?.method).toBe('PUT');expect(JSON.parse(mutations()[0][1]?.body as string)).toEqual({target_id:target.id});
-  expect(screen.getByText(/Current executor is SYNTHETIC; no Target URL is visited/)).toBeInTheDocument();
+  expect(screen.getByText(/Viewing or configuring it never visits the URL/)).toBeInTheDocument();
 });
 
 it('renders the Campaign-selected Target using its scoped configuration',async()=>{

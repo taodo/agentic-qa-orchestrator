@@ -61,7 +61,7 @@ it('keeps the compact Target hero authoritative, inert and explicit',async()=>{
   expect(within(hero).getByText('100 requirements · 129 approved tests')).toBeInTheDocument();
   expect(within(hero).getByText('https://example.com')).toBeInTheDocument();
   expect(screen.queryByRole('link',{name:'https://example.com'})).not.toBeInTheDocument();
-  expect(screen.getByText('Current executor is SYNTHETIC; no Target URL is visited.')).toBeInTheDocument();
+  expect(screen.getByText('Viewing or configuring it never visits the URL; the stored Run executor determines execution.')).toBeInTheDocument();
   const sidebar=screen.getByLabelText('Workspace navigation');
   expect(within(sidebar).queryByText(project.id)).not.toBeInTheDocument();
   expect(within(sidebar).getByRole('link',{name:'Project workspaces'})).toHaveAttribute('title','Project ID: '+project.id);

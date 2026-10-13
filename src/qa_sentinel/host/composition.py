@@ -49,22 +49,26 @@ def compose(config: HostConfig, *, existing_database=False) -> HostComposition:
             preflight_storage(config)
         prepared = []
         if config.mode == "local":
-            if not os.environ.get("OPENAI_API_KEY", "").strip():
+            if any(not p.browser_only for p in config.projects) and not os.environ.get("OPENAI_API_KEY", "").strip():
                 raise HostError("HOST_MODEL_KEY_REQUIRED")
-            prepared = [(project, real_components(project)) for project in config.projects]
+            prepared = [(project, None if project.browser_only else real_components(project)) for project in config.projects]
         if existing_database and config.mode != "local":
             raise HostError("HOST_CONFIG_INVALID")
+        # Browser-only onboarding never bootstraps/migrates, even through lower-level serve.
+        existing_database = existing_database or any(p.browser_only for p in config.projects)
         engine, factory = open_existing_database(config.database) if existing_database else bootstrap_database(config.database)
         if config.mode in {"demo", "preview-demo", "hosted-demo"}:
             bundles = [demo_bundle(factory, config.database,
                 identity_root=hosted_identity_root(config) if config.mode == "hosted-demo" else None)]
         else:
             bundles = []
-            for project, (reader, mutation, execution, request) in prepared:
+            for project, components in prepared:
                 with UnitOfWork(factory) as uow:
                     persisted = uow.projects.get_by_key(project.key)
                     if persisted is None:
                         raise HostError("HOST_PROJECT_NOT_FOUND")
+                if components is None: continue
+                reader, mutation, execution, request = components
                 binding = ProjectWorkspaceBinding(project_id=persisted.id, workspace_root=project.workspace_root)
                 service = TestExecutionService(factory, PytestRunner(CommandRunner(execution)), workspace_binding=binding)
                 bundles.append(ProjectExecutionBundle(binding,
@@ -74,8 +78,14 @@ def compose(config: HostConfig, *, existing_database=False) -> HostComposition:
         admission, wake = ExecutionAdmission(), threading.Event()
         extractor = RequirementExtractor(OpenAIModelAdapter(), RoleModelConfig().researcher) if config.mode == "local" else None
         generator = TestSpecificationGenerator(OpenAIModelAdapter(), RoleModelConfig().planner) if config.mode == "local" else None
+        browser_executor = browser_generator = None
+        if config.mode == "local":
+            from .browser import PlaywrightBrowserExecutor, BrowserExecutionError, BrowserPlanGenerator
+            try: browser_executor = PlaywrightBrowserExecutor()
+            except BrowserExecutionError: pass  # Optional runtime missing; UI capability is unavailable.
+            browser_generator = BrowserPlanGenerator(OpenAIModelAdapter(), RoleModelConfig().planner)
         application = QASentinelApplication(factory, resolver, execution_admission=admission, execution_notify=wake.set,
-            requirement_extractor=extractor, test_generator=generator)
+            requirement_extractor=extractor, test_generator=generator, browser_executor=browser_executor, browser_plan_generator=browser_generator)
         worker = ExecutionWorker(application, admission, wake, on_exit=engine.dispose)
         return HostComposition(application, engine, resolver, worker)
     except Exception as exc:

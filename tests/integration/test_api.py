@@ -114,6 +114,11 @@ def test_health_openapi_and_no_unversioned_domain_routes(api):
         ("/target", "/documents", "/execution-candidates", "/test-specifications/{test_spec_id}/edits",
          "/test-specifications/{test_spec_id}/edit-evidence", "/test-exports", "/test-design",
          "/test-design/selection", "/test-design/approval", "/runs/{run_id}/export")}
+    expected |= {
+        "/api/v1/projects/{project_id}/campaigns/{campaign_id}/browser/capability",
+        "/api/v1/projects/{project_id}/campaigns/{campaign_id}/browser/tests/{test_id}/readiness",
+        "/api/v1/projects/{project_id}/campaigns/{campaign_id}/browser/tests/{test_id}/facts",
+    }
     assert set(schema["paths"]) == expected | {"/health"}
     assert schema["paths"]["/api/v1/projects"]["post"]["responses"]["201"]
     error_schema = schema["paths"]["/api/v1/projects"]["get"]["responses"]["422"]["content"]["application/json"]["schema"]
@@ -404,7 +409,7 @@ def test_api_import_boundary_and_single_use_case_routes():
                 assert not (node.module or "").startswith(forbidden), path
             elif isinstance(node, ast.Import):
                 assert all(not alias.name.startswith(forbidden) for alias in node.names), path
-        if path.name in {"projects.py", "tasks.py", "operations.py", "campaigns.py", "campaign_content.py", "test_specifications.py", "campaign_review.py", "qa_runs.py"}:
+        if path.name in {"projects.py", "tasks.py", "operations.py", "campaigns.py", "campaign_content.py", "test_specifications.py", "campaign_review.py", "qa_runs.py", "browser.py"}:
             for node in tree.body:
                 if isinstance(node, ast.FunctionDef) and node.decorator_list:
                     calls = [call for call in ast.walk(node) if isinstance(call, ast.Call)

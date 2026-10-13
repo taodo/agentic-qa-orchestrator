@@ -140,6 +140,19 @@ No retry/runtime AI, source dependency, migration/API/frontend/dependency change
 or Stop workflow. Chunked/compressed bodies and broader browser capabilities remain
 unsupported. See [hardening details](BROWSER_EXECUTION.md#task-56-deterministic-resilience-and-security-hardening).
 
+## Phase 5 Task 5.7: trusted local browser operator UX
+
+Structured Test Design facts use existing immutable HUMAN_EDIT successor/re-approval,
+including the accepted 512-character precondition bound. Execution separately exposes
+Generate/read-only candidate/Accept; CREATED browser Run detail separately Starts.
+Typed bounded API routes reuse accepted application methods; real operations mount
+only locally, guarded by exact numeric loopback Host/peer and unsafe-request Origin.
+Public demo modes stay fake-only. Explicit `browser_only: true` Project configuration
+omits source/pytest services and always opens an existing migrated DB; hosting and
+accepted Run Start need no provider key, generation capability does. Existing source
+configs remain compatible. No runtime/policy/approval/Run/evidence/dependency/migration
+change. See [operator workflow](BROWSER_EXECUTION.md#task-57-trusted-local-operator-ui).
+
 ## Target Under Test foundation
 
 **Target != Workspace != Executor.** Project-owned WEB Targets hold only typed

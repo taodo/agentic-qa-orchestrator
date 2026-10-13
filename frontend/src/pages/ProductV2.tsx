@@ -1,3 +1,5 @@
+import { BrowserFactsForm } from '../components/BrowserFactsForm';
+import { BrowserPlanning } from '../components/BrowserPlanning';
 import { CampaignTransition } from '../components/CampaignTransition';
 import { MetricIcon } from '../components/CommandVisuals';
 import { RecentRuns } from '../components/RecentRuns';
@@ -159,6 +161,7 @@ function TestReview({row,changed,open,toggle}:{row:ExecutionCandidate|DesignRow;
     <details><summary>Supporting source findings</summary>{test.requirement_ids.map((id,i)=><p key={id}><Link to={`${base}/requirements?requirement_id=${encodeURIComponent(id)}`}>View supporting finding {i+1} and its source evidence</Link></p>)}</details>
     {'eligible' in row && !row.eligible && <p className="hint">Execution: {row.reason}</p>}
     {!!test.unresolved_requirement_refs.length && <p className="notice">Resolve supporting source links in Audit before editing this test. Human facts cannot invent traceability.</p>}
+    <BrowserFactsForm p={p} c={c} test={test} hash={row.content_hash} changed={changed}/>
     <button disabled={!!test.unresolved_requirement_refs.length} onClick={()=>setEditing(!editing)}>Edit / provide facts</button>{editing && <form aria-label={`Edit ${test.key}`} onSubmit={event=>{event.preventDefault();const data=new FormData(event.currentTarget);
       const {key,test_type,information_markers}=test;
       const required_evidence=evidence.split("\n").filter(Boolean), preconditionLines=preconditions.split("\n").filter(Boolean);
@@ -188,7 +191,8 @@ export function ExecutionPage() {
       try{await startRun(p,c,run.id);}finally{navigate(runsPath(p,c,run.id));}
     });
   }
-  return <><SectionHeader title="Execution"/><CampaignTarget/><aside className="notice synthetic-notice"><strong>SYNTHETIC execution only</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
+  return <><SectionHeader title="Execution"/><CampaignTarget/><aside className="notice synthetic-notice"><strong>SYNTHETIC fixture execution</strong><p>No real application, browser or API is tested. Odd snapshot positions PASS; even positions FAIL.</p></aside>
+    <BrowserPlanning key={`${p}/${c}`} p={p} c={c} tests={rows.map(row=>row.test)}/>
     <section className="panel"><p>Select approved eligible tests. Whole-workspace readiness does not block unrelated eligible tests.</p>
       <div className="actions"><button disabled={!!intent || action.busy || new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)]).size>500} onClick={()=>setSelected([...new Set([...selected,...rows.filter(row=>row.eligible).map(row=>row.test.id)])])}>Select all eligible on this page</button><button disabled={!!intent || action.busy} onClick={()=>setSelected([])}>Clear selection</button><span role="status">Selected: {selected.length} across pages (maximum 500)</span>
       <button className="button--primary" disabled={(!selected.length && !intent) || action.busy || action.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void runSelected()}>{action.busy?'Creating / running…':intent?'Retry same create intent':'Run selected (Synthetic)'}</button></div>

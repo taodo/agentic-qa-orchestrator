@@ -614,6 +614,20 @@ class QASentinelApplication:
                 items.append(ExecutionCandidate(test=test,content_hash=content_hash(test),eligible=reason is None,reason=reason))
             return CollectionPage[ExecutionCandidate](items=items,total_returned=len(items),truncated=len(tests)>limit)
 
+    def edit_browser_facts(self, project_id, campaign_id, test_id, **command):
+        from .browser_ux import edit_facts
+        return edit_facts(self,project_id,campaign_id,test_id,**command)
+
+    def browser_planning_readiness(self, project_id, campaign_id, test_id, *, provider_available):
+        from .browser_ux import readiness
+        return readiness(self,project_id,campaign_id,test_id,provider_available=provider_available)
+
+    def generate_ready_browser_plan(self, project_id, campaign_id, test_id, *, provider_available):
+        state=self.browser_planning_readiness(project_id,campaign_id,test_id,provider_available=provider_available)
+        if state.status=='PROVIDER_UNAVAILABLE':raise ApplicationError(Code.GENERATION_NOT_CONFIGURED)
+        if state.status!='AVAILABLE':raise ApplicationError(Code.BROWSER_PLAN_PROVENANCE_MISMATCH)
+        return self.generate_browser_plan(project_id,campaign_id,test_id)
+
     def generate_browser_plan(self, project_id, campaign_id, test_id):
         from .browser_generation import generate
         return generate(self,project_id,campaign_id,test_id)

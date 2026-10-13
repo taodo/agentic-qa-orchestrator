@@ -44,8 +44,9 @@ def relative_test_path(value: str) -> str:
 class LocalProjectConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     key: ProjectKey
-    workspace_root: Path
-    pytest_targets: tuple[str, ...] = Field(min_length=1)
+    browser_only: bool = Field(default=False,strict=True)
+    workspace_root: Path | None = None
+    pytest_targets: tuple[str, ...] = ()
     test_cwd: str = "."
 
     @field_validator("test_cwd")
@@ -56,6 +57,7 @@ class LocalProjectConfig(BaseModel):
     @field_validator("workspace_root")
     @classmethod
     def workspace(cls, value):
+        if value is None: return None
         if not value.is_absolute():
             raise ValueError("Workspace must be explicit and absolute")
         root = canonical_path(value, exists=True)
@@ -70,6 +72,14 @@ class LocalProjectConfig(BaseModel):
             raise ValueError("Targets must be relative paths, not options")
         return values
 
+    @model_validator(mode="after")
+    def capabilities(self):
+        if self.browser_only:
+            if self.workspace_root is not None or self.pytest_targets or self.test_cwd != ".":
+                raise ValueError("Browser-only project cannot configure source/test execution")
+        elif self.workspace_root is None or not self.pytest_targets:
+            raise ValueError("Source workflow requires workspace and pytest targets")
+        return self
 
 class HostConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -119,9 +129,10 @@ class HostConfig(BaseModel):
         if len({p.key for p in self.projects}) != len(self.projects):
             raise ValueError("Duplicate project keys")
         for index, project in enumerate(self.projects):
+            if project.browser_only: continue
             if overlaps(project.workspace_root, self.frontend_dist) or self.database.is_relative_to(project.workspace_root):
                 raise ValueError("Host files must be outside target workspaces")
-            if any(overlaps(project.workspace_root, other.workspace_root) for other in self.projects[:index]):
+            if any(overlaps(project.workspace_root, other.workspace_root) for other in self.projects[:index] if not other.browser_only):
                 raise ValueError("Overlapping workspaces")
         return self
 

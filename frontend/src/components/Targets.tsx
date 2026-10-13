@@ -10,7 +10,7 @@ import { useCampaign } from '../pages/CampaignDetailPage';
 export function TargetSummary({target,historical=false,compact=false}:{target:Target|TargetSnapshot|null|undefined;historical?:boolean;compact?:boolean}) {
   return <section className="target-summary" aria-label={historical?'Run Target snapshot':'Target Under Test'}>{!compact && <h3>{historical?'Run Target snapshot':'Target Under Test'}</h3>}
     {target?<><strong>{target.name}</strong><p>{target.type} · {target.environment}</p><p className="mono">{'configuration' in target?target.configuration.base_url:target.base_url}</p></>:<p>{historical?'Target information was not captured for this Run.':'Target not configured'}</p>}
-    <p className="hint">{historical?'Immutable Target context captured for this Run. Viewing Results never visits this URL.':'Target is the configured external system. Current executor is SYNTHETIC; no Target URL is visited.'}</p>
+    <p className="hint">{historical?'Immutable Target context captured for this Run. Viewing Results never visits this URL.':'Target is the configured external system. Viewing or configuring it never visits the URL; the stored Run executor determines execution.'}</p>
   </section>;
 }
 
@@ -65,7 +65,7 @@ export function CampaignTarget({commandCenter=false,children}:{commandCenter?:bo
       <button disabled={action.busy} onClick={()=>{setSelected(campaign.target_id??'');setChoosing(!choosing);}}>{campaign.target_id?'Change Target':'Choose Campaign Target'}</button>
       <Link to={`/projects/${encodeURIComponent(p)}/settings`}>Configure Project Targets</Link>
     </div></div>
-    <div className="target-hero-footer"><p className="target-executor-note">Current executor is SYNTHETIC; no Target URL is visited.</p>
+    <div className="target-hero-footer"><p className="target-executor-note">Viewing or configuring it never visits the URL; the stored Run executor determines execution.</p>
     <details className="target-context-note"><summary>Target context</summary><p className="hint">Association changes apply to future Runs only. Continue with Specification → Test Design → human approval → Execution → Results.</p></details></div>
     {choosing && <form aria-label="Campaign Target selection" onSubmit={e=>{e.preventDefault();void action.run(()=>associateTarget(p,c,selected||null),async value=>{await transition(value);setChoosing(false);});}}>
       <fieldset disabled={action.busy}><TargetOptions projectId={p} value={selected} onChange={setSelected}/><button disabled={action.error?.code==='HOST_AUTH_REQUIRED'} type="submit">Save Campaign Target</button></fieldset>

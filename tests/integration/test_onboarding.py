@@ -265,7 +265,7 @@ def test_runtime_status_safe_typed_and_no_api_v1_change(prepared, monkeypatch):
         from qa_sentinel.api import create_api_app
         original = create_api_app(client.app.state.host_composition.application).openapi()["paths"]
         current = client.get("/openapi.json").json()["paths"]
-        assert {k: v for k, v in current.items() if k.startswith("/api/v1")} == {k: v for k, v in original.items() if k.startswith("/api/v1")}
+        assert {k: v for k, v in current.items() if k.startswith("/api/v1") and "/browser/" not in k} == {k: v for k, v in original.items() if k.startswith("/api/v1") and "/browser/" not in k}
 
 
 @pytest.mark.parametrize("mode", ["demo", "preview-demo"])
