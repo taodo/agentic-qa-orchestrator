@@ -10,7 +10,7 @@ import { useCampaign } from '../pages/CampaignDetailPage';
 export function TargetSummary({target,historical=false,compact=false}:{target:Target|TargetSnapshot|null|undefined;historical?:boolean;compact?:boolean}) {
   return <section className="target-summary" aria-label={historical?'Run Target snapshot':'Target Under Test'}>{!compact && <h3>{historical?'Run Target snapshot':'Target Under Test'}</h3>}
     {target?<><strong>{target.name}</strong><p>{target.type} · {target.environment}</p><p className="mono">{'configuration' in target?target.configuration.base_url:target.base_url}</p></>:<p>{historical?'Target information was not captured for this Run.':'Target not configured'}</p>}
-    <p className="hint">Target is the configured external system. Current executor is SYNTHETIC; no Target URL is visited.</p>
+    <p className="hint">{historical?'Immutable Target context captured for this Run. Viewing Results never visits this URL.':'Target is the configured external system. Current executor is SYNTHETIC; no Target URL is visited.'}</p>
   </section>;
 }
 

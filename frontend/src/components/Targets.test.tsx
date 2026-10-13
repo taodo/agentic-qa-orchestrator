@@ -58,7 +58,7 @@ it('renders the Campaign-selected Target using its scoped configuration',async()
 });
 
 it('keeps historical Run Target display isolated from mutable Project Targets',async()=>{
-  const run={id:'run-a',project_id:project.id,campaign_id:campaign.id,run_number:1,execution_status:'COMPLETED',qa_outcome:'FAIL',target_snapshot:snapshot,created_at:campaign.created_at,started_at:null,completed_at:null,campaign_snapshot:campaign,readiness_at_creation:readiness,requirement_count:1,test_count:2};
+  const run={executor_kind:'SYNTHETIC',id:'run-a',project_id:project.id,campaign_id:campaign.id,run_number:1,execution_status:'COMPLETED',qa_outcome:'FAIL',target_snapshot:snapshot,created_at:campaign.created_at,started_at:null,completed_at:null,campaign_snapshot:campaign,readiness_at_creation:readiness,requirement_count:1,test_count:2};
   setup(url=>{
     if(url.includes('/runs/run-a/results'))return response({run,summary:{total:2,completed:2,passed:1,failed:1,skipped:0,not_evaluated:0,remaining:0},tests:page([])});
     if(url.includes('/runs/run-a/requirements'))return response(page([]));

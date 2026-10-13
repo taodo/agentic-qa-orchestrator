@@ -1,7 +1,17 @@
 import type { CampaignReadiness, CampaignRequirement, CampaignTestSpecification, ApprovalEvidence } from './campaignTypes';
 export type RunStatus = 'CREATED' | 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'STOPPED' | 'FAILED';
 export type RunOutcome = 'NOT_EVALUATED' | 'PASS' | 'FAIL' | 'PARTIAL';
+export interface BrowserRuntimeIdentity {
+  adapter_version: string; engine: 'CHROMIUM'; playwright_version: string;
+  chromium_revision: string; browser_version: string;
+}
+// Identity subset only; Results never renders sealed operation/input data.
+export interface BrowserPlanIdentity {
+  origin: 'MANUAL' | 'DETERMINISTIC' | 'AI'; plan_hash: string;
+  plan: { version: string };
+}
 export interface QARun {
+  runtime_identity?: BrowserRuntimeIdentity | null;
   executor_kind?: 'SYNTHETIC' | 'WEB_BROWSER';
   browser_error_code?: string | null;
   target_snapshot?: import('./targets').TargetSnapshot | null;
@@ -13,6 +23,7 @@ export interface QARun {
 }
 export interface RunRequirement { id: string; run_id: string; original_requirement_id: string; position: number; content: CampaignRequirement; approval: ApprovalEvidence }
 export interface RunTest {
+  browser_plan?: BrowserPlanIdentity | null;
   id: string; run_id: string; original_test_specification_id: string; position: number; content: CampaignTestSpecification; approval: ApprovalEvidence;
   linked_requirement_snapshot_ids: string[]; execution_status: 'NOT_STARTED' | 'RUNNING' | 'COMPLETED' | 'BLOCKED'; qa_result: 'NOT_EVALUATED' | 'PASS' | 'FAIL' | 'SKIP';
 }
@@ -23,6 +34,7 @@ export interface EvidencePresentation {
   variant:string;display_label:string;details:{label:string;value:string}[];
 }
 export interface RunEvidence {
+  executor_kind?: QARun['executor_kind'];
   id:string;project_id:string;campaign_id:string;run_id:string;run_test_id:string;
   sequence:number;recorded_at:string;schema_version:'qa-run-evidence-v1';
   kind:'EXECUTION_OBSERVATION';source:string;summary:string;

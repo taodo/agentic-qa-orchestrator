@@ -116,6 +116,17 @@ WEB fixtures prove the same production path; no example-site special cases.
 No migrations/dependencies/frontend changes; browser UX and broader compatibility
 remain deferred. See [operator commands](BROWSER_EXECUTION.md#task-54-generic-controlled-local-end-to-end-flow).
 
+## Phase 5 Task 5.5: browser Results presentation
+
+Results renders stored executor/runtime identity, immutable Target snapshot and
+sealed per-Test plan origin/version/hash through existing bounded read models.
+Browser navigation/assertion details use the reviewed server projection, never
+raw payloads or invented observed values. Synthetic/legacy history remains readable;
+absent identity is unavailable. Status remains authoritative and separate from QA
+outcome. No backend/API/dependency/migration change, new execution controls or
+runtime/model/Target access. UI V3 is unchanged; native disclosures/wrapping and
+explicit bounded evidence reads are reused. See [browser Results](BROWSER_EXECUTION.md#task-55-stored-browser-results-presentation).
+
 ## Target Under Test foundation
 
 **Target != Workspace != Executor.** Project-owned WEB Targets hold only typed

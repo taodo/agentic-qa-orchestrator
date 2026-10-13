@@ -8,6 +8,7 @@ import { deferred, page, project, response } from '../test/fixtures';
 const base = `/projects/${project.id}/campaigns/${campaign.id}`, api = '/api/v1'+base;
 const ready = { ...readiness, status: 'READY', blocker_codes: [] };
 const run: QARun = {
+  executor_kind: 'SYNTHETIC',
   id: 'run-a', project_id: project.id, campaign_id: campaign.id, run_number: 1, idempotency_key: 'intent-a', note: 'Showcase',
   snapshot_hash: 'f'.repeat(64), snapshot_version: 'qa-run-snapshot-v1', requirement_count: 1, test_count: 3,
   campaign_snapshot: { ...campaign, status: 'APPROVED', name: 'Frozen Campaign' }, readiness_at_creation: { ...readiness, status: 'READY', blocker_codes: [] },
@@ -211,4 +212,109 @@ it('labels sealed browser history truthfully and exposes no synthetic or browser
   expect(screen.queryByText('Synthetic execution')).not.toBeInTheDocument();
   expect(screen.queryByRole('button',{name:'Start Synthetic Run'})).not.toBeInTheDocument();
   expect(vi.mocked(fetch).mock.calls.every(([,options])=>!options?.method||options.method==='GET')).toBe(true);
+});
+
+
+const runtimeIdentity = {adapter_version:'playwright-chromium-v1',engine:'CHROMIUM' as const,
+  playwright_version:'1.63.0',chromium_revision:'1243',browser_version:'153.0.8010.12'};
+const capturedTarget = {schema_version:'web-target-snapshot-v1' as const,target_id:'captured-target',project_id:project.id,
+  name:'Captured WEB system',type:'WEB' as const,environment:'STAGING' as const,base_url:'https://configured.invalid/'+ 'segment'.repeat(150)};
+const browserRun:QARun = {...completed,executor_kind:'WEB_BROWSER',runtime_identity:runtimeIdentity,target_snapshot:capturedTarget,test_count:1,qa_outcome:'PASS'};
+const browserTest = {...results[0],browser_plan:{origin:'AI' as const,plan_hash:'b'.repeat(64),plan:{version:'browser-execution-plan-v1'}}};
+function browserEvidence(sequence:number,matched=true):RunEvidence {
+  return {...evidence(browserTest,sequence),executor_kind:'WEB_BROWSER',source:'web-browser',summary:`Browser step ${sequence}: ${sequence===1?'NAVIGATE':'ASSERT_TEXT'} ${matched?'matched':'mismatched'}.`,
+    payload:{variant:'browser-observation-v1',category:sequence===1?'NAVIGATION':'ASSERTION',run_test_id:browserTest.id,plan_hash:'b'.repeat(64),
+      step_number:sequence,action:sequence===1?'NAVIGATE':'ASSERT_TEXT',matched,outcome:matched?'PASS':'FAIL',browser_version:runtimeIdentity.browser_version},
+    presentation:{variant:'browser-observation-v1',display_label:'WEB_BROWSER',details:[
+      {label:'Observed action',value:sequence===1?'NAVIGATE':'ASSERT_TEXT'},{label:'Snapshot step',value:String(sequence)},
+      {label:'Matched',value:matched?'True':'False'},{label:'Chromium',value:runtimeIdentity.browser_version}]}};
+}
+function browserResults(saved:QARun=browserRun,records:RunEvidence[]=[browserEvidence(1),browserEvidence(2)]):RunResults {
+  const value=resultPage(saved,[{...browserTest,qa_result:saved.qa_outcome==='FAIL'?'FAIL':saved.qa_outcome==='PASS'?'PASS':'NOT_EVALUATED'}]);
+  value.tests.items[0].evidence=page(records);value.tests.items[0].evidence_count=records.length;
+  return value;
+}
+function browserRoutes(value:RunResults) {
+  routes(url=>url===api+'/runs/run-a/results?limit=50&after_position=0'?response(value):undefined);
+}
+
+describe('stored browser Results presentation',()=>{
+  it('renders stored runtime, immutable Target and sealed plan identity without live lookups or execution',async()=>{
+    browserRoutes(browserResults());open('/runs/run-a');
+    expect(await screen.findByText('Playwright · Chromium')).toBeInTheDocument();
+    expect(screen.getByLabelText('Stored executor identity')).toHaveTextContent(runtimeIdentity.adapter_version);
+    expect(screen.getByLabelText('Stored executor identity')).toHaveTextContent(runtimeIdentity.playwright_version);
+    expect(screen.getByLabelText('Stored executor identity')).toHaveTextContent(runtimeIdentity.chromium_revision);
+    expect(screen.getByLabelText('Run Target snapshot')).toHaveTextContent(capturedTarget.name);
+    expect(screen.getByText(capturedTarget.base_url)).not.toHaveAttribute('href');
+    const row=screen.getByRole('row',{name:/Frozen Test 1/});fireEvent.click(row);
+    const plan=within(row).getByLabelText('Sealed browser plan identity');
+    expect(plan).toHaveTextContent('AI');expect(plan).toHaveTextContent('browser-execution-plan-v1');
+    fireEvent.click(within(plan).getByText('Full plan hash'));expect(within(plan).getByText('b'.repeat(64))).toBeVisible();
+    expect(within(row).getByText('Navigation (NAVIGATE)')).toBeVisible();
+    expect(within(row).getByText('Text assertion (ASSERT_TEXT)')).toBeVisible();
+    expect(within(row).getAllByText('Matched')).not.toHaveLength(0);
+    expect(screen.queryByText(/Current executor is SYNTHETIC/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:/Start|Generate|Accept/})).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.every(([url,options])=>String(url).startsWith('/api/v1/projects/')&&(!options?.method||options.method==='GET'))).toBe(true);
+    expect(vi.mocked(fetch).mock.calls.some(([url])=>/targets|browser-plan|sources/.test(String(url)))).toBe(false);
+  });
+  it('shows mismatch as evidence with authoritative COMPLETED and QA FAIL',async()=>{
+    browserRoutes(browserResults({...browserRun,qa_outcome:'FAIL'},[browserEvidence(1),browserEvidence(2,false)]));open('/runs/run-a');
+    const identity=await screen.findByLabelText('Stored executor identity');expect(identity).toHaveTextContent('WEB_BROWSER');
+    const summary=screen.getByRole('heading',{name:'RUN-001'}).closest('section')!;
+    expect(summary).toHaveTextContent('Execution statusCOMPLETED');expect(summary).toHaveTextContent('QA outcomeFAIL');
+    fireEvent.click(screen.getByRole('row',{name:/Frozen Test 1/}));expect(screen.getByText('Mismatch')).toBeVisible();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();expect(posts()).toHaveLength(0);
+  });
+  it('shows system failure with no invented assertions or completion',async()=>{
+    const value=browserResults({...browserRun,execution_status:'FAILED',qa_outcome:'NOT_EVALUATED',execution_error_code:'RUN_EXECUTION_FAILED',browser_error_code:'BROWSER_TARGET_UNREACHABLE'},[]);
+    value.tests.items[0].execution_status='RUNNING';value.summary={total:1,completed:0,passed:0,failed:0,skipped:0,not_evaluated:1,remaining:1};
+    browserRoutes(value);open('/runs/run-a');
+    expect(await screen.findByRole('alert')).toHaveTextContent('BROWSER_TARGET_UNREACHABLE');
+    expect(screen.getByRole('alert')).toHaveTextContent('execution-system failure, not a product assertion failure');
+    fireEvent.click(screen.getByRole('row',{name:/Frozen Test 1/}));expect(screen.getByText(/No recorded execution evidence/)).toBeVisible();
+    expect(screen.queryByText('Mismatch')).not.toBeInTheDocument();expect(screen.queryByText('Text assertion (ASSERT_TEXT)')).not.toBeInTheDocument();
+  });
+  it('does not infer executor/runtime/plan from a WEB Target or absent fields',async()=>{
+    const value=browserResults({...browserRun,executor_kind:undefined,runtime_identity:null});
+    value.tests.items[0].browser_plan=null;browserRoutes(value);open('/runs/run-a');
+    expect(await screen.findByText('Executor identity unavailable. No executor is inferred from the Target.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Stored executor identity')).toHaveTextContent('Unavailable');
+    expect(screen.queryByText('Playwright · Chromium')).not.toBeInTheDocument();
+    expect(screen.queryByText('Synthetic execution')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:/Start/})).not.toBeInTheDocument();
+  });
+  it('shows missing browser runtime and plan honestly without removing stored browser identity',async()=>{
+    const value=browserResults({...browserRun,runtime_identity:null});value.tests.items[0].browser_plan=null;
+    browserRoutes(value);open('/runs/run-a');expect(await screen.findByLabelText('Stored executor identity')).toHaveTextContent('RuntimeUnavailable');
+    fireEvent.click(screen.getByRole('row',{name:/Frozen Test 1/}));expect(screen.getByText(/Browser plan identity unavailable/)).toBeVisible();
+  });
+  it('retains bounded preview and explicit evidence read, never automatic fan-out',async()=>{
+    const value=browserResults();value.tests.items[0].evidence=page([browserEvidence(1)],true);value.tests.items[0].evidence_count=2;
+    routes(url=>url===api+'/runs/run-a/results?limit=50&after_position=0'?response(value):url===api+'/runs/run-a/tests/snapshot-1/evidence?limit=2'?response(page([browserEvidence(1),browserEvidence(2)])):undefined);
+    open('/runs/run-a');const row=await screen.findByRole('row',{name:/Frozen Test 1/});const before=vi.mocked(fetch).mock.calls.length;
+    fireEvent.click(row);expect(fetch).toHaveBeenCalledTimes(before);
+    fireEvent.click(within(row).getByRole('button',{name:'View bounded test evidence'}));
+    expect(await within(row).findByText('Text assertion (ASSERT_TEXT)')).toBeVisible();
+    expect(fetch).toHaveBeenCalledTimes(before+1);expect(posts()).toHaveLength(0);
+  });
+});
+
+
+it('renders hostile Target strings as text with wrapping classes and no external requests',async()=>{
+  const hostile='<img src="https://untrusted.invalid" onerror="alert(1)">';
+  browserRoutes(browserResults({...browserRun,target_snapshot:{...capturedTarget,name:hostile}}));
+  const view=open('/runs/run-a');expect(await screen.findByText(hostile)).toBeInTheDocument();
+  const target=screen.getByLabelText('Run Target snapshot');expect(target.querySelector('.mono')).toHaveTextContent(capturedTarget.base_url);
+  expect(view.container.querySelector('img,script,iframe')).toBeNull();
+  expect(Array.from(view.container.querySelectorAll('a')).every(a=>!a.href.startsWith('https://configured.invalid'))).toBe(true);
+  expect(vi.mocked(fetch).mock.calls.every(([url])=>String(url).startsWith('/api/v1/'))).toBe(true);
+});
+it('keeps a stored synthetic Run synthetic even when a WEB Target snapshot exists',async()=>{
+  routes(url=>url===api+'/runs/run-a/results?limit=50&after_position=0'?response(resultPage({...completed,executor_kind:'SYNTHETIC',target_snapshot:capturedTarget},results)):undefined);
+  open('/runs/run-a');expect(await screen.findByText('Synthetic execution')).toBeInTheDocument();
+  expect(screen.getByLabelText('Stored executor identity')).toHaveTextContent('SYNTHETIC');
+  expect(screen.queryByText('Playwright · Chromium')).not.toBeInTheDocument();
+  expect(screen.queryByText('WEB_BROWSER execution')).not.toBeInTheDocument();
 });
