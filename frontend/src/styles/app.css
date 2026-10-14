@@ -670,3 +670,5 @@ button, .button { border-radius: 7px; }
 .sidebar-workspace-panel .campaign-context p { margin: 0 0 12px; font-size: .9rem; }
 .sidebar-workspace-panel .sidebar-target { margin: 0; padding: 0; }
 .sidebar-workspace-panel .sidebar-target p { margin: 5px 0 0; }
+
+.browser-run-dialog { position:fixed; inset:15vh 1rem auto; z-index:50; max-width:36rem; margin-inline:auto; max-height:75vh; overflow:auto; box-shadow:0 0 0 100vmax rgb(0 0 0 / .35); }

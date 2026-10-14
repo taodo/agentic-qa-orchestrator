@@ -825,3 +825,64 @@ event.listen(BrowserGroundingRow.__table__, "after_create", DDL("CREATE TRIGGER 
 event.listen(BrowserGroundingObservationRow.__table__, "after_create", DDL("CREATE TRIGGER browser_grounding_observation_no_update BEFORE UPDATE ON browser_grounding_observations BEGIN SELECT RAISE(ABORT,'Observation history is immutable'); END"))
 
 event.listen(BrowserGroundingObservationRow.__table__, "after_create", DDL("CREATE TRIGGER browser_grounding_observation_no_delete BEFORE DELETE ON browser_grounding_observations BEGIN SELECT RAISE(ABORT,'Observation history is immutable'); END"))
+
+
+class BrowserBatchSubmissionRow(Base):
+    __tablename__="browser_batch_submissions"
+    __table_args__=(
+        UniqueConstraint("preparation_id","campaign_id","project_id",name="uq_batch_submission_owner"),
+        ForeignKeyConstraint(["preparation_id","campaign_id","project_id"],["browser_preparations.id","browser_preparations.campaign_id","browser_preparations.project_id"],name="fk_batch_submission_preparation",deferrable=True,initially="DEFERRED"),
+        CheckConstraint("json_extract(payload,'$.contract_version') IS 'browser-batch-submit-v1' AND json_extract(payload,'$.preparation_id') IS preparation_id AND json_extract(payload,'$.project_id') IS project_id AND json_extract(payload,'$.campaign_id') IS campaign_id AND length(CAST(payload AS BLOB))<=2048",name="ck_batch_submission_payload"),
+    )
+    preparation_id: Mapped[str]=mapped_column(String(36),nullable=False,primary_key=True)
+    project_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    campaign_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    created_at: Mapped[datetime]=mapped_column(ISODateTime(),nullable=False)
+    payload: Mapped[Any]=mapped_column(JSON,nullable=False)
+event.listen(BrowserBatchSubmissionRow.__table__,"after_create",DDL("CREATE TRIGGER batch_submission_insert BEFORE INSERT ON browser_batch_submissions WHEN NOT EXISTS (SELECT 1 FROM browser_preparations p WHERE p.id=NEW.preparation_id AND p.project_id=NEW.project_id AND p.campaign_id=NEW.campaign_id AND p.status='CREATED' AND p.selection_hash=json_extract(NEW.payload,'$.selection_hash') AND p.browser_mode=json_extract(NEW.payload,'$.browser_mode')) BEGIN SELECT RAISE(ABORT,'Batch submission requires immutable created selection'); END"))
+event.listen(BrowserBatchSubmissionRow.__table__,"after_create",DDL("CREATE TRIGGER batch_submission_ack BEFORE UPDATE ON browser_batch_submissions WHEN NEW.preparation_id!=OLD.preparation_id OR NEW.project_id!=OLD.project_id OR NEW.campaign_id!=OLD.campaign_id OR NEW.created_at!=OLD.created_at OR json_remove(NEW.payload,'$.interruption_acknowledged_at')!=json_remove(OLD.payload,'$.interruption_acknowledged_at') OR json_extract(OLD.payload,'$.interruption_acknowledged_at') IS NOT NULL OR julianday(json_extract(NEW.payload,'$.interruption_acknowledged_at')) IS NULL OR julianday(json_extract(NEW.payload,'$.interruption_acknowledged_at'))<julianday(OLD.created_at) BEGIN SELECT RAISE(ABORT,'Batch submission is immutable except explicit interruption acknowledgement'); END"))
+event.listen(BrowserBatchSubmissionRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_submissions_no_delete BEFORE DELETE ON browser_batch_submissions BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))
+
+class BrowserBatchPlanRow(Base):
+    __tablename__="browser_batch_plans"
+    __table_args__=(
+        UniqueConstraint("id","campaign_id","project_id",name="uq_batch_plan_owner"),
+        UniqueConstraint("preparation_id","item_id",name="uq_batch_plan_item"),
+        ForeignKeyConstraint(["preparation_id","campaign_id","project_id"],["browser_batch_submissions.preparation_id","browser_batch_submissions.campaign_id","browser_batch_submissions.project_id"],name="fk_batch_plan_submission",deferrable=True,initially="DEFERRED"),
+        ForeignKeyConstraint(["grounding_id","campaign_id","project_id"],["browser_groundings.id","browser_groundings.campaign_id","browser_groundings.project_id"],name="fk_batch_plan_grounding",deferrable=True,initially="DEFERRED"),
+        ForeignKeyConstraint(["observation_id","campaign_id","project_id"],["browser_grounding_observations.id","browser_grounding_observations.campaign_id","browser_grounding_observations.project_id"],name="fk_batch_plan_observation",deferrable=True,initially="DEFERRED"),
+        CheckConstraint("json_extract(payload,'$.contract_version') IS 'browser-batch-plan-v1' AND json_extract(payload,'$.id') IS id AND json_extract(payload,'$.scope.project_id') IS project_id AND json_extract(payload,'$.scope.campaign_id') IS campaign_id AND json_extract(payload,'$.scope.preparation_id') IS preparation_id AND json_extract(payload,'$.scope.item_id') IS item_id AND json_extract(payload,'$.scope.attempt_id') IS attempt_id AND json_extract(payload,'$.scope.test_id') IS test_id AND json_extract(payload,'$.grounding_id') IS grounding_id AND json_extract(payload,'$.observation_id') IS observation_id AND json_extract(payload,'$.plan_hash') IS plan_hash AND length(CAST(payload AS BLOB))<=1048576",name="ck_batch_plan_payload"),
+    )
+    id: Mapped[str]=mapped_column(String(36),nullable=False,primary_key=True)
+    project_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    campaign_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    preparation_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    item_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    attempt_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    test_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    grounding_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    observation_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    plan_hash: Mapped[str]=mapped_column(String(64),nullable=False)
+    payload: Mapped[Any]=mapped_column(JSON,nullable=False)
+event.listen(BrowserBatchPlanRow.__table__,"after_create",DDL("CREATE TRIGGER batch_plan_insert BEFORE INSERT ON browser_batch_plans WHEN NOT EXISTS (SELECT 1 FROM browser_groundings g,browser_grounding_observations o,browser_preparations p,json_each(p.payload,'$.items') i WHERE g.id=NEW.grounding_id AND g.status='GROUNDED' AND g.project_id=NEW.project_id AND g.campaign_id=NEW.campaign_id AND g.preparation_id=NEW.preparation_id AND g.item_id=NEW.item_id AND g.attempt_id=NEW.attempt_id AND g.test_id=NEW.test_id AND g.observation_id=NEW.observation_id AND json_extract(g.payload,'$.scope')=json_extract(NEW.payload,'$.scope') AND o.id=NEW.observation_id AND json_extract(o.payload,'$.observation_hash')=json_extract(NEW.payload,'$.observation_hash') AND p.id=NEW.preparation_id AND p.status='PREPARING' AND p.selection_hash=json_extract(NEW.payload,'$.selection_hash') AND p.browser_mode=json_extract(NEW.payload,'$.browser_mode') AND json_extract(i.value,'$.id')=NEW.item_id AND json_extract(i.value,'$.attempt_id')=NEW.attempt_id AND json_extract(i.value,'$.status')='PREPARING') BEGIN SELECT RAISE(ABORT,'Batch plan requires exact active persisted grounding'); END"))
+event.listen(BrowserBatchPlanRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_plans_no_delete BEFORE DELETE ON browser_batch_plans BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))
+event.listen(BrowserBatchPlanRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_plans_no_update BEFORE UPDATE ON browser_batch_plans BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))
+event.listen(BrowserBatchPlanRow.__table__,"after_create",DDL("CREATE TRIGGER batch_runnable_proof BEFORE UPDATE ON browser_preparations WHEN EXISTS (SELECT 1 FROM browser_batch_submissions b WHERE b.preparation_id=NEW.id) AND EXISTS (SELECT 1 FROM json_each(NEW.payload,'$.items') i WHERE json_extract(i.value,'$.status')='RUNNABLE' AND NOT EXISTS (SELECT 1 FROM browser_batch_plans p WHERE p.preparation_id=NEW.id AND p.project_id=NEW.project_id AND p.campaign_id=NEW.campaign_id AND p.item_id=json_extract(i.value,'$.id') AND p.attempt_id=json_extract(i.value,'$.attempt_id') AND p.test_id=json_extract(i.value,'$.original_test_id') AND p.grounding_id=json_extract(i.value,'$.grounding_id') AND p.plan_hash=json_extract(i.value,'$.plan_hash') AND json_extract(p.payload,'$.observation_hash')=json_extract(i.value,'$.observation_hash'))) BEGIN SELECT RAISE(ABORT,'Runnable batch item requires durable plan proof'); END"))
+
+class BrowserBatchRunItemRow(Base):
+    __tablename__="browser_batch_run_items"
+    __table_args__=(
+        UniqueConstraint("plan_receipt_id",name="uq_batch_materialized_plan"),
+        ForeignKeyConstraint(["run_test_id","run_id","campaign_id","project_id"],["qa_run_tests.id","qa_run_tests.run_id","qa_run_tests.campaign_id","qa_run_tests.project_id"],name="fk_batch_run_item_test",deferrable=True,initially="DEFERRED"),
+        ForeignKeyConstraint(["plan_receipt_id","campaign_id","project_id"],["browser_batch_plans.id","browser_batch_plans.campaign_id","browser_batch_plans.project_id"],name="fk_batch_run_item_plan",deferrable=True,initially="DEFERRED"),
+    )
+    run_test_id: Mapped[str]=mapped_column(String(36),nullable=False,primary_key=True)
+    project_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    campaign_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    run_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    preparation_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    item_id: Mapped[str]=mapped_column(String(36),nullable=False)
+    plan_receipt_id: Mapped[str]=mapped_column(String(36),nullable=False)
+event.listen(BrowserBatchRunItemRow.__table__,"after_create",DDL("CREATE TRIGGER batch_run_item_insert BEFORE INSERT ON browser_batch_run_items WHEN NOT EXISTS (SELECT 1 FROM browser_batch_plans p,qa_run_tests t,qa_runs r WHERE p.id=NEW.plan_receipt_id AND p.project_id=NEW.project_id AND p.campaign_id=NEW.campaign_id AND p.preparation_id=NEW.preparation_id AND p.item_id=NEW.item_id AND t.id=NEW.run_test_id AND t.run_id=NEW.run_id AND t.project_id=NEW.project_id AND t.campaign_id=NEW.campaign_id AND t.original_test_specification_id=p.test_id AND json_extract(t.browser_plan,'$.plan_hash')=p.plan_hash AND r.id=NEW.run_id AND r.preparation_id=NEW.preparation_id) BEGIN SELECT RAISE(ABORT,'Batch Run item must bind the exact sealed plan'); END"))
+event.listen(BrowserBatchRunItemRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_run_items_no_delete BEFORE DELETE ON browser_batch_run_items BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))
+event.listen(BrowserBatchRunItemRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_run_items_no_update BEFORE UPDATE ON browser_batch_run_items BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))

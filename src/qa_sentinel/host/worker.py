@@ -51,13 +51,21 @@ class ExecutionWorker:
     def execute_one(self):
         """Deterministic single-step entry point for tests and the one host thread."""
         try:
+            if self._stop.is_set():return False
+            # Empty queue probes are visibility reads, not active workflows. Avoid
+            # transiently rejecting a synchronous browser Start on an idle host.
+            # A positive hint is never a claim: recheck under the existing admission.
+            if not self.application.has_pending_execution_work():return False
             with self.admission.enter():
                 with self._claim_gate:
                     if self._stop.is_set():
                         return False
                     job = self.application.claim_next_execution_job()
                 if job is None:
-                    return False
+                    batch=getattr(self.application,"next_browser_batch",lambda:None)()
+                    if batch is None:return False
+                    self.application.execute_browser_batch(*batch)
+                    return True
                 status, error = Status.SUCCEEDED, None
                 with self.admission.job(job.id):
                     try:

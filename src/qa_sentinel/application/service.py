@@ -99,6 +99,10 @@ class QASentinelApplication:
         self._test_generator = test_generator
         self._browser_executor = browser_executor
         self._browser_plan_generator = browser_plan_generator
+        import threading
+        self._browser_batch_gate = threading.RLock()
+        self._active_browser_batches = set()
+        self._browser_batch_project_keys = None
         self._browser_observer = browser_observer
         self._browser_grounding_reasoner = browser_grounding_reasoner
         self._synthetic_run_executor = synthetic_run_executor if synthetic_run_executor is not None else SyntheticRunExecutor()
@@ -380,12 +384,15 @@ class QASentinelApplication:
             raise ApplicationError(Code.CAMPAIGN_REQUIREMENT_MISMATCH)
         return record
 
-    def _review(self, project_id, campaign_id, object_id, kind, command=None, *, policy=None):
+    def _review(self, project_id, campaign_id, object_id, kind, command=None, *, policy=None, previous_hash=None):
         project_id, campaign_id, object_id = map(identifier, (project_id, campaign_id, object_id))
         with persistence_boundary(), UnitOfWork(self._factory) as uow:
             if command is not None:
                 uow.session.connection(execution_options={"qa_job_write": True})
             record = self._review_object(uow, project_id, campaign_id, object_id, kind)
+            if previous_hash is not None:
+                from qa_sentinel.domain.campaign_review import content_hash
+                if content_hash(record)!=previous_hash:raise ApplicationError(Code.REVIEW_CONFLICT)
             try:
                 if command is None:
                     return uow.campaign_reviews.state(record, kind)
@@ -423,11 +430,11 @@ class QASentinelApplication:
         return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION",
             self._approval_command(reviewer_label, note, action))
 
-    def review_source_free_campaign_test(self, project_id, campaign_id, test_spec_id, *, reviewer_label, note=None):
+    def review_source_free_campaign_test(self, project_id, campaign_id, test_spec_id, *, reviewer_label, note=None, previous_hash=None):
         """Explicit human approval policy for the new source-free browser path only."""
         from qa_sentinel.domain.campaign_review import SOURCE_FREE_APPROVAL_POLICY
         return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION",
-            self._approval_command(reviewer_label, note, "APPROVE"), policy=SOURCE_FREE_APPROVAL_POLICY)
+            self._approval_command(reviewer_label, note, "APPROVE"), policy=SOURCE_FREE_APPROVAL_POLICY, previous_hash=previous_hash)
 
     def create_browser_preparation(self, project_id, campaign_id, *, idempotency_key, test_specification_ids, browser_mode="HEADLESS"):
         from .browser_preparation import create
@@ -450,6 +457,34 @@ class QASentinelApplication:
     def get_browser_grounding_observation(self, project_id, campaign_id, observation_id):
         from .browser_grounding import read
         return read(self, project_id, campaign_id, observation_id, observation=True)
+
+    def submit_browser_batch(self, project_id, campaign_id, **arguments):
+        from .browser_batches import submit
+        return submit(self, project_id, campaign_id, **arguments)
+
+    def next_browser_batch(self):
+        from .browser_batches import next_batch
+        return next_batch(self)
+
+    def execute_browser_batch(self, project_id, campaign_id, preparation_id):
+        from .browser_batches import execute
+        return execute(self, project_id, campaign_id, preparation_id)
+
+    def list_browser_batches(self, project_id, campaign_id, **arguments):
+        from .browser_batches import history
+        return history(self, project_id, campaign_id, **arguments)
+
+    def approve_browser_tests(self, project_id, campaign_id, **arguments):
+        from .browser_batches import approve_tests
+        return approve_tests(self, project_id, campaign_id, **arguments)
+
+    def get_browser_batch(self, project_id, campaign_id, preparation_id, **arguments):
+        from .browser_batches import read
+        return read(self, project_id, campaign_id, preparation_id, **arguments)
+
+    def acknowledge_browser_batch_interruption(self, project_id, campaign_id, preparation_id):
+        from .browser_batches import acknowledge
+        return acknowledge(self, project_id, campaign_id, preparation_id)
 
     def get_campaign_test_specification_review(self, project_id, campaign_id, test_spec_id) -> ReviewState:
         return self._review(project_id, campaign_id, test_spec_id, "TEST_SPECIFICATION")
@@ -683,11 +718,13 @@ class QASentinelApplication:
 
     def generate_browser_plan(self, project_id, campaign_id, test_id):
         from .browser_generation import generate
-        return generate(self,project_id,campaign_id,test_id)
+        admission=self._execution_admission.enter() if self._execution_admission is not None else nullcontext()
+        with admission:return generate(self,project_id,campaign_id,test_id)
 
     def retry_browser_plan_generation(self, project_id, campaign_id, generation_id):
         from .browser_generation import generate
-        return generate(self,project_id,campaign_id,None,previous_id=generation_id)
+        admission=self._execution_admission.enter() if self._execution_admission is not None else nullcontext()
+        with admission:return generate(self,project_id,campaign_id,None,previous_id=generation_id)
 
     def get_browser_plan_generation(self, project_id, campaign_id, generation_id):
         project_id,campaign_id,generation_id=map(identifier,(project_id,campaign_id,generation_id))
@@ -819,7 +856,8 @@ class QASentinelApplication:
         return self._start_qa_run(project_id,campaign_id,run_id)
 
     def start_browser_qa_run(self, project_id, campaign_id, run_id) -> QARun:
-        return self._start_qa_run(project_id,campaign_id,run_id,allow_browser=True)
+        admission=self._execution_admission.enter() if self._execution_admission is not None else nullcontext()
+        with admission:return self._start_qa_run(project_id,campaign_id,run_id,allow_browser=True)
 
     def _start_qa_run(self, project_id, campaign_id, run_id, *, allow_browser=False) -> QARun:
         project_id, campaign_id, run_id = map(identifier, (project_id, campaign_id, run_id))
@@ -835,6 +873,11 @@ class QASentinelApplication:
             prepared = uow.qa_runs.preparation(run)
             if any(t.execution_status != "NOT_STARTED" for t in prepared.tests):
                 raise ApplicationError(Code.RUN_INVALID_STATE)
+            executor=self._browser_executor
+            if allow_browser and run.preparation_id is not None and uow.browser_batches.submission(project_id,campaign_id,run.preparation_id) is not None:
+                root=uow.browser_preparations.get(project_id,campaign_id,run.preparation_id)
+                uow.browser_batches.validate_run(prepared,require_links=True)
+                executor=executor.for_mode(root.browser_mode)
             uow.qa_runs.start(run)
             uow.commit()  # Claim is durable before any executor evaluation.
         try:
@@ -844,7 +887,7 @@ class QASentinelApplication:
                     run = uow.qa_runs.get(project_id, campaign_id, run_id)
                     running = uow.qa_runs.start_test(run, uow.qa_runs.test(run, snapshot.id))
                     uow.commit()
-                result = (self._browser_executor.execute(running.browser_plan,run,running) if allow_browser else
+                result = (executor.execute(running.browser_plan,run,running) if allow_browser else
                     execute_synthetic(self._synthetic_run_executor, running))  # No open DB transaction.
                 with persistence_boundary(), UnitOfWork(self._factory) as uow:
                     uow.session.connection(execution_options={"qa_job_write": True})
@@ -1429,6 +1472,13 @@ class QASentinelApplication:
             if any(job.project_id != task.project_id for job in jobs):
                 raise ApplicationError(Code.PROJECT_TASK_MISMATCH)
             return page(jobs, limit, ExecutionJobView)
+
+    def has_pending_execution_work(self):
+        """Bounded read hint only; real claims are rechecked under host admission."""
+        with persistence_boundary(), UnitOfWork(self._factory) as uow:
+            if uow.execution_jobs.running() is not None or uow.execution_jobs.next_queued() is not None:
+                return True
+        return self.next_browser_batch() is not None
 
     # Trusted worker operations: no public HTTP route exposes lifecycle writes.
     def claim_next_execution_job(self) -> ExecutionJobView | None:

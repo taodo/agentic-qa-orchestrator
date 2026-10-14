@@ -99,6 +99,9 @@ class QARunRepository:
                 item = runnable[test.content.id]
                 if test.content != item.test or test.approval != item.approval or test.browser_plan.plan_hash != item.plan_hash:
                     raise ValueError("Run preparation seal mismatch")
+        if run.preparation_id is not None:
+            from .browser_batches import BrowserBatchRepository
+            BrowserBatchRepository(self.session).validate_run(prepared)
         self.session.add(QARunRow(**row_values(run)))
         for entries, table in ((prepared.requirements, QARunRequirementRow), (prepared.tests, QARunTestRow)):
             for entry in entries:

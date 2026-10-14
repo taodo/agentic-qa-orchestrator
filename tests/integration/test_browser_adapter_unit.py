@@ -10,7 +10,7 @@ from qa_sentinel.domain.browser_execution import BrowserExecutionPlan
 from test_browser_execution_foundation import browser_candidate,ready,review
 
 
-@pytest.mark.parametrize('mode,expected',[('pass','PASS'),('mismatch','FAIL'),('launch','BROWSER_LAUNCH_FAILED'),('action','BROWSER_ACTION_TIMEOUT'),('overall','BROWSER_TEST_TIMEOUT'),('cleanup','BROWSER_CLEANUP_FAILED'),('cleanup_stall','BROWSER_CLEANUP_FAILED'),('barrier_timeout','BROWSER_ACTION_TIMEOUT'),('driver','BROWSER_LAUNCH_FAILED'),('context','BROWSER_LAUNCH_FAILED'),('page','BROWSER_LAUNCH_FAILED'),('page_close','BROWSER_CRASHED'),('context_close','BROWSER_CRASHED'),('disconnect','BROWSER_CRASHED'),('assertion_stall','BROWSER_ACTION_TIMEOUT'),('cancel','CANCELLED'),
+@pytest.mark.parametrize('mode,expected',[('pass','PASS'),('headed','PASS'),('mismatch','FAIL'),('launch','BROWSER_LAUNCH_FAILED'),('action','BROWSER_ACTION_TIMEOUT'),('overall','BROWSER_TEST_TIMEOUT'),('cleanup','BROWSER_CLEANUP_FAILED'),('cleanup_stall','BROWSER_CLEANUP_FAILED'),('barrier_timeout','BROWSER_ACTION_TIMEOUT'),('driver','BROWSER_LAUNCH_FAILED'),('context','BROWSER_LAUNCH_FAILED'),('page','BROWSER_LAUNCH_FAILED'),('page_close','BROWSER_CRASHED'),('context_close','BROWSER_CRASHED'),('disconnect','BROWSER_CRASHED'),('assertion_stall','BROWSER_ACTION_TIMEOUT'),('cancel','CANCELLED'),
     *[(f'{stage}_{kind}', 'BROWSER_LAUNCH_FAILED') for stage in ('factory','driver','launch','context','page') for kind in ('os','runtime')],
     ('invalid_locator','BROWSER_INTERNAL_ERROR'),('strict_mode','BROWSER_INTERNAL_ERROR'),
     ('action_disconnect','BROWSER_CRASHED'),('transport','BROWSER_TARGET_UNREACHABLE'),
@@ -84,7 +84,7 @@ def test_sdk_cleanup_and_truthful_error_mapping(browser_candidate,monkeypatch,mo
         async def launch(self,**kwargs):
             startup_failure('launch')
             assert '--deny-permission-prompts' in kwargs['args']
-            assert kwargs['headless'] and 'executable_path' not in kwargs
+            assert kwargs['headless']==(mode!='headed') and 'executable_path' not in kwargs
             assert 'OPENAI_API_KEY' not in kwargs['env']
             if mode=='launch':raise Error('SECRET /private/path')
             return Browser()
@@ -121,6 +121,7 @@ def test_sdk_cleanup_and_truthful_error_mapping(browser_candidate,monkeypatch,mo
     monkeypatch.setattr(runtime,'PinnedNetwork',Network)
     executor=object.__new__(PlaywrightBrowserExecutor)
     executor.trusted_local_origin=None
+    executor.mode="HEADED" if mode=="headed" else "HEADLESS"
     executor.identity=SimpleNamespace(browser_version='153.0.8010.12')
     plan=BrowserExecutionPlan(steps=({'action':'NAVIGATE','path':'/','timeout_ms':1000},
         {'action':'ASSERT_TEXT','locator':{'strategy':'CSS','value':'h1'},'text':'Courses','timeout_ms':100 if mode in {'barrier_timeout','assertion_stall'} else 1000}),test_timeout_ms=1000)

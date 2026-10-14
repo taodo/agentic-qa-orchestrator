@@ -147,7 +147,7 @@ def test_restart_migrates_to_head_preserves_operator_data_and_demo_identity(conf
         assert len(projects) == 2 and [p for p in projects if p["key"] == "demo-calculator"][0]["id"] == project["id"]
         assert client.get(f"/api/v1/tasks/{created['id']}").json()["title"] == "Keep task"
         with app.state.host_composition.engine.connect() as connection:
-            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0017"
+            assert connection.execute(text("select version_num from alembic_version")).scalar_one() == "0018"
 
 
 @pytest.mark.parametrize("path", ["/", "/projects", "/projects/project-a", "/tasks/task-a?view=artifacts", "/index.html"])
@@ -166,7 +166,7 @@ def test_fallback_never_masks_api_assets_or_traversal(config, path):
         assert "Built frontend" not in response.text and "OUTSIDE_SECRET" not in response.text
 
 
-@pytest.mark.parametrize("suffix", ["", "/requirements?requirement_id=revised-v2", "/test-specifications?test_spec_id=test-a", "/traceability", "/readiness", "/runs", "/runs/run-a", "/requirements/", "/specification", "/test-design", "/execution", "/results", "/audit"])
+@pytest.mark.parametrize("suffix", ["", "/requirements?requirement_id=revised-v2", "/test-specifications?test_spec_id=test-a", "/traceability", "/readiness", "/runs", "/runs/run-a", "/browser-batches/batch-a", "/requirements/", "/specification", "/test-design", "/execution", "/results", "/audit"])
 @pytest.mark.parametrize("mode", ["demo", "local"])
 def test_campaign_spa_deep_links(config, tmp_path, monkeypatch, suffix, mode):
     value = config
@@ -187,6 +187,8 @@ def test_campaign_spa_deep_links(config, tmp_path, monkeypatch, suffix, mode):
     "/projects/project-a/campaigns", "/projects/project-a/campaigns/campaign-a/unknown",
     "/projects/project-a/campaigns/campaign-a/requirements/extra",
     "/projects/project-a/campaigns/campaign-a/runs/run-a/extra",
+    "/projects/project-a/campaigns/campaign-a/browser-batches/batch-a/extra",
+    "/projects/project-a/campaigns/campaign-a/browser-batches",
     "/projects/project-a/campaigns/campaign-a/api/v1/missing",
     "/api/projects/project-a/campaigns/campaign-a/requirements",
     "/api/v1/projects/project-a/campaigns/campaign-a/unknown",

@@ -29,7 +29,7 @@ def test_three_explicit_gates_no_secret_no_target_before_start(planning,http,mon
     def forbidden(*a,**k):pytest.fail('No Target/provider/browser/source side effect from reads or acceptance')
     monkeypatch.setattr(socket,'getaddrinfo',forbidden)
     monkeypatch.setattr(subprocess,'Popen',forbidden)
-    assert client.get(base+'/capability').json()=={'planning':'AVAILABLE','execution':'AVAILABLE'}
+    assert client.get(base+'/capability').json()=={'planning':'AVAILABLE','execution':'AVAILABLE','automatic':'UNAVAILABLE','source_free_review':'AVAILABLE','automatic_reason':'Configure a WEB Target, install the supported Chromium runtime and supply the model key in the local server environment.'}
     assert client.get(base+f'/tests/{spec.id}/readiness').json()['status']=='AVAILABLE'
     assert len(mock.calls)==0 and executor.calls==[]
     generated=client.post(base+f'/tests/{spec.id}/generate',json={})
@@ -48,7 +48,7 @@ def test_three_explicit_gates_no_secret_no_target_before_start(planning,http,mon
     assert client.get(base+'/generations/'+gid).json()['accepted_run_id']==run['id']
     assert client.post(base+'/generations/'+gid+'/accept',json={'idempotency_key':'review'}).json()==run
     monkeypatch.delenv('OPENAI_API_KEY');app._browser_plan_generator=None
-    assert client.get(base+'/capability').json()=={'planning':'UNAVAILABLE','execution':'AVAILABLE'}
+    assert client.get(base+'/capability').json()['planning']=='UNAVAILABLE'
     final=client.post(base+'/runs/'+run['id']+'/start',json={})
     assert final.status_code==200 and final.json()['execution_status']=='COMPLETED' and final.json()['qa_outcome']=='PASS'
     assert len(mock.calls)==1 and len(executor.calls)==1 and executor.calls[0].plan.model_dump(mode='json')==candidate['output']['plan']
@@ -120,7 +120,7 @@ def test_nonlocal_peer_and_bare_api_cannot_execute(planning):
     app,_,_,_,p,c,spec,mock,executor,_=planning;api=create_api_app(app)
     base=f'/api/v1/projects/{p.id}/campaigns/{c.id}/browser'
     with TestClient(api) as client:
-        assert client.get(base+'/capability').json()=={'planning':'UNAVAILABLE','execution':'UNAVAILABLE'}
+        assert all(client.get(base+'/capability').json()[key]=='UNAVAILABLE' for key in ('planning','execution','automatic','source_free_review'))
         assert client.post(base+f'/tests/{spec.id}/generate',json={}).status_code==404
         assert client.post(base+'/runs/'+str(uuid4())+'/start',json={}).status_code==404
     api=create_api_app(app)
@@ -142,6 +142,8 @@ def test_browser_only_host_no_workspace_no_key_no_migration(config,monkeypatch):
     try:
         assert composed.application.get_project(p).key=='browser-operator'
         assert composed.application._browser_plan_generator is not None
+        assert composed.application._browser_grounding_reasoner is not None
+        assert composed.application._browser_observer is not None
         from qa_sentinel.application import ApplicationError
         with pytest.raises(ApplicationError):composed.resolver.resolve(p)
     finally:composed.close()
@@ -171,7 +173,8 @@ def test_public_demo_composition_never_configures_browser(config,tmp_path,monkey
     try:
         composed=host.state.host_composition
         assert composed.application._browser_executor is None and composed.application._browser_plan_generator is None
-        assert not any('/browser/' in route.path and any(op in route.path for op in ('/generate','/accept','/start','/generations')) for route in host.routes if hasattr(route,'path'))
+        assert composed.application._browser_observer is None and composed.application._browser_grounding_reasoner is None
+        assert not any('/browser/' in route.path and any(op in route.path for op in ('/generate','/accept','/start','/generations','/batches')) for route in host.routes if hasattr(route,'path'))
     finally:host.state.host_composition.close()
 
 def test_browser_only_local_start_reuses_build_validation_serve_without_key(config,tmp_path,monkeypatch,capsys):
@@ -271,3 +274,29 @@ def test_dedicated_path_can_change_reserved_facts_after_declaration(planning,htt
     new=result.json();assert json.loads(new['preconditions'][-1])==facts
     assert new['review_status']=='READY_FOR_REVIEW' and new['provenance']['origin']=='HUMAN_EDIT'
     assert app.get_campaign_test_specification(p.id,c.id,spec.id)==old and len(mock.calls)==0 and executor.calls==[]
+
+
+def test_idle_worker_probe_never_reserves_browser_execution_admission(planning,monkeypatch):
+    from threading import Event
+    from concurrent.futures import ThreadPoolExecutor
+    from qa_sentinel.host.admission import ExecutionAdmission
+    from qa_sentinel.host.worker import ExecutionWorker
+    app,_,_,_,p,c,spec,mock,executor,_=planning
+    candidate=app.generate_browser_plan(p.id,c.id,spec.id)
+    run=app.accept_browser_plan_generation(p.id,c.id,candidate.id,idempotency_key="idle-start")
+    app._execution_admission=ExecutionAdmission()
+    worker=ExecutionWorker(app,app._execution_admission,Event())
+    assert not app.has_pending_execution_work()
+    observed,release=Event(),Event()
+    def idle_probe():
+        observed.set();assert release.wait(5);return False
+    monkeypatch.setattr(app,"has_pending_execution_work",idle_probe)
+    with ThreadPoolExecutor(max_workers=1) as threads:
+        probe=threads.submit(worker.execute_one);assert observed.wait(2)
+        try:
+            # Force Start to occur during the read probe, not after an arbitrary sleep.
+            finished=app.start_browser_qa_run(p.id,c.id,run.id)
+            assert finished.execution_status=="COMPLETED" and finished.qa_outcome=="PASS"
+            assert len(mock.calls)==len(executor.calls)==1
+        finally:release.set()
+        assert not probe.result(timeout=2)

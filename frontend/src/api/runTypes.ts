@@ -11,6 +11,7 @@ export interface BrowserPlanIdentity {
   plan: { version: string };
 }
 export interface QARun {
+  preparation_id?: string | null;
   runtime_identity?: BrowserRuntimeIdentity | null;
   executor_kind?: 'SYNTHETIC' | 'WEB_BROWSER';
   browser_error_code?: string | null;

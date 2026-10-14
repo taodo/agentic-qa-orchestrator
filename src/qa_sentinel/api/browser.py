@@ -14,6 +14,9 @@ router=APIRouter(prefix='/projects/{project_id}/campaigns/{campaign_id}/browser'
 class Capability(BaseModel):
     planning: Literal['AVAILABLE','UNAVAILABLE']
     execution: Literal['AVAILABLE','UNAVAILABLE']
+    automatic: Literal['AVAILABLE','UNAVAILABLE']
+    source_free_review: Literal['AVAILABLE','UNAVAILABLE']
+    automatic_reason: str | None=None
 
 class Empty(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -40,7 +43,12 @@ def capabilities(request,application,p):
     allowed=enabled(request,application,p)
     runtime=allowed and application._browser_executor is not None
     provider=runtime and application._browser_plan_generator is not None and bool(os.environ.get('OPENAI_API_KEY','').strip())
-    return Capability(planning='AVAILABLE' if provider else 'UNAVAILABLE',execution='AVAILABLE' if runtime else 'UNAVAILABLE')
+    campaign=application.get_campaign(p,request.path_params['campaign_id'])
+    web=allowed and campaign.target_id is not None
+    automatic=web and provider and application._browser_observer is not None and application._browser_grounding_reasoner is not None
+    return Capability(planning='AVAILABLE' if provider else 'UNAVAILABLE',execution='AVAILABLE' if runtime else 'UNAVAILABLE',
+        automatic='AVAILABLE' if automatic else 'UNAVAILABLE',source_free_review='AVAILABLE' if web else 'UNAVAILABLE',
+        automatic_reason=None if automatic else 'Configure a WEB Target, install the supported Chromium runtime and supply the model key in the local server environment.')
 def require_local(request,application,p):
     if not enabled(request,application,p):raise ApplicationError(Code.GENERATION_NOT_CONFIGURED)
 
@@ -83,3 +91,55 @@ def accept(project_id:UUID,campaign_id:UUID,generation_id:UUID,body:AcceptReques
 def start(project_id:UUID,campaign_id:UUID,run_id:UUID,body:Empty,request:Request,application:Application):
     require_local(request,application,project_id)
     return application.start_browser_qa_run(project_id,campaign_id,run_id)
+
+
+from qa_sentinel.application.browser_batches import BatchView,BatchHistoryItem,CreateBrowserPreparation
+from qa_sentinel.application import ReviewState
+
+class BrowserApproval(Empty):
+    reviewer_label: str=Field(min_length=1,max_length=64,strict=True)
+    note: str | None=Field(default=None,min_length=1,max_length=1000,strict=True)
+    previous_hash: Hash | None=None
+
+class BrowserBulkApproval(Empty):
+    test_ids: tuple[UUID,...]=Field(min_length=1,max_length=500)
+    expected_hashes: dict[str,Hash]=Field(min_length=1,max_length=500)
+    reviewer_label: str=Field(min_length=1,max_length=64,strict=True)
+    note: str | None=Field(default=None,min_length=1,max_length=1000,strict=True)
+
+
+def require_web(request,application,p,c):
+    require_local(request,application,p)
+    campaign=application.get_campaign(p,c)
+    if campaign.target_id is None:raise ApplicationError(Code.TARGET_NOT_FOUND)
+
+@local_router.post('/tests/{test_id}/review',response_model=ReviewState)
+def source_free_review(project_id:UUID,campaign_id:UUID,test_id:UUID,body:BrowserApproval,request:Request,application:Application):
+    require_web(request,application,project_id,campaign_id)
+    return application.review_source_free_campaign_test(project_id,campaign_id,test_id,**body.model_dump())
+
+@local_router.post('/tests/approve-selection')
+def source_free_bulk_review(project_id:UUID,campaign_id:UUID,body:BrowserBulkApproval,request:Request,application:Application):
+    require_web(request,application,project_id,campaign_id)
+    return application.approve_browser_tests(project_id,campaign_id,**body.model_dump())
+
+@local_router.post('/batches',response_model=BatchView,status_code=201)
+def submit_batch(project_id:UUID,campaign_id:UUID,body:CreateBrowserPreparation,request:Request,application:Application):
+    require_web(request,application,project_id,campaign_id)
+    if capabilities(request,application,project_id).automatic!='AVAILABLE':raise ApplicationError(Code.BROWSER_BATCH_NOT_CONFIGURED)
+    return application.submit_browser_batch(project_id,campaign_id,**body.model_dump())
+
+@local_router.get('/batches',response_model=CollectionPage[BatchHistoryItem])
+def batch_history(project_id:UUID,campaign_id:UUID,request:Request,application:Application,limit:int=20):
+    require_local(request,application,project_id)
+    return application.list_browser_batches(project_id,campaign_id,limit=limit)
+
+@local_router.get('/batches/{preparation_id}',response_model=BatchView)
+def get_batch(project_id:UUID,campaign_id:UUID,preparation_id:UUID,request:Request,application:Application,limit:int=50,after_position:int=0):
+    require_local(request,application,project_id)
+    return application.get_browser_batch(project_id,campaign_id,preparation_id,limit=limit,after_position=after_position)
+
+@local_router.post('/batches/{preparation_id}/acknowledge-interruption',response_model=BatchView)
+def acknowledge_batch(project_id:UUID,campaign_id:UUID,preparation_id:UUID,body:Empty,request:Request,application:Application):
+    require_local(request,application,project_id)
+    return application.acknowledge_browser_batch_interruption(project_id,campaign_id,preparation_id)

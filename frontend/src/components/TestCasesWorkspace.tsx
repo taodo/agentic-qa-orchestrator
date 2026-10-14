@@ -1,3 +1,5 @@
+import { useBrowserCapability, BrowserRunSelected } from './BrowserRunSelected';
+import { browserReviewable, browserExecutable } from '../api/browserBatches';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { listTestSpecifications, getTestSpecification } from '../api/campaigns';
@@ -16,13 +18,13 @@ import { downloadTestCases } from './testCaseCsv';
 function reviewBlocked(test:CampaignTestSpecification) {
   return !!(test.information_markers.length || test.unresolved_requirement_refs.length || !test.requirement_ids.length || !test.required_evidence.length || test.overall_expected_result===null || test.steps.some(step=>step.expected===null));
 }
-function TestCaseDetails({test,base,reviewable,...scope}:{test:CampaignTestSpecification;base:string;reviewable:boolean}&PreparationScope) {
+function TestCaseDetails({test,base,reviewable,sourceFree=false,...scope}:{sourceFree?:boolean;test:CampaignTestSpecification;base:string;reviewable:boolean}&PreparationScope) {
   return <>
     <p className="mono muted">{test.id} · {test.logical_key}</p>
     <dl className="metadata"><div><dt>Origin</dt><dd>{test.provenance.origin==='IMPORT'?'Imported':test.provenance.origin==='HUMAN_EDIT'?'Human-reviewed':'AI-generated'}</dd></div><div><dt>Created</dt><dd><DateTime value={test.created_at}/></dd></div><div><dt>Updated</dt><dd><DateTime value={test.updated_at}/></dd></div><div><dt>Expected result</dt><dd>{test.overall_expected_result===null?'Missing':'Provided'}</dd></div></dl>
     {test.information_markers.length>0 && <div className="clarification"><h4>Clarification blockers</h4><ul>{test.information_markers.map((marker,i)=><li key={i}><strong>{marker.kind.replaceAll('_',' ').toLowerCase()}: </strong><span className="prose">{marker.description}</span></li>)}</ul></div>}
     {test.unresolved_requirement_refs.length>0 && <p className="notice prose">Unresolved Requirement references: {test.unresolved_requirement_refs.join(', ')}</p>}
-    {reviewable || test.review_status==='APPROVED' ? <PreparationReview {...scope} objectId={test.id} kind="Test Case" status={test.review_status} blocked={!reviewable || reviewBlocked(test)}/> : <p className="notice">Outside the returned current list: read-only audit content. Approval, selection and export are unavailable here.</p>}
+    {reviewable || test.review_status==='APPROVED' ? <PreparationReview {...scope} objectId={test.id} kind="Test Case" status={test.review_status} sourceFree={sourceFree} blocked={!reviewable || (sourceFree?!browserReviewable(test):reviewBlocked(test))}/> : <p className="notice">Outside the returned current list: read-only audit content. Approval, selection and export are unavailable here.</p>}
     <h4>Preconditions</h4>{test.preconditions.length?<ul>{test.preconditions.map((item,i)=><li className="prose" key={i}>{item}</li>)}</ul>:<p>None specified.</p>}
     <h4>Steps and expected behavior</h4><ol className="test-steps">{test.steps.map(step=><li key={step.index}><p className="prose">{step.action}</p><p className="prose muted">Expected: {step.expected??'Not specified; clarification required.'}</p></li>)}</ol>
     <h4>Overall expected result</h4><p className="prose">{test.overall_expected_result??'Not specified; clarification required.'}</p>
@@ -33,6 +35,7 @@ function TestCaseDetails({test,base,reviewable,...scope}:{test:CampaignTestSpeci
   </>;
 }
 export function TestCasesWorkspace({projectId,campaignId,base,campaignName,reloadReadiness}:{projectId:string;campaignId:string;base:string;campaignName:string;reloadReadiness:()=>Promise<void>}) {
+  const capability=useBrowserCapability(projectId,campaignId),sourceFree=capability.data?.source_free_review==='AVAILABLE';
   const [params]=useSearchParams(), selectedId=params.get('test_spec_id'), location=useLocation();
   const [filter,setFilter]=useState('ALL'), [selected,setSelected]=useState<string[]>([]), [feedback,setFeedback]=useState('');
   const [importOpen,setImportOpen]=useState(location.hash==='#test-import'), [generationOpen,setGenerationOpen]=useState(location.hash==='#test-generation');
@@ -66,15 +69,16 @@ export function TestCasesWorkspace({projectId,campaignId,base,campaignName,reloa
       <p className="hint">Counts, selection and CSV exports cover returned current records only, never global Campaign totals. Approved cases can be selected for export but are never resubmitted for approval.</p>
       <div className="actions"><button onClick={()=>setSelected(visible.map(test=>test.id))}>Select all visible</button><button onClick={()=>setSelected([])}>Deselect all</button><span role="status">Selected: {chosen.length} visible current Test Cases.</span><button disabled={!visible.length} onClick={()=>exportCsv('visible')}>Export visible CSV</button><button disabled={!chosen.length} onClick={()=>exportCsv('selected')}>Export selected CSV</button></div>
     </>}
+    <BrowserRunSelected p={projectId} c={campaignId} base={base} ids={chosen.filter(browserExecutable).map(test=>test.id)} capability={capability}/>
     <PreparationBulkApproval {...reviewScope} compact kind="Test Case" rows={visible.map(test=>({id:test.id,key:test.key,eligible:test.review_status==='READY_FOR_REVIEW' && !reviewBlocked(test)}))} selected={chosen.map(test=>test.id)}/>
     {!tests.loading && !tests.error && tests.data && <>
       {!visible.length?<EmptyState>No Test Cases in this view.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Cases table" tabIndex={0}><table className="campaign-table test-cases-table"><caption>Test Cases — returned current versions</caption><thead><tr>{['Select','Test Case','Requirement(s)','Type','Priority','Status','Steps','Actions'].map(label=><th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{visible.map(test=><PreparationRow key={test.id} id={`test-${test.id}`} initialOpen={selectedId===test.id}>{({open,setOpen,detailId})=><>
         <td><input type="checkbox" aria-label={`Select ${test.key}`} checked={chosen.some(item=>item.id===test.id)} onChange={event=>setSelected(event.target.checked?[...chosen.map(item=>item.id),test.id]:chosen.filter(item=>item.id!==test.id).map(item=>item.id))}/></td>
         <th scope="row"><span className="record-key">{test.key}</span><h3>{test.title}</h3></th><td>{test.requirement_ids.length} linked</td><td>{test.test_type}</td><td>{test.priority}</td><td><CampaignStatusBadge status={test.review_status}/></td><td>{test.steps.length}</td>
-        <td><details id={detailId} open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>Review / details</summary><TestCaseDetails {...reviewScope} test={test} base={base} reviewable/></details></td>
+        <td><details id={detailId} open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>Review / details</summary><TestCaseDetails {...reviewScope} sourceFree={sourceFree} test={test} base={base} reviewable/></details></td>
       </>}</PreparationRow>)}</tbody></table></div>}
       <TruncationNotice truncated={tests.data.truncated}/>{tests.data.truncated && <p className="notice">CSV exports are bounded to returned visible/selected current Test Cases. Additional Campaign cases are not included.</p>}
-      {tests.data.selectedDetail && <section id={`test-${tests.data.selectedDetail.id}`} tabIndex={-1} aria-label="Selected Test Case audit detail"><h3>{tests.data.selectedDetail.title}</h3><p>The selected Test Case is outside the bounded current list and is included through a single detail read. It may be historical; it is read-only and excluded from table counts, selection, approval and CSV.</p><CampaignStatusBadge status={tests.data.selectedDetail.review_status}/><TestCaseDetails {...reviewScope} test={tests.data.selectedDetail} base={base} reviewable={false}/></section>}
+      {tests.data.selectedDetail && <section id={`test-${tests.data.selectedDetail.id}`} tabIndex={-1} aria-label="Selected Test Case audit detail"><h3>{tests.data.selectedDetail.title}</h3><p>The selected Test Case is outside the bounded current list and is included through a single detail read. It may be historical; it is read-only and excluded from table counts, selection, approval and CSV.</p><CampaignStatusBadge status={tests.data.selectedDetail.review_status}/><TestCaseDetails {...reviewScope} sourceFree={sourceFree} test={tests.data.selectedDetail} base={base} reviewable={false}/></section>}
     </>}
   </section><details id="test-import-actions" className="panel campaign-section" open={importOpen} onToggle={event=>setImportOpen(event.currentTarget.open)}><summary>Import Existing Tests</summary><PreparationImport projectId={projectId} campaignId={campaignId} changed={changed}/></details>
     <details id="test-generation-actions" className="panel campaign-section" open={generationOpen} onToggle={event=>setGenerationOpen(event.currentTarget.open)}><summary>Secondary generation selection</summary><PreparationGeneration projectId={projectId} campaignId={campaignId} changed={changed}/></details>

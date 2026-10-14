@@ -56,7 +56,7 @@ human approval; no browser ID fan-out or selection persistence. Run result CSV/X
 uses only existing persisted snapshots/results and batched evidence counts, at most
 1,000 rows/4 MiB, with the existing literal spreadsheet writer.
 Migration 0012 is additive; downgrade refuses audit loss. Local validation and
-non-migrating runtime opening now require 0017 (the configured operator DB, not the
+non-migrating runtime opening now require 0018 (the configured operator DB, not the
 checkout default). Revision/head agreement has a regression guard. API, host authentication,
 repository read/target interpreter and tool boundaries remain unchanged.
 
@@ -478,3 +478,18 @@ ChatGPT:
 Phase 1 Context & Token Efficiency is accepted infrastructure. Optimize runtime context selection and token/cost observability without changing product semantics. Keep the work bounded and measurable; do not turn it into a general architecture rewrite.
 
 The later QA Campaign phases must preserve the execution invariant above and must not depend on source code or self-repair.
+
+## Task 5.8C–E automatic browser batches
+
+Read [Browser batches](BROWSER_BATCHES.md) for the current normal Run selected
+flow. `application/browser_batches.py` composes existing preparation/grounding,
+reloads immutable artifacts, validates exact action manifests, seals only runnable
+items into browser-v3 Runs and invokes the existing Run lifecycle. No second model
+call is needed for deterministic plan materialization. Existing single-host worker
+and admission serialize batches with Task execution. Migration 0018 adds immutable
+submission/plan/Run-Test receipts; existing v1/v2/v3 fingerprint contracts stay intact.
+Local-only API/UI expose source-free human approval, bounded submission/history,
+whole-batch Results and explicit non-retrying interruption acknowledgement. Headed
+mode changes only executor launch visibility; observer inspection stays headless.
+Default Playwright cache only; runtime environment overrides remain denied. Public
+hosts stay fake-only. Grounding limits, reserved facts and source/pytest remain intact.
