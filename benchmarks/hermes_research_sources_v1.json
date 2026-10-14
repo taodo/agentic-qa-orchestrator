@@ -1,0 +1,45 @@
+{
+  "version": "hermes-research-sources-v1",
+  "repository": "NousResearch/hermes-agent",
+  "reviewed_commit": "d97007c32d6340f7ba79ac1dfb5773cc00846448",
+  "observed_date": "2026-10-14",
+  "source_execution": "NONE",
+  "sources": [
+    {
+      "path": "tools/memory_tool_store.py",
+      "sha256": "3280e2294928815ab2dd52479c5616aee805e27819b901f9af40831a293728c6",
+      "bytes": 41338,
+      "url": "https://github.com/NousResearch/hermes-agent/blob/d97007c32d6340f7ba79ac1dfb5773cc00846448/tools/memory_tool_store.py"
+    },
+    {
+      "path": "tools/session_search_tool.py",
+      "sha256": "beb3850558d034e7950f0e84398d72d4d35fa4ff95a20a6b9da1ff13e4966e72",
+      "bytes": 43575,
+      "url": "https://github.com/NousResearch/hermes-agent/blob/d97007c32d6340f7ba79ac1dfb5773cc00846448/tools/session_search_tool.py"
+    },
+    {
+      "path": "tools/write_approval.py",
+      "sha256": "8d8a15d29a73dceb2e8cf76f613d59d91115314c908a8086ffe1c72572382c7f",
+      "bytes": 18928,
+      "url": "https://github.com/NousResearch/hermes-agent/blob/d97007c32d6340f7ba79ac1dfb5773cc00846448/tools/write_approval.py"
+    },
+    {
+      "path": "hermes_cli/profiles.py",
+      "sha256": "4bad019b99bb8532d25252af53f997f2c2207232b8b694e2020f26d016ac4fd8",
+      "bytes": 123538,
+      "url": "https://github.com/NousResearch/hermes-agent/blob/d97007c32d6340f7ba79ac1dfb5773cc00846448/hermes_cli/profiles.py"
+    },
+    {
+      "path": "SECURITY.md",
+      "sha256": "08b733d1f2c71f8cdd87200beb10c06185d0912a6eb19bbf69149dbb4e207a55",
+      "bytes": 15752,
+      "url": "https://github.com/NousResearch/hermes-agent/blob/d97007c32d6340f7ba79ac1dfb5773cc00846448/SECURITY.md"
+    },
+    {
+      "path": "pyproject.toml",
+      "sha256": "62541c282d5d4b1c4b43c02f3072477597ef024b28a3d1bd3acadd29934f050d",
+      "bytes": 43032,
+      "url": "https://github.com/NousResearch/hermes-agent/blob/d97007c32d6340f7ba79ac1dfb5773cc00846448/pyproject.toml"
+    }
+  ]
+}
