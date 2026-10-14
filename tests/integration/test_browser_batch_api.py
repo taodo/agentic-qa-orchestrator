@@ -121,3 +121,74 @@ def test_single_source_free_review_hash_is_checked_inside_application(batch,http
     response=client.post(path,json=dict(reviewer_label="human",previous_hash=content_hash(test)))
     assert response.status_code==200,response.text
     assert response.json()["review_status"]=="APPROVED"
+
+
+def test_explicit_local_operator_provenance_is_truthful_immutable_and_not_identity(batch,http):
+    from qa_sentinel.application.local_approval import LOCAL_OPERATOR_LABEL,LOCAL_OPERATOR_NOTE
+    from sqlalchemy import text
+    from sqlalchemy.exc import IntegrityError
+    client,base=http;data,*_=batch;app=data[0];p,c=data[4:6]
+    value=case("LOCAL-PROVENANCE");value.update(preconditions=[],steps=[dict(index=1,action="Open page",expected="Welcome")],overall_expected_result="Welcome",required_evidence=["Heading"])
+    app.import_campaign_tests(p.id,c.id,name="Local review",format="CSV",content=csv_text([value]))
+    test=next(t for t in app.list_campaign_test_specifications(p.id,c.id).items if t.key==value["key"])
+    body=dict(test_ids=[str(test.id)],expected_hashes={str(test.id):content_hash(test)},approval_provenance="LOCAL_OPERATOR")
+    assert client.post(base+"/tests/approve-selection",json=body,headers={"origin":"http://evil.invalid"}).status_code==403
+    assert client.post(base+"/tests/approve-selection",json={**body,"reviewer_label":"some-person"}).status_code==422
+    assert client.post(base+"/tests/approve-selection",json={**body,"note":"custom identity"}).status_code==422
+    assert client.post(base+"/tests/approve-selection",json={k:v for k,v in body.items() if k!="approval_provenance"}).status_code==422
+    assert app.get_campaign_test_specification(p.id,c.id,test.id).review_status!="APPROVED"
+    assert client.post(base+"/tests/approve-selection",json=body).json()["approved"]==1
+    receipt=app.get_campaign_test_specification_review(p.id,c.id,test.id).evidence
+    assert receipt.reviewer_label==LOCAL_OPERATOR_LABEL and receipt.note==LOCAL_OPERATOR_NOTE
+    assert receipt.approved_at and receipt.content_hash==content_hash(test)
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):receipt.note="rewritten"
+    replay=client.post(base+f"/tests/{test.id}/review",json={"reviewer_label":"different-human","note":"rewrite attempt"})
+    assert replay.status_code==409
+    assert app.get_campaign_test_specification_review(p.id,c.id,test.id).evidence==receipt
+
+
+def test_local_finding_approval_uses_same_explicit_provenance_and_host_boundary(batch,http):
+    from test_campaign_test_specifications import seed_requirement
+    from qa_sentinel.application.local_approval import LOCAL_OPERATOR_LABEL
+    client,base=http;data,*_=batch;app=data[0];p,c=data[4:6]
+    requirement=seed_requirement(data[1],p,c,"LOCAL-FINDING")
+    path=base+f"/requirements/{requirement.id}/review"
+    body=dict(approval_provenance="LOCAL_OPERATOR")
+    assert client.post(path,json=body,headers={"origin":"http://evil.invalid"}).status_code==403
+    result=client.post(path,json=body);assert result.status_code==200,result.text
+    assert result.json()["evidence"]["reviewer_label"]==LOCAL_OPERATOR_LABEL
+    assert client.post(path,json=body).json()==result.json()
+    assert not batch[2].calls and not batch[3].calls and not batch[4].calls
+
+
+def test_local_design_approval_before_target_preserves_legacy_eligibility(batch,http):
+    from test_campaign_test_specifications import seed_requirement
+    from qa_sentinel.application.local_approval import LOCAL_OPERATOR_LABEL
+    client,base=http;data,*_=batch;app=data[0];p,c=data[4:6]
+    app.associate_campaign_target(p.id,c.id,target_id=None)
+    capability=client.get(base+"/capability").json()
+    assert capability["local_operator_review"]=="AVAILABLE" and capability["source_free_review"]=="UNAVAILABLE"
+    requirement=seed_requirement(data[1],p,c,"BEFORE-TARGET")
+    result=client.post(base+f"/requirements/{requirement.id}/review",json={"approval_provenance":"LOCAL_OPERATOR"})
+    assert result.status_code==200
+    value=case("TRACED-LOCAL",[requirement.key]);value.update(preconditions=[],steps=[dict(index=1,action="Open page",expected="Welcome")],overall_expected_result="Welcome",required_evidence=["Heading"])
+    app.import_campaign_tests(p.id,c.id,name="Spec-based",format="CSV",content=csv_text([value]))
+    test=next(t for t in app.list_campaign_test_specifications(p.id,c.id).items if t.key==value["key"])
+    assert test.review_status=="READY_FOR_REVIEW"
+    selection=dict(criteria=dict(search="",status="ALL"),ids=[str(test.id)],expected_versions={str(test.id):content_hash(test)+":"+test.review_status})
+    summary=client.post(base.replace('/browser','')+'/test-design/selection',json=selection)
+    assert summary.status_code==200
+    body=dict(selection=selection,fingerprint=summary.json()["fingerprint"],approval_provenance="LOCAL_OPERATOR")
+    assert client.post(base+'/test-design/approval',json=body,headers={"origin":"http://evil.invalid"}).status_code==403
+    result=client.post(base+'/test-design/approval',json=body);assert result.status_code==200,result.text
+    assert result.json()["approved"]==1
+    assert app.get_campaign_test_specification_review(p.id,c.id,test.id).evidence.reviewer_label==LOCAL_OPERATOR_LABEL
+    # The generic operator path does not acquire the browser/source-free approval exemption.
+    value=case("UNTRACED-LOCAL");value.update(preconditions=[],steps=[dict(index=1,action="Open page",expected="Welcome")],overall_expected_result="Welcome",required_evidence=["Heading"])
+    app.import_campaign_tests(p.id,c.id,name="Needs browser context",format="CSV",content=csv_text([value]))
+    untraced=next(t for t in app.list_campaign_test_specifications(p.id,c.id).items if t.key==value["key"])
+    result=client.post(base+f"/tests/{untraced.id}/operator-review",json={"approval_provenance":"LOCAL_OPERATOR"})
+    assert result.status_code==409
+    assert app.get_campaign_test_specification_review(p.id,c.id,untraced.id).evidence is None
+    assert not batch[2].calls and not batch[3].calls and not batch[4].calls

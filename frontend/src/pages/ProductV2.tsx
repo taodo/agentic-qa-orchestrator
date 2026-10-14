@@ -1,6 +1,7 @@
+import { PageSelection } from '../components/PageSelection';
 import { BrowserRunSelected, useBrowserCapability } from '../components/BrowserRunSelected';
 import { BrowserBatchHistoryPanel } from './BrowserBatchPage';
-import { browserExecutable, browserReviewable, approveBrowserTests } from '../api/browserBatches';
+import { browserExecutable, browserReviewable, approveBrowserTests, approveLocalDesignSelection } from '../api/browserBatches';
 import { PreparationReview } from '../components/PreparationReview';
 import { isReservedBrowserFacts } from '../api/browser';
 import { BrowserFactsForm } from '../components/BrowserFactsForm';
@@ -74,20 +75,20 @@ function AnalyzeSource({source,changed}:{source:CampaignSource;changed:()=>Promi
   </>;
 }
 
-function GenerateFromFindings({changed}:{changed:()=>Promise<void>}) {
+function GenerateFromFindings({changed,localOperator=false,approvalPending=false}:{changed:()=>Promise<void>;localOperator?:boolean;approvalPending?:boolean}) {
   const {projectId:p,campaignId:c,base}=useCampaign();
   const findings=useResource(useCallback(()=>listRequirements(p,c),[p,c]));const [selected,setSelected]=useState<string[]>([]);
   const action=usePreparationAction<TestGeneration>();
   const rows=findings.data?.items??[];const approved=rows.filter(row=>selected.includes(row.id) && row.review_status==='APPROVED');
   async function refresh(){setSelected([]);await findings.reload();await changed();}
-  return <details className="panel" open><summary>Generate test cases from supported findings</summary>
-    <p>Review supported behavior before AI designs tests. Missing source facts remain unresolved; only explicitly approved findings are used. Choose up to 20 at a time.</p>
+  return <details id="test-design-generation" className="panel" open><summary tabIndex={0}>Generate Test Cases from supported findings</summary>
+    <p>{rows.length} returned findings · {rows.filter(row=>row.review_status==='APPROVED').length} approved for generation. Review supported behavior before AI designs tests. Missing source facts remain unresolved; only explicitly approved findings are used. Choose up to 20 at a time.</p>
     {findings.loading?<LoadingState>Loading supported findings…</LoadingState>:findings.error?<ErrorState error={findings.error}/>:<>
-      {!rows.length && <EmptyState>Analyze a specification first.</EmptyState>}
-      {rows.map(row=><label key={row.id}><input type="checkbox" checked={selected.includes(row.id)} disabled={action.busy || !['APPROVED','READY_FOR_REVIEW'].includes(row.review_status) || row.information_markers.length>0 || (!selected.includes(row.id) && selected.length>=20)} onChange={e=>setSelected(e.target.checked?[...selected,row.id]:selected.filter(id=>id!==row.id))}/>{row.key} — {row.title} · {designStatus(row.review_status)}</label>)}
-      <RequirementBulkApproval rows={rows} selected={selected} projectId={p} campaignId={c} changed={refresh}/>
       <p>Selected approved findings: {approved.length}. Approval is explicit human review, never AI approval.</p>
       <button className="button--primary" disabled={!approved.length || action.busy || action.error?.code==='HOST_AUTH_REQUIRED'} onClick={()=>void action.run(()=>generateTests(p,c,approved.map(row=>row.id)),async result=>{if(result.status==='SUCCEEDED')await changed();})}>{action.busy?'Generating…':'Generate test cases'}</button>
+      {!rows.length && <EmptyState>Analyze a specification first.</EmptyState>}
+      {rows.map(row=><label key={row.id}><input type="checkbox" checked={selected.includes(row.id)} disabled={action.busy || !['APPROVED','READY_FOR_REVIEW'].includes(row.review_status) || row.information_markers.length>0 || (!selected.includes(row.id) && selected.length>=20)} onChange={e=>setSelected(e.target.checked?[...selected,row.id]:selected.filter(id=>id!==row.id))}/>{row.key} — {row.title} · {row.review_status==='APPROVED'?'Approved for generation':row.review_status==='READY_FOR_REVIEW' && !row.information_markers.length?'Ready for your approval':'Needs information'}</label>)}
+      {approvalPending?<p role="status">Checking approval options...</p>:<RequirementBulkApproval localOperator={localOperator} rows={rows} selected={selected} projectId={p} campaignId={c} changed={refresh}/>}
       <TruncationNotice truncated={!!findings.data?.truncated}/><Link to={base+'/requirements'}>Inspect source findings / add missing information</Link>
     </>}{action.error && <ErrorState error={action.error}/>}{action.result && <p role="status">{action.result.status==='SUCCEEDED'?`Generated ${action.result.output?.generated_count??'an unknown number of'} test cases. Review remains explicit.`: `Generation ${action.result.status}. ${action.result.error_code??'Inspect Audit before continuing.'}`}</p>}
     {action.result && <details><summary>Generation audit</summary><AIActionSummary attempt={action.result} kind="generation" base={base} navigation={false}/></details>}
@@ -106,14 +107,14 @@ function Pagination({page,busy=false}:{page:ReturnType<typeof useTestPage>;busy?
 export function TestDesignPage() {
   const {projectId:p,campaignId:c,base,readiness}=useCampaign();
   const [search,setSearch]=useState(''),[filter,setFilter]=useState('ALL'),[number,setNumber]=useState(1),[size,setSize]=useState(10);
-  const capability=useBrowserCapability(p,c), sourceFree=capability.data?.source_free_review==='AVAILABLE';
+  const capability=useBrowserCapability(p,c), sourceFree=capability.data?.source_free_review==='AVAILABLE',localOperator=capability.data?.local_operator_review==='AVAILABLE';
   const [runSelection,setRunSelection]=useState<Record<string,CampaignTestSpecification>>({});
   const [selected,setSelected]=useState<string[]>([]),[all,setAll]=useState<{selection:DesignSelection;summary:SelectionSummary}>(),[notice,setNotice]=useState(''),[reviewer,setReviewer]=useState('');
   const page=useResource(useCallback(()=>designPage(p,c,{search,status:filter},number,size),[p,c,search,filter,number,size]));
   const exporting=usePreparationAction<Awaited<ReturnType<typeof exportTests>>>();
   const selecting=usePreparationAction<SelectionSummary>();const approving=usePreparationAction<Awaited<ReturnType<typeof approveSelection>>>();
   const selectionGeneration=useRef(0);
-  const visible=page.data?.items??[], chosen=visible.filter(row=>selected.includes(row.test.id));
+  const visible=page.data?.items??[], chosen=visible.filter(row=>selected.includes(row.test.id)||!!runSelection[row.test.id]);
   const eligible=all?.summary.eligible??chosen.filter(row=>sourceFree?browserReviewable(row.test) && ['READY_FOR_REVIEW','NEEDS_CLARIFICATION'].includes(row.test.review_status):row.approvable).length;
   const busy=selecting.busy||approving.busy;
   function clear(){selectionGeneration.current++;setSelected([]);setAll(undefined);setRunSelection({});}
@@ -123,33 +124,41 @@ export function TestDesignPage() {
   async function changed(){clear();await Promise.all([page.reload(),readiness.reload()]);}
   async function selectMatching(){
     const generation=++selectionGeneration.current, selection={criteria:{search,status:filter}};
-    await selecting.run(()=>selectionSummary(p,c,selection),async summary=>{if(generation===selectionGeneration.current){setSelected([]);setAll({selection,summary});}});
+    await selecting.run(()=>selectionSummary(p,c,selection),async summary=>{if(generation===selectionGeneration.current){setSelected([]);setRunSelection({});setAll({selection,summary});}});
   }
   async function approve(){
     const selection=all?.selection??{criteria:{search,status:filter},ids:chosen.map(row=>row.test.id),expected_versions:Object.fromEntries(chosen.map(row=>[row.test.id,`${row.content_hash}:${row.test.review_status}`]))};
     const generation=selectionGeneration.current;
     await approving.run(async()=>{
-      if(sourceFree && !all){return approveBrowserTests(p,c,chosen.map(row=>row.test.id),Object.fromEntries(chosen.map(row=>[row.test.id,row.content_hash])),reviewer);}
+      if(sourceFree && !all){return approveBrowserTests(p,c,chosen.map(row=>row.test.id),Object.fromEntries(chosen.map(row=>[row.test.id,row.content_hash])),localOperator?undefined:reviewer);}
       const summary=all?.summary??await selectionSummary(p,c,selection);
       // Explicit page selection also pins the versions that were displayed.
       if(generation!==selectionGeneration.current)throw new Error('Selection changed');
-      return approveSelection(p,c,selection,summary.fingerprint,reviewer);
+      return localOperator?approveLocalDesignSelection(p,c,selection,summary.fingerprint):approveSelection(p,c,selection,summary.fingerprint,reviewer);
     },async result=>{setNotice(`Approved ${result.approved}; skipped ${result.skipped} ineligible tests.`);await changed();});
   }
   async function download(format:'CSV'|'XLSX') {await exporting.run(()=>exportTests(p,c,chosen.map(row=>row.test.id),format),async result=>{saveExport(result);setNotice(`Exported ${result.count} selected cases as ${format}.`);});}
+  function togglePage(checked:boolean){
+    selectionGeneration.current++;setAll(undefined);setSelected(checked?visible.map(row=>row.test.id):[]);
+    setRunSelection(previous=>{const next={...previous};for(const row of visible){if(checked && browserExecutable(row.test))next[row.test.id]=row.test;else delete next[row.test.id];}return next;});
+  }
+  const pageSelected=visible.filter(row=>!!all||selected.includes(row.test.id)||!!runSelection[row.test.id]).length;
+  const pageOverLimit=new Set([...Object.keys(runSelection),...visible.filter(row=>browserExecutable(row.test)).map(row=>row.test.id)]).size>500;
   const totalPages=page.data?.total_pages??1,current=page.data?.page??number;
   const numbers=[...new Set([1,totalPages,current-1,current,current+1].filter(n=>n>=1 && n<=totalPages))].sort((a,b)=>a-b);
   return <><SectionHeader title="Test Design"/><p>Review, add information and approve the ready tests you need. Unresolved tests do not block unrelated ready work. Specifications are optional for imported executable browser tests.</p>
-    <nav className="actions"><Link className="button" to={base+'/test-specifications#test-import'}>Import Test Cases</Link><Link className="button" to={base+'/traceability'}>Generate from Specs</Link></nav>
+    <nav className="actions"><Link className="button" to={base+'/test-specifications#test-import'}>Import Test Cases</Link><a className="button" href="#test-design-generation" onClick={()=>{const panel=document.getElementById('test-design-generation') as HTMLDetailsElement|null;if(panel){panel.open=true;panel.querySelector<HTMLElement>('summary')?.focus();}}}>Generate from Specs</a></nav>
+    <GenerateFromFindings changed={changed} localOperator={localOperator} approvalPending={capability.loading}/>
     <section className="panel"><div className="actions"><label>Search tests<input disabled={busy} value={search} onChange={e=>{clear();setSearch(e.target.value);setNumber(1);}} maxLength={200}/></label><label>Design status<select disabled={busy} value={filter} onChange={e=>{clear();setFilter(e.target.value);setNumber(1);}}>{['ALL','READY','NEEDS_INFO','DRAFT','APPROVED'].map(value=><option key={value}>{value}</option>)}</select></label><button disabled={page.loading||busy} onClick={()=>void changed()}>Refresh tests</button></div>
-      <div className="actions"><button disabled={page.loading||busy||!visible.length||new Set([...Object.keys(runSelection),...visible.filter(row=>browserExecutable(row.test)).map(row=>row.test.id)]).size>500} onClick={()=>{selectionGeneration.current++;setAll(undefined);setSelected(visible.map(row=>row.test.id));setRunSelection(previous=>({...previous,...Object.fromEntries(visible.filter(row=>browserExecutable(row.test)).map(row=>[row.test.id,row.test]))}));}}>Select page ({visible.length})</button><button disabled={sourceFree||page.loading||busy||!page.data?.total||page.data.total>10000} onClick={()=>void selectMatching()}>Select all {page.data?.total??0} matching tests</button><button disabled={busy} onClick={clear}>Clear selection</button><span role="status">Selected: {all?.summary.matched??chosen.length} · {eligible} eligible for approval</span><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('CSV')}>Export CSV</button><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('XLSX')}>Export XLSX</button></div>
+      <div className="actions"><button disabled={page.loading||busy||!visible.length||new Set([...Object.keys(runSelection),...visible.filter(row=>browserExecutable(row.test)).map(row=>row.test.id)]).size>500} onClick={()=>togglePage(true)}>Select all on current page ({visible.length})</button><button disabled={sourceFree||page.loading||busy||!page.data?.total||page.data.total>10000} onClick={()=>void selectMatching()}>Select all {page.data?.total??0} matching tests for approval</button><button disabled={busy} onClick={clear}>Clear selection</button><span role="status">Selected: {all?.summary.matched??chosen.length} · {eligible} eligible for approval</span><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('CSV')}>Export CSV</button><button disabled={!chosen.length||exporting.busy} onClick={()=>void download('XLSX')}>Export XLSX</button></div>
       {!!page.data && page.data.total>10000 && <p className="notice">All-matching approval is limited to 10,000 tests. Narrow the search/filter.</p>}
-      <form aria-label="Approve selected tests" onSubmit={e=>{e.preventDefault();void approve();}}><label>Reviewer label<input required maxLength={64} disabled={busy} value={reviewer} onChange={e=>setReviewer(e.target.value)}/></label><button className="button--primary" disabled={!eligible||busy||page.loading||approving.error?.code==='HOST_AUTH_REQUIRED'} type="submit">{approving.busy?'Recording approvals…':`Approve selected (${eligible})`}</button><p className="hint">Explicit human approval only. Ineligible tests are skipped; any changed matching set/version rejects the selection.</p></form>
+      <p className="hint">Page selection includes only loaded rows. Browser Run uses explicitly selected approved Tests across visited pages, up to 500. All matching approves the filtered set; it does not add unseen Tests to Run or export. Approval and export use selected rows on this page.</p>
+      <form aria-label="Approve selected tests" onSubmit={e=>{e.preventDefault();void approve();}}>{capability.loading?<p role="status">Checking approval options...</p>:localOperator?<p>Confirm as the local operator. Approval evidence records this explicit human action without asserting an authenticated personal identity.</p>:<details open><summary>Approval provenance</summary><label>Reviewer label<input required maxLength={64} disabled={busy} value={reviewer} onChange={e=>setReviewer(e.target.value)}/></label></details>}<button className="button--primary" disabled={capability.loading||!eligible||busy||page.loading||approving.error?.code==='HOST_AUTH_REQUIRED'} type="submit">{approving.busy?'Recording approvals…':`Approve selected (${eligible})`}</button><p className="hint">Explicit human approval only. Ineligible tests are skipped; any changed matching set/version rejects the selection.</p></form>
       <BrowserRunSelected p={p} c={c} base={base} ids={Object.keys(runSelection)} capability={capability} disabled={busy}/><p className="hint">{Object.keys(runSelection).length} approved browser tests selected across pages (maximum 500). Browser selection uses explicit tests, not all-matching approval.</p>
       <p role="status">{notice}</p>{[exporting.error,selecting.error,approving.error].map((error,i)=>error && <ErrorState key={i} error={error}/>)}
-      {page.loading?<LoadingState>Loading test design…</LoadingState>:page.error?<ErrorState error={page.error}/>:!visible.length?<EmptyState>No matching tests. Import Test Cases, generate from Specs, or adjust the filter.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Design table" tabIndex={0}><table className="campaign-table"><thead><tr><th>Select</th><th>Test case</th><th>Priority</th><th>Status / approval</th><th>Review</th></tr></thead><tbody>{visible.map(row=><DesignTestRow key={row.test.id} row={row} sourceFree={sourceFree} selected={!!all||selected.includes(row.test.id)||!!runSelection[row.test.id]} disabled={busy||!!all || (!selected.includes(row.test.id) && !runSelection[row.test.id] && Object.keys(runSelection).length>=500)} select={checked=>{if(all)clear();setSelected(checked?[...selected,row.test.id]:selected.filter(id=>id!==row.test.id));setRunSelection(previous=>{const next={...previous};if(checked && browserExecutable(row.test))next[row.test.id]=row.test;else delete next[row.test.id];return next;});}} changed={changed}/>)}</tbody></table></div>}
+      {page.loading?<LoadingState>Loading test design…</LoadingState>:page.error?<ErrorState error={page.error}/>:!visible.length?<EmptyState>No matching tests. Import Test Cases, generate from Specs, or adjust the filter.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Design table" tabIndex={0}><table className="campaign-table"><thead><tr><th><PageSelection count={visible.length} selected={pageSelected} disabled={busy||!!all||(pageOverLimit && pageSelected<visible.length)} onChange={togglePage}/></th><th>Test case</th><th>Priority</th><th>Status / approval</th><th>Review</th></tr></thead><tbody>{visible.map(row=><DesignTestRow key={row.test.id} row={row} sourceFree={sourceFree} selected={!!all||selected.includes(row.test.id)||!!runSelection[row.test.id]} disabled={busy||!!all || (!selected.includes(row.test.id) && !runSelection[row.test.id] && Object.keys(runSelection).length>=500)} select={checked=>{if(all)clear();setSelected(checked?[...selected,row.test.id]:selected.filter(id=>id!==row.test.id));setRunSelection(previous=>{const next={...previous};if(checked && browserExecutable(row.test))next[row.test.id]=row.test;else delete next[row.test.id];return next;});}} changed={changed}/>)}</tbody></table></div>}
       <nav aria-label="Test Design pages" className="actions"><label>Rows per page<select disabled={busy} value={size} onChange={e=>{clear();setSize(Number(e.target.value));setNumber(1);}}>{[10,20,50,100].map(n=><option key={n}>{n}</option>)}</select></label><button disabled={current<=1||busy||page.loading} onClick={()=>setNumber(current-1)}>Previous page</button>{numbers.map((n,i)=><span key={n}>{i>0 && n-numbers[i-1]>1 && <span> … </span>}<button disabled={busy||page.loading} aria-current={n===current?'page':undefined} onClick={()=>setNumber(n)}>{n}</button></span>)}<button disabled={current>=totalPages||busy||page.loading} onClick={()=>setNumber(current+1)}>Next page</button><span>Page {current} of {totalPages} · {page.data?.total??0} matching tests</span></nav>
-    </section><GenerateFromFindings changed={changed}/><Link className="button" to={base+'/execution'}>Continue to Execution</Link></>;
+    </section><Link className="button" to={base+'/execution'}>Continue to Execution</Link></>;
 }
 function DesignTestRow({row,selected,disabled,select,changed,sourceFree=false}:{row:DesignRow;sourceFree?:boolean;selected:boolean;disabled:boolean;select:(checked:boolean)=>void;changed:()=>Promise<void>}) {
   const [open,setOpen]=useState(false);

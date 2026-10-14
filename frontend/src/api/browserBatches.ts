@@ -14,9 +14,14 @@ export const submitBrowserBatch=(p:string,c:string,body:{idempotency_key:string;
 export const getBrowserBatch=(p:string,c:string,id:string,after=0,signal?:AbortSignal)=>request<BrowserBatch>(batchPath(p,c,id)+'?limit=50&after_position='+after,{signal});
 export const listBrowserBatches=(p:string,c:string)=>request<CollectionPage<BrowserBatchHistory>>(batchPath(p,c)+'?limit=20');
 export const acknowledgeBrowserBatch=(p:string,c:string,id:string)=>request<BrowserBatch>(batchPath(p,c,id)+'/acknowledge-interruption',{method:'POST',body:'{}'});
-export const reviewBrowserTest=(p:string,c:string,id:string,body:{reviewer_label:string;note?:string;previous_hash?:string})=>request<ReviewState>(campaignPath(p,c)+'/browser/tests/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify(body)});
-export const approveBrowserTests=(p:string,c:string,test_ids:string[],expected_hashes:Record<string,string>,reviewer_label:string)=>request<{matched:number;approved:number;skipped:number}>(campaignPath(p,c)+'/browser/tests/approve-selection',{method:'POST',body:JSON.stringify({test_ids,expected_hashes,reviewer_label})});
+export const reviewBrowserTest=(p:string,c:string,id:string,body:{reviewer_label?:string;note?:string;previous_hash?:string;approval_provenance?:'LOCAL_OPERATOR'})=>request<ReviewState>(campaignPath(p,c)+'/browser/tests/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify(body)});
+export const approveBrowserTests=(p:string,c:string,test_ids:string[],expected_hashes:Record<string,string>,reviewer_label?:string)=>request<{matched:number;approved:number;skipped:number}>(campaignPath(p,c)+'/browser/tests/approve-selection',{method:'POST',body:JSON.stringify({test_ids,expected_hashes,...(reviewer_label?{reviewer_label}:{approval_provenance:'LOCAL_OPERATOR'})})});
 export function browserReviewable(test:CampaignTestSpecification) {
  return !test.unresolved_requirement_refs.length && test.information_markers.every(marker=>marker.kind==='MISSING_TRACEABILITY') && (!test.information_markers.length || !test.requirement_ids.length) && !!test.required_evidence.length && test.overall_expected_result!==null && test.steps.every(step=>step.expected!==null);
 }
 export const browserExecutable=(test:CampaignTestSpecification)=>test.review_status==='APPROVED' && browserReviewable(test);
+
+export const approveLocalFinding=(p:string,c:string,id:string)=>request<ReviewState>(campaignPath(p,c)+'/browser/requirements/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify({approval_provenance:'LOCAL_OPERATOR'})});
+
+export const approveLocalTest=(p:string,c:string,id:string)=>request<ReviewState>(campaignPath(p,c)+'/browser/tests/'+encodeURIComponent(id)+'/operator-review',{method:'POST',body:JSON.stringify({approval_provenance:'LOCAL_OPERATOR'})});
+export const approveLocalDesignSelection=(p:string,c:string,selection:import('./productV2').DesignSelection,fingerprint:string)=>request<{matched:number;approved:number;skipped:number}>(campaignPath(p,c)+'/browser/test-design/approval',{method:'POST',body:JSON.stringify({selection,fingerprint,approval_provenance:'LOCAL_OPERATOR'})});

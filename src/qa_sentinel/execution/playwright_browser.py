@@ -47,7 +47,7 @@ class PlaywrightBrowserExecutor:
             self.policy_for(run.target_snapshot).validate_envelope(envelope,run,test)
             if (run.executor_kind!="WEB_BROWSER" or run.runtime_identity!=self.identity or test.browser_plan!=envelope):
                 raise ValueError()
-            captures=sum(step.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL"} for step in envelope.plan.steps)
+            captures=sum(step.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL","ASSERT_PAGE_LOAD"} for step in envelope.plan.steps)
             if (envelope.plan.screenshot_limit or not captures or captures>envelope.plan.evidence_limit or envelope.plan.steps[0].action!="NAVIGATE"):
                 raise BrowserExecutionError(BrowserErrorCode.UNSUPPORTED)
             if any(key in os.environ for key in ("PLAYWRIGHT_NODEJS_PATH","PLAYWRIGHT_BROWSERS_PATH","NODE_OPTIONS","PWDEBUG","DEBUG")):
@@ -128,7 +128,7 @@ class PlaywrightBrowserExecutor:
                 async def navigate(url,timeout):
                     nonlocal redirecting
                     while True:
-                        try: await page.goto(url,wait_until="load",timeout=timeout)
+                        try: response=await page.goto(url,wait_until="load",timeout=timeout)
                         except Error:
                             if blocked:raise BrowserExecutionError(blocked[0]) from None
                             if not pending_redirect:
@@ -137,7 +137,7 @@ class PlaywrightBrowserExecutor:
                         if blocked: raise BrowserExecutionError(blocked[0])
                         if not pending_redirect:
                             redirecting=False
-                            return
+                            return response
                         await redirect_interstitial.wait()
                         url=pending_redirect.pop()
                 await context.route("**/*",handle)
@@ -174,15 +174,17 @@ class PlaywrightBrowserExecutor:
                     from .browser_observer import collect_page
                     observation_result=await collect_page(page,navigate,target,observation_context,self.identity)
                 else:
+                    loaded=None
                     for number,step in enumerate(envelope.plan.steps,1):
                         matched=True
-                        assertion_observation=step.action in {"ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL"}
+                        assertion_observation=step.action in {"ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL","ASSERT_PAGE_LOAD"}
                         try:
                             async with asyncio.timeout(step.timeout_ms/1000):
                                 action=step.action
                                 loc=self.locator(page,step.locator) if hasattr(step,"locator") else None
                                 if action=="NAVIGATE":
-                                    await navigate(relative_destination(target.base_url,step.path),step.timeout_ms)
+                                    response=await navigate(relative_destination(target.base_url,step.path),step.timeout_ms)
+                                    loaded=None if response is None else (response.url,response.status)
                                 elif action=="CLICK":
                                     href=await loc.get_attribute("href",timeout=step.timeout_ms)
                                     if href and urlsplit(href).scheme and urlsplit(href).scheme not in {"http","https"}:
@@ -203,6 +205,10 @@ class PlaywrightBrowserExecutor:
                                     actual=await loc.inner_text(timeout=step.timeout_ms)
                                     matched=actual==step.text if step.exact else step.text in actual
                                 elif action=="ASSERT_VISIBLE": matched=await loc.is_visible()==step.visible
+                                elif action=="ASSERT_PAGE_LOAD":
+                                    destination=relative_destination(target.base_url,step.path)
+                                    if loaded is None:raise BrowserExecutionError(BrowserErrorCode.INTERNAL)
+                                    matched=loaded[0]==page.url==destination and 200<=loaded[1]<300
                                 elif action=="ASSERT_URL": matched=page.url==relative_destination(target.base_url,step.path)
                                 else: raise BrowserExecutionError(BrowserErrorCode.PLAN)
                                 if pending_redirect:
@@ -220,7 +226,7 @@ class PlaywrightBrowserExecutor:
                             # Only the pinned transport can attest unreachable; SDK action text is untrusted.
                             raise BrowserExecutionError(blocked[0] if blocked else BrowserErrorCode.CRASH if not browser.is_connected() else BrowserErrorCode.INTERNAL) from None
                         if blocked: raise BrowserExecutionError(blocked[0])
-                        if step.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL"}:
+                        if step.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL","ASSERT_PAGE_LOAD"}:
                             observations.append((number,step.action,matched))
                         if not matched:
                             outcome="FAIL";break

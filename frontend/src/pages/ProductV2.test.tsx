@@ -54,7 +54,7 @@ it('does not upload unsupported files or oversized content',async()=>{
 it('shows needs-info cases alongside ready cases and explicit selected approval/export',async()=>{
   routes();open('test-design');await screen.findByRole('heading',{name:specification.title});
   expect(screen.getByText('NEEDS_INFO',{selector:'.badge'})).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('checkbox',{name:'Select PAY'}));expect(screen.getByRole('button',{name:'Export CSV'})).toBeEnabled();expect(screen.getByRole('button',{name:'Export XLSX'})).toBeEnabled();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select PAY'}));expect((screen.getByRole('checkbox',{name:'Select all on current page'}) as HTMLInputElement).indeterminate).toBe(true);expect(screen.getByRole('button',{name:'Export CSV'})).toBeEnabled();expect(screen.getByRole('button',{name:'Export XLSX'})).toBeEnabled();
   expect(writes()).toHaveLength(0);fireEvent.click(screen.getByRole('button',{name:'Clear selection'}));expect(screen.getByRole('button',{name:'Export CSV'})).toBeDisabled();
 });
 
@@ -150,7 +150,7 @@ it('exports the explicit current-page selection through the scoped export contra
 it('uses a disabled approval button until eligible page selection; mixed selection stays explicit',async()=>{
   routes();open('test-design');await screen.findByRole('heading',{name:specification.title});
   expect(screen.getByRole('button',{name:'Approve selected (0)'})).toBeDisabled();
-  fireEvent.click(screen.getByRole('button',{name:'Select page (2)'}));
+  fireEvent.click(screen.getByRole('button',{name:'Select all on current page (2)'}));
   expect(screen.getByRole('button',{name:'Approve selected (1)'})).toBeEnabled();
   expect(screen.getByText('Selected: 2 · 1 eligible for approval')).toBeInTheDocument();
   expect(writes()).toHaveLength(0);
@@ -195,7 +195,7 @@ it('selects all matching using a descriptor and pins approval to its backend fin
     if(url.endsWith('/test-design/selection')){selection=JSON.parse(options!.body as string);return response({fingerprint:'f'.repeat(64),matched:247,eligible:240});}
     if(url.endsWith('/test-design/approval')){approval=JSON.parse(options!.body as string);return response({matched:247,approved:240,skipped:7});}return undefined;
   });open('test-design');await screen.findByRole('heading',{name:specification.title});
-  fireEvent.click(screen.getByRole('button',{name:'Select all 247 matching tests'}));
+  fireEvent.click(screen.getByRole('button',{name:'Select all 247 matching tests for approval'}));
   expect(await screen.findByRole('button',{name:'Approve selected (240)'})).toBeEnabled();
   expect(selection).toEqual({criteria:{search:'',status:'ALL'}});
   fireEvent.change(screen.getByLabelText('Reviewer label'),{target:{value:'human'}});
@@ -208,7 +208,7 @@ it('selects all matching using a descriptor and pins approval to its backend fin
 it('discards delayed matching selection on navigation',async()=>{
   const pending=deferred<Response>();routes(url=>url.endsWith('/test-design/selection')?pending.promise:undefined);
   const view=open('test-design');await screen.findByRole('heading',{name:specification.title});
-  fireEvent.click(screen.getByRole('button',{name:'Select all 2 matching tests'}));view.unmount();
+  fireEvent.click(screen.getByRole('button',{name:'Select all 2 matching tests for approval'}));view.unmount();
   await act(async()=>{pending.resolve(response({fingerprint:'f'.repeat(64),matched:2,eligible:2}));});
   expect(writes()).toHaveLength(1);
 });
@@ -237,7 +237,7 @@ it('pins explicit page approval to displayed versions and never retries a stale 
     if(url.endsWith('/test-design/approval'))return response({error:{code:'REVIEW_CONFLICT',message:'Selection changed; select again.'}},409);
     return undefined;
   });open('test-design');await screen.findByRole('heading',{name:specification.title});
-  fireEvent.click(screen.getByRole('button',{name:'Select page (2)'}));
+  fireEvent.click(screen.getByRole('button',{name:'Select all on current page (2)'}));
   fireEvent.change(screen.getByLabelText('Reviewer label'),{target:{value:'human'}});
   fireEvent.click(screen.getByRole('button',{name:'Approve selected (1)'}));
   await screen.findByText(/Selection changed; select again/);
@@ -261,4 +261,113 @@ it('hides reserved browser facts from generic preconditions and edits ordinary t
   fireEvent.change(within(form).getByLabelText('Reviewer label'),{target:{value:'qa'}});fireEvent.change(within(form).getByLabelText('Facts / reason for this change'),{target:{value:'Ordinary change'}});
   fireEvent.submit(form);await waitFor(()=>expect(submitted).toBeDefined());
   expect((submitted!.design as Record<string,unknown>).preconditions).toEqual(['Changed ordinary setup']);expect(writes()).toHaveLength(1);
+});
+
+
+it('Analyze success continues directly to the one top generation workflow without a model call on landing',async()=>{
+  const source={id:'spec',name:'Spec',source_type:'MARKDOWN',purpose:'SPECIFICATION',status:'INGESTED',original_bytes:12,line_count:2,document:null,latest_extraction:{id:'analysis',status:'SUCCEEDED',output:{requirement_count:1},metadata:null}};
+  routes(url=>url===api+'/sources?limit=50&purpose=SPECIFICATION'?response(page([source])):undefined);
+  open('specification');await screen.findByText('Analysis saved. Review the supported findings in Test Design.');
+  fireEvent.click(screen.getByRole('link',{name:'Continue to Test Design'}));
+  const summary=await screen.findByText('Generate Test Cases from supported findings');
+  const panel=summary.closest('details')!;expect(panel.open).toBe(true);
+  expect(panel.compareDocumentPosition(screen.getByRole('region',{name:'Test Design table'})) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(screen.getByRole('link',{name:'Import Test Cases'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('link',{name:'Generate from Specs'}));expect(summary).toHaveFocus();
+  expect(screen.getAllByText('Generate Test Cases from supported findings')).toHaveLength(1);
+  expect(screen.getByRole('button',{name:'Generate test cases'})).toBeDisabled();
+  expect(writes()).toHaveLength(0);
+});
+
+it('normal local bulk approval has no reviewer/note fields and sends explicit provenance and displayed hashes',async()=>{
+  let approved:Record<string,unknown>|undefined;
+  routes((url,options)=>{
+    if(url===api+'/browser/capability')return response({planning:'AVAILABLE',execution:'AVAILABLE',automatic:'AVAILABLE',source_free_review:'AVAILABLE',local_operator_review:'AVAILABLE'});
+    if(url.includes('/test-design?'))return response({items:[{...good,test:{...specification,review_status:'READY_FOR_REVIEW',requirement_ids:[]},approvable:false}],total:1,page:1,page_size:10,total_pages:1});
+    if(url===api+'/browser/tests/approve-selection'){approved=JSON.parse(options!.body as string);return response({matched:1,approved:1,skipped:0});}
+    return undefined;
+  });open('test-design');await screen.findByRole('checkbox',{name:'Select PAY'});
+  const form=screen.getByRole('form',{name:'Approve selected tests'});
+  expect(within(form).queryByLabelText('Reviewer label')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Bulk reviewer label')).not.toBeInTheDocument();expect(screen.queryByLabelText('Bulk review note (optional)')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select PAY'}));
+  fireEvent.click(within(form).getByRole('button',{name:'Approve selected (1)'}));
+  await screen.findByText('Approved 1; skipped 0 ineligible tests.');
+  expect(approved).toEqual({test_ids:[specification.id],expected_hashes:{[specification.id]:'a'.repeat(64)},approval_provenance:'LOCAL_OPERATOR'});
+  expect(writes()).toHaveLength(1);
+});
+
+it('current-page header selection, page sizing and filters never select unloaded browser Tests',async()=>{
+  const approved={...specification,requirement_ids:[]},second={...approved,id:'second',key:'SECOND',title:'Second Test'};
+  let submitted:Record<string,unknown>|undefined;
+  routes((url,options)=>{
+    if(url===api+'/browser/capability')return response({planning:'AVAILABLE',execution:'AVAILABLE',automatic:'AVAILABLE',source_free_review:'AVAILABLE',local_operator_review:'AVAILABLE'});
+    if(url.includes('/test-design?')){const q=new URL(url,'http://local').searchParams;return response({items:[{test:q.get('page')==='2'?second:approved,content_hash:'a'.repeat(64),approvable:false}],total:100,page:Number(q.get('page')),page_size:Number(q.get('page_size')),total_pages:10});}
+    if(url===api+'/browser/batches'){submitted=JSON.parse(options!.body as string);return response({error:{code:'BROWSER_BATCH_NOT_CONFIGURED',message:'Offline fixture'}},409);}
+    return undefined;
+  });open('test-design');await screen.findByRole('checkbox',{name:'Select PAY'});
+  const header=screen.getByRole('checkbox',{name:'Select all on current page'});header.focus();expect(header).toHaveFocus();fireEvent.click(header);
+  expect(screen.getByRole('checkbox',{name:'Select PAY'})).toBeChecked();
+  fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByRole('checkbox',{name:'Select SECOND'});
+  expect(screen.getByRole('checkbox',{name:'Select all on current page'})).not.toBeChecked();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select all on current page'}));
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select all on current page'}));
+  expect(screen.getByText(/1 approved browser tests selected across pages/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Run selected'}));fireEvent.click(screen.getByRole('button',{name:'Run'}));
+  await screen.findByText('BROWSER_BATCH_NOT_CONFIGURED');expect(submitted?.test_specification_ids).toEqual([approved.id]);
+  fireEvent.click(screen.getByRole('button',{name:'Cancel'}));
+  fireEvent.change(screen.getByLabelText('Rows per page'),{target:{value:'20'}});await screen.findByRole('checkbox',{name:'Select PAY'});
+  expect(screen.getByText(/0 approved browser tests selected across pages/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select all on current page'}));fireEvent.change(screen.getByLabelText('Design status'),{target:{value:'READY'}});
+  await waitFor(()=>expect(screen.getByText(/0 approved browser tests selected across pages/)).toBeInTheDocument());
+  expect(screen.getByRole('button',{name:'Select all 100 matching tests for approval'})).toBeDisabled();
+  expect(writes()).toHaveLength(1);
+});
+
+
+it('the top generation panel calls the existing generation action exactly once after explicit approved selection',async()=>{
+  const pending=deferred<Response>();
+  routes((url,options)=>url===api+'/generate-tests' && options?.method==='POST'?pending.promise:undefined);
+  open('test-design');await screen.findByText('Generate Test Cases from supported findings');
+  const panel=document.getElementById('test-design-generation')!;
+  const selected=await within(panel).findByRole('checkbox',{name:/Approved for generation/});expect(selected).not.toBeChecked();
+  fireEvent.click(selected);const generate=within(panel).getByRole('button',{name:'Generate test cases'});
+  fireEvent.click(generate);fireEvent.click(generate);
+  await waitFor(()=>expect(writes()).toHaveLength(1));
+  expect(writes()[0][0]).toBe(api+'/generate-tests');
+  expect(JSON.parse(writes()[0][1]!.body as string)).toEqual({requirement_ids:[requirement.id]});
+  await act(async()=>pending.resolve(response({id:'generated',status:'SUCCEEDED',output:{generated_count:1},metadata:null})));
+  await screen.findByText('Generated 1 test cases. Review remains explicit.');expect(writes()).toHaveLength(1);
+});
+
+
+it('trusted local Spec-based bulk approval before Target selection needs no reviewer ceremony',async()=>{
+  let approval:Record<string,unknown>|undefined;
+  routes((url,options)=>{
+    if(url===api+'/browser/capability')return response({planning:'UNAVAILABLE',execution:'UNAVAILABLE',automatic:'UNAVAILABLE',source_free_review:'UNAVAILABLE',local_operator_review:'AVAILABLE'});
+    if(url.includes('/test-design?'))return response({items:[{...good,test:{...specification,review_status:'READY_FOR_REVIEW'},approvable:true}],total:1,page:1,page_size:10,total_pages:1});
+    if(url.endsWith('/test-design/selection'))return response({fingerprint:'f'.repeat(64),matched:1,eligible:1});
+    if(url.endsWith('/browser/test-design/approval')){approval=JSON.parse(options!.body as string);return response({matched:1,approved:1,skipped:0});}
+    return undefined;
+  });open('test-design');await screen.findByRole('checkbox',{name:'Select PAY'});
+  expect(screen.queryByLabelText('Bulk reviewer label')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Bulk review note (optional)')).not.toBeInTheDocument();
+  const form=screen.getByRole('form',{name:'Approve selected tests'});expect(within(form).queryByLabelText('Reviewer label')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select PAY'}));fireEvent.click(within(form).getByRole('button',{name:'Approve selected (1)'}));
+  await screen.findByText('Approved 1; skipped 0 ineligible tests.');
+  expect(approval).toEqual({selection:{criteria:{search:'',status:'ALL'},ids:[specification.id],expected_versions:{[specification.id]:'a'.repeat(64)+':READY_FOR_REVIEW'}},fingerprint:'f'.repeat(64),approval_provenance:'LOCAL_OPERATOR'});
+  expect(writes()).toHaveLength(2);
+});
+
+
+it('does not flash or accept reviewer ceremony while local capability is loading',async()=>{
+  const pending=deferred<Response>();
+  routes(url=>url===api+'/browser/capability'?pending.promise:undefined);
+  open('test-design');await screen.findByRole('checkbox',{name:'Select PAY'});
+  expect(screen.queryByLabelText('Reviewer label')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Bulk reviewer label')).not.toBeInTheDocument();
+  await act(async()=>pending.resolve(response({planning:'UNAVAILABLE',execution:'UNAVAILABLE',source_free_review:'UNAVAILABLE',local_operator_review:'AVAILABLE'})));
+  expect(screen.queryByLabelText('Reviewer label')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Bulk reviewer label')).not.toBeInTheDocument();
+  expect(writes()).toHaveLength(0);
 });

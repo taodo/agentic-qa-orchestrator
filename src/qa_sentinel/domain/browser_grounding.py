@@ -174,13 +174,13 @@ class GroundingOperation(Frozen):
 
 
 class GroundingAssertion(Frozen):
-    kind: Literal["TEXT","VISIBLE","URL"]
+    kind: Literal["TEXT","VISIBLE","URL","PAGE_LOAD"]
     element_ref: ElementRef | None
     path_ref: PathRef | None
 
     @model_validator(mode="after")
     def shape(self):
-        if (self.kind=="URL" and (self.path_ref is None or self.element_ref)) or (self.kind!="URL" and (self.element_ref is None or self.path_ref)):
+        if (self.kind in {"URL","PAGE_LOAD"} and (self.path_ref is None or self.element_ref)) or (self.kind not in {"URL","PAGE_LOAD"} and (self.element_ref is None or self.path_ref)):
             raise ValueError("Assertion reference shape")
         return self
 
@@ -228,7 +228,7 @@ class BrowserGroundingRecord(Frozen):
     contract_version: Literal["browser-grounding-v1"]=GROUNDING_VERSION
     scope: GroundingScope
     settings: ModelSettings
-    prompt_version: Literal["browser-grounder-v1"]="browser-grounder-v1"
+    prompt_version: Literal["browser-grounder-v1","browser-grounder-v2"]="browser-grounder-v1"
     status: Literal["STARTED","GROUNDED","NEEDS_ATTENTION","SYSTEM_ERROR"]="STARTED"
     started_at: AwareDatetime=Field(default_factory=now)
     finished_at: AwareDatetime | None=None
@@ -261,7 +261,7 @@ class BrowserGroundingRecord(Frozen):
 
 
 ACTION_HINTS={
-    "INSUFFICIENT_TEST_INFORMATION":"Clarify the Test action and literal expected result, then review the new Test version.",
+    "INSUFFICIENT_TEST_INFORMATION":"Clarify the Test action and supported expected behavior, then review the new Test version.",
     "AMBIGUOUS_TARGET":"Clarify which visible control the Test means; identical candidates cannot be chosen safely.",
     "UNSUPPORTED_BEHAVIOR":"Use a supported public-page Test without credentials or secret values.",
     "POLICY_REJECTED":"Review Target configuration with the local operator; network protections remain enforced.",

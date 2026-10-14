@@ -81,7 +81,7 @@ class BrowserObservation(Frozen):
     run_test_id: UUID
     plan_hash: Hash
     step_number: int = Field(ge=1, le=50, strict=True)
-    action: Literal["NAVIGATE", "ASSERT_TEXT", "ASSERT_VISIBLE", "ASSERT_URL"]
+    action: Literal["NAVIGATE", "ASSERT_TEXT", "ASSERT_VISIBLE", "ASSERT_URL", "ASSERT_PAGE_LOAD"]
     matched: bool = Field(strict=True)
     outcome: Literal["PASS", "FAIL"]
     browser_version: str = Field(min_length=1,max_length=64,pattern=r"^[0-9]+(\.[0-9]+){3}$",strict=True)
@@ -95,6 +95,8 @@ class BrowserObservation(Frozen):
         return self
 
     def safe_summary(self):
+        if self.action=="ASSERT_PAGE_LOAD":
+            return f"Browser step {self.step_number}: completed load at the sealed destination with a 2xx main response {'matched' if self.matched else 'mismatched'}."
         return f"Browser step {self.step_number}: {self.action} {'matched' if self.matched else 'mismatched'}."
 
 

@@ -6,7 +6,7 @@ import { campaign,readiness,specification } from '../test/campaigns';
 import { response,page,project,deferred } from '../test/fixtures';
 const base=`/projects/${campaign.project_id}/campaigns/${campaign.id}`,api='/api/v1'+base;
 const test={...specification,requirement_ids:[],preconditions:[]};
-const capability={planning:'AVAILABLE',execution:'AVAILABLE',automatic:'AVAILABLE',source_free_review:'AVAILABLE',automatic_reason:null};
+const capability={planning:'AVAILABLE',execution:'AVAILABLE',automatic:'AVAILABLE',source_free_review:'AVAILABLE',local_operator_review:'AVAILABLE',automatic_reason:null};
 const target={schema_version:'web-target-snapshot-v1',target_id:'target',project_id:project.id,name:'Frozen target',type:'WEB',environment:'LOCAL',base_url:'https://generic.invalid'};
 const item=(id:string,outcome:string)=>({id,test_id:id,position:Number(id),key:'CASE-'+id,title:'Case '+id,preparation_status:outcome==='NEEDS_ATTENTION'?'NEEDS_ATTENTION':'RUNNABLE',outcome,reason:outcome==='NEEDS_ATTENTION'?'GROUNDING_UNAVAILABLE':null,affected_step:outcome==='NEEDS_ATTENTION'?1:null,hint:outcome==='NEEDS_ATTENTION'?'Provide a visible supported control in the Test intent.':null,run_test_id:null,execution_status:null,qa_result:null,evidence_count:null,evidence:null});
 const batch={id:'batch-a',project_id:project.id,campaign_id:campaign.id,status:'COMPLETED',browser_mode:'HEADLESS',target_snapshot:target,selected_count:3,summary:{runnable:2,passed:1,failed:1,needs_attention:1,preparation_errors:0,not_evaluated:0},run:{id:'run',execution_status:'COMPLETED',qa_outcome:'FAIL'},processing:false,reconciliation_required:false,interruption_acknowledged_at:null,duration_seconds:2,items:page([item('1','FAIL'),item('2','PASS'),item('3','NEEDS_ATTENTION')])};
@@ -87,7 +87,7 @@ it('serially polls active progress and stops when persisted execution is termina
 it('retains explicit browser Test Design selection across server pages',async()=>{
  const second={...test,id:'second',key:'SECOND',title:'Second test'};
  routes(url=>url.includes('/test-design?')?response({items:[{test:url.includes('page=2')?second:test,content_hash:'a'.repeat(64),approvable:false}],total:2,page:url.includes('page=2')?2:1,total_pages:2,page_size:10}):undefined);
- open('test-design');fireEvent.click(await screen.findByRole('checkbox',{name:'Select PAY'}));fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByRole('checkbox',{name:'Select SECOND'});fireEvent.click(screen.getByRole('button',{name:'Select page (1)'}));
+ open('test-design');fireEvent.click(await screen.findByRole('checkbox',{name:'Select PAY'}));fireEvent.click(screen.getByRole('button',{name:'Next page'}));await screen.findByRole('checkbox',{name:'Select SECOND'});fireEvent.click(screen.getByRole('button',{name:'Select all on current page (1)'}));
  expect(screen.getByText(/2 approved browser tests selected across pages/)).toBeInTheDocument();fireEvent.click(screen.getByRole('button',{name:'Run selected'}));expect(screen.getByRole('dialog',{name:'Run 2 selected tests'})).toBeInTheDocument();expect(writes()).toHaveLength(0);
 });
 
