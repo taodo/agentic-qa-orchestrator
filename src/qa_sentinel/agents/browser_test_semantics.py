@@ -16,7 +16,7 @@ QUOTE = r'("(?:[^"\\]|\\.)*")'
 def outcome(expected):
     if re.fullmatch(r"(?:The )?(?:home )?page loads successfully\.?", expected, re.I):
         return Outcome(kind="PAGE_LOAD")
-    match = re.fullmatch(r'(?:The )?(?:main )?heading ' + QUOTE + r' is visible\.?', expected, re.I)
+    match = re.fullmatch(r'(?:The )?(?:main )?heading ' + QUOTE + r' is (?:visible|visibly displayed)\.?', expected, re.I)
     if match:
         return Outcome(kind="HEADING_VISIBLE", text=json.loads(match[1]))
     match = re.fullmatch(r'(?:The )?(?:main )?heading (?:reads|displays) ' + QUOTE + r'\.?', expected, re.I)
@@ -49,8 +49,13 @@ def assertion_for(step):
     if parsed.kind == "PAGE_LOAD":
         if not re.fullmatch(r'(?:Open|Visit|Navigate to) the (?:(?:[^./:]+? )?home )?page\.?', step.action, re.I):
             raise GroundingLimitation("INSUFFICIENT_TEST_INFORMATION", step.index)
-    elif not re.fullmatch(r'(?:Observe|Verify|Assert) (?:the )?(?:main )?heading(?: on the loaded page)?\.?', step.action, re.I):
-        raise GroundingLimitation("INSUFFICIENT_TEST_INFORMATION", step.index)
+    else:
+        heading_action = re.fullmatch(r'(?:Observe|Verify|Assert) (?:the )?(?:main )?heading(?: on the loaded page)?\.?', step.action, re.I)
+        # This wording explicitly claims visibility; a text-only outcome cannot drop it.
+        visible_heading_action = parsed.kind == "HEADING_VISIBLE" and re.fullmatch(
+            r'(?:Observe|Verify|Assert) (?:the )?visible page heading\.?', step.action, re.I)
+        if not (heading_action or visible_heading_action):
+            raise GroundingLimitation("INSUFFICIENT_TEST_INFORMATION", step.index)
     if parsed.text is not None and not parsed.text:
         raise GroundingLimitation("INSUFFICIENT_TEST_INFORMATION", step.index)
     return parsed

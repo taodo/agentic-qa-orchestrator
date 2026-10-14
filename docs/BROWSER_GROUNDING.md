@@ -147,3 +147,10 @@ The closed grammar accepts successful home-page load wording, a quoted heading b
 A quoted visible heading binds only to its exact observed heading identity with a unique current locator, and seals both exact text and visibility assertions. Duplicate/missing observed candidates cannot become runnable. Reference selection cannot omit, reorder or substitute operations/assertions. The exact revalidated manifest and per-step bindings are checked again at materialization; Playwright receives only the sealed plan. There is one bounded grounding call, no runtime model or healing.
 
 Evidence records the actual navigation and constituent assertions, including whether the successful-load check matched. It does not assert or claim a separate overall summary result. Existing browser policies, admission, budgets, immutable approval/Target/Test seals and zero-runnable/no-Run behavior remain authoritative. This adds no database migration or dependency; existing JSON contracts admit the additional typed action/assertion while historical shapes remain readable.
+
+
+### Phase 5.8F-R1: observed manual-smoke wording
+
+The same typed visibility outcome also accepts `The heading "Example Domain" is visibly displayed.` paired with `Observe the visible page heading.` These are bounded alternatives to the original smoke wording, not arbitrary prose execution. The visible-page action requires a visibility outcome; a text-only expectation cannot silently drop its visibility claim. Extra action/expectation clauses remain unsupported. Summary composition, unique current observed heading, exact text plus visibility, immutable approval/Target seals and reference-only model output validation are unchanged.
+
+See [R1 manual-smoke RCA and verification](PHASE_5_8F_R1_REPORT.md). Existing failed preparation receipts remain immutable; after activating the reviewed code, create a new explicit batch for retesting.
