@@ -14,7 +14,7 @@ from test_browser_execution_foundation import browser_candidate,ready,review
     *[(f'{stage}_{kind}', 'BROWSER_LAUNCH_FAILED') for stage in ('factory','driver','launch','context','page') for kind in ('os','runtime')],
     ('invalid_locator','BROWSER_INTERNAL_ERROR'),('strict_mode','BROWSER_INTERNAL_ERROR'),
     ('action_disconnect','BROWSER_CRASHED'),('transport','BROWSER_TARGET_UNREACHABLE'),
-    ('policy_action','BROWSER_NETWORK_DENIED')])
+    ('policy_action','BROWSER_NETWORK_DENIED'),('load_no_response','BROWSER_INTERNAL_ERROR')])
 def test_sdk_cleanup_and_truthful_error_mapping(browser_candidate,monkeypatch,mode,expected):
     _,run,test,envelope=browser_candidate
     closes=[];routes={};drafts=[];events={"page":{},"context":{},"browser":{}}
@@ -124,7 +124,7 @@ def test_sdk_cleanup_and_truthful_error_mapping(browser_candidate,monkeypatch,mo
     executor.mode="HEADED" if mode=="headed" else "HEADLESS"
     executor.identity=SimpleNamespace(browser_version='153.0.8010.12')
     plan=BrowserExecutionPlan(steps=({'action':'NAVIGATE','path':'/','timeout_ms':1000},
-        {'action':'ASSERT_TEXT','locator':{'strategy':'CSS','value':'h1'},'text':'Courses','timeout_ms':100 if mode in {'barrier_timeout','assertion_stall'} else 1000}),test_timeout_ms=1000)
+        ({'action':'ASSERT_PAGE_LOAD','path':'/','timeout_ms':1000} if mode=='load_no_response' else {'action':'ASSERT_TEXT','locator':{'strategy':'CSS','value':'h1'},'text':'Courses','timeout_ms':100 if mode in {'barrier_timeout','assertion_stall'} else 1000})),test_timeout_ms=1000)
     candidate=envelope.model_copy(update={'plan':plan})
     if expected=='CANCELLED':
         async def cancel():

@@ -17,6 +17,7 @@ class Capability(BaseModel):
     automatic: Literal['AVAILABLE','UNAVAILABLE']
     source_free_review: Literal['AVAILABLE','UNAVAILABLE']
     automatic_reason: str | None=None
+    local_operator_review: Literal['AVAILABLE','UNAVAILABLE']='UNAVAILABLE'
 
 class Empty(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -48,6 +49,7 @@ def capabilities(request,application,p):
     automatic=web and provider and application._browser_observer is not None and application._browser_grounding_reasoner is not None
     return Capability(planning='AVAILABLE' if provider else 'UNAVAILABLE',execution='AVAILABLE' if runtime else 'UNAVAILABLE',
         automatic='AVAILABLE' if automatic else 'UNAVAILABLE',source_free_review='AVAILABLE' if web else 'UNAVAILABLE',
+        local_operator_review='AVAILABLE' if allowed else 'UNAVAILABLE',
         automatic_reason=None if automatic else 'Configure a WEB Target, install the supported Chromium runtime and supply the model key in the local server environment.')
 def require_local(request,application,p):
     if not enabled(request,application,p):raise ApplicationError(Code.GENERATION_NOT_CONFIGURED)
@@ -96,16 +98,14 @@ def start(project_id:UUID,campaign_id:UUID,run_id:UUID,body:Empty,request:Reques
 from qa_sentinel.application.browser_batches import BatchView,BatchHistoryItem,CreateBrowserPreparation
 from qa_sentinel.application import ReviewState
 
-class BrowserApproval(Empty):
-    reviewer_label: str=Field(min_length=1,max_length=64,strict=True)
-    note: str | None=Field(default=None,min_length=1,max_length=1000,strict=True)
+from qa_sentinel.application.local_approval import LocalApproval
+
+class BrowserApproval(LocalApproval):
     previous_hash: Hash | None=None
 
-class BrowserBulkApproval(Empty):
+class BrowserBulkApproval(LocalApproval):
     test_ids: tuple[UUID,...]=Field(min_length=1,max_length=500)
     expected_hashes: dict[str,Hash]=Field(min_length=1,max_length=500)
-    reviewer_label: str=Field(min_length=1,max_length=64,strict=True)
-    note: str | None=Field(default=None,min_length=1,max_length=1000,strict=True)
 
 
 def require_web(request,application,p,c):
@@ -116,12 +116,12 @@ def require_web(request,application,p,c):
 @local_router.post('/tests/{test_id}/review',response_model=ReviewState)
 def source_free_review(project_id:UUID,campaign_id:UUID,test_id:UUID,body:BrowserApproval,request:Request,application:Application):
     require_web(request,application,project_id,campaign_id)
-    return application.review_source_free_campaign_test(project_id,campaign_id,test_id,**body.model_dump())
+    return application.review_source_free_campaign_test(project_id,campaign_id,test_id,previous_hash=body.previous_hash,**body.command())
 
 @local_router.post('/tests/approve-selection')
 def source_free_bulk_review(project_id:UUID,campaign_id:UUID,body:BrowserBulkApproval,request:Request,application:Application):
     require_web(request,application,project_id,campaign_id)
-    return application.approve_browser_tests(project_id,campaign_id,**body.model_dump())
+    return application.approve_browser_tests(project_id,campaign_id,test_ids=body.test_ids,expected_hashes=body.expected_hashes,**body.command())
 
 @local_router.post('/batches',response_model=BatchView,status_code=201)
 def submit_batch(project_id:UUID,campaign_id:UUID,body:CreateBrowserPreparation,request:Request,application:Application):
@@ -143,3 +143,25 @@ def get_batch(project_id:UUID,campaign_id:UUID,preparation_id:UUID,request:Reque
 def acknowledge_batch(project_id:UUID,campaign_id:UUID,preparation_id:UUID,body:Empty,request:Request,application:Application):
     require_local(request,application,project_id)
     return application.acknowledge_browser_batch_interruption(project_id,campaign_id,preparation_id)
+
+@local_router.post('/requirements/{requirement_id}/review',response_model=ReviewState)
+def local_requirement_review(project_id:UUID,campaign_id:UUID,requirement_id:UUID,body:LocalApproval,request:Request,application:Application):
+    require_local(request,application,project_id)
+    return application.review_campaign_requirement(project_id,campaign_id,requirement_id,**body.command())
+
+
+@local_router.post('/tests/{test_id}/operator-review',response_model=ReviewState)
+def local_test_review(project_id:UUID,campaign_id:UUID,test_id:UUID,body:LocalApproval,request:Request,application:Application):
+    require_local(request,application,project_id)
+    return application.review_campaign_test_specification(project_id,campaign_id,test_id,**body.command())
+
+from qa_sentinel.application.test_design import DesignSelection,ApprovalResult
+
+class LocalDesignApproval(LocalApproval):
+    selection: DesignSelection
+    fingerprint: Hash
+
+@local_router.post('/test-design/approval',response_model=ApprovalResult)
+def local_design_review(project_id:UUID,campaign_id:UUID,body:LocalDesignApproval,request:Request,application:Application):
+    require_local(request,application,project_id)
+    return application.test_design_selection(project_id,campaign_id,selection=body.selection,fingerprint=body.fingerprint,**body.command())

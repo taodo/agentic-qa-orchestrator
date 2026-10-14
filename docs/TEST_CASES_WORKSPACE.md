@@ -121,3 +121,14 @@ Use synthetic prepared data. These are operator checks, not a claimed live run.
 
 No XLSX, pagination expansion, bulk transaction, generic status override or new
 Test Case clarification editor is added. No migration or dependency is needed.
+
+
+## Phase 5.8F: Test Design smoke usability (#101)
+
+The normal Test Design page places its existing supported-findings generation panel before the Test table. Import Test Cases and Generate from Specs are obvious entry paths; Generate from Specs opens/focuses that same panel. It performs no selection, approval, generation or model call on landing. Explicit approved finding selection remains bounded to 20; unresolved work does not block unrelated ready Tests. Advanced Browser configuration and individual audit details remain secondary.
+
+Trusted local bulk approval removes reviewer/note inputs, including Spec-based design before Target selection. The advertised local-operator review capability is independent of source-free browser eligibility; existing Requirement/Test approval policies remain unchanged. The explicit command carries `approval_provenance: LOCAL_OPERATOR`; the local API derives `local-operator-v1` plus a fixed explanatory note in the existing immutable approval receipt. This records a human action through the trusted local host and explicitly asserts no authenticated personal identity. It is not a fabricated human name or automatic approval. Existing operator-asserted labels remain compatible in individual/legacy flows. Local Host/peer/Origin checks and session/CSRF middleware remain unchanged. Atomic displayed-hash checks in normal Test Design and sequential per-item conflict/auth handling in the legacy bounded list remain intact; approval never starts execution.
+
+Normal Test Design retains real server pages with 10/20/50/100 rows. The header checkbox and page action affect only current-page explicit IDs. Run selection retains explicitly chosen approved Tests across visited pages, maximum 500; revisiting a page truthfully shows those checked rows. Approval/export uses current-page explicit rows. Search/filter/page-size changes clear selection; page navigation never adds unknown records. Server all-matching approval remains a separate fingerprinted descriptor in the legacy compatible flow, and does not select unloaded IDs for Run/export.
+
+The legacy/import Test Cases list offers 10/20/50 rows over only its returned bounded records. Current-page selection and all-returned-filtered selection are separately named. Its pagination never implies global Campaign pagination; truncation remains visible and out-of-list audit records remain excluded from selection/approval/export/Run. Native header checkboxes expose checked/mixed state and normal keyboard behavior; summaries remain keyboard reachable and generation links move focus.

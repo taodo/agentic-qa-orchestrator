@@ -62,7 +62,7 @@ def test_normal_headless_real_chromium_no_spec_and_mixed_truth(batch,mock_openai
         id=created.json()["id"];assert not seen and not mock.calls
         assert worker.execute_one() and not worker.execute_one()
         done=client.get(base+"/batches/"+id).json()
-        assert done["run"] is not None, done["items"]
+        assert done["run"] is not None, json.dumps(done["items"])
         assert done["run"]["execution_status"]=="COMPLETED" and done["run"]["executor_kind"]=="WEB_BROWSER"
         assert done["browser_mode"]=="HEADLESS" and done["run"]["runtime_identity"]["engine"]=="CHROMIUM"
         assert [item["outcome"] for item in done["items"]["items"]]==(["FAIL","PASS","NEEDS_ATTENTION"] if mixed else ["PASS"])

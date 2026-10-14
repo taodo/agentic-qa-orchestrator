@@ -134,3 +134,16 @@ materialization. 5.8D owns final Run UX and headed/headless wiring. No Hermes/Je
 self-healing, authentication, source mutation or Phase 6 behavior is introduced.
 
 Task 5.8C–E consumes this bounded capability through [automatic batches](BROWSER_BATCHES.md). Grounding alone remains non-execution history.
+
+
+## Phase 5.8F: bounded human Test semantics (#101)
+
+New grounding receipts use `browser-grounder-v2`; v1 receipt intent validation remains literal and unchanged. Canonical imported and generated Tests use the same bridge, including zero Specification/Requirement Tests. The approved Test itself is never rewritten.
+
+The closed grammar accepts successful home-page load wording, a quoted heading being visible, and a heading reading/displaying quoted text. Home-page navigation means the configured Target base path, selected from the current observation; no route or selector is invented. A supported overall summary may compose the load and visible-heading outcomes, or be an exact conjunction of step expectations. Unaccounted summary claims, unsupported actions, secrets/authentication and other ambiguous prose remain Needs attention. Legacy literal expectations remain supported.
+
+`PAGE_LOAD` is a typed reference-only grounding assertion. It materializes as `ASSERT_PAGE_LOAD` at the sealed observed path. Secured Chromium checks that navigation completed its load event, the current destination equals the sealed destination, and the main document response was 2xx. Navigation errors/timeouts/policy violations remain system/preparation failures. Missing main-response data is a system error, never a manufactured QA failure. A completed HTTP error response yields a QA assertion FAIL when successful load was expected; status alone is not a global QA outcome for Tests that do not assert successful load.
+
+A quoted visible heading binds only to its exact observed heading identity with a unique current locator, and seals both exact text and visibility assertions. Duplicate/missing observed candidates cannot become runnable. Reference selection cannot omit, reorder or substitute operations/assertions. The exact revalidated manifest and per-step bindings are checked again at materialization; Playwright receives only the sealed plan. There is one bounded grounding call, no runtime model or healing.
+
+Evidence records the actual navigation and constituent assertions, including whether the successful-load check matched. It does not assert or claim a separate overall summary result. Existing browser policies, admission, budgets, immutable approval/Target/Test seals and zero-runnable/no-Run behavior remain authoritative. This adds no database migration or dependency; existing JSON contracts admit the additional typed action/assertion while historical shapes remain readable.

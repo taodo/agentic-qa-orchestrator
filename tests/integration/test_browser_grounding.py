@@ -310,7 +310,7 @@ def test_real_chromium_observation_and_reference_grounding(source_free,mock_open
         return value
     mock=mock_openai([choose]);app._browser_grounding_reasoner=BrowserGroundingReasoner(OpenAIModelAdapter(client=mock.client),ModelSettings(model="configured-model"))
     prep=local_active(data,observation_site,path=path,action=action);result=ground(data,prep)
-    assert (result.status,result.reason)==(status,reason)
+    assert (result.status,result.reason)==(status,reason), result.browser_error_code
     assert len(mock.calls)==(1 if result.observation_id else 0)
     assert rows(data[2])==(0,0,0,0)
     if result.observation_id:

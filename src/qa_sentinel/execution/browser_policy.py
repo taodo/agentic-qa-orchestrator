@@ -69,7 +69,7 @@ class BrowserExecutionPolicy(Frozen):
         plan = BrowserExecutionPlan.model_validate(plan.model_dump())
         target = self.validate_target(target)
         for step in plan.steps:
-            if step.action in {"NAVIGATE", "ASSERT_URL"}:
+            if step.action in {"NAVIGATE", "ASSERT_URL", "ASSERT_PAGE_LOAD"}:
                 relative_destination(target.base_url, step.path)
             if step.timeout_ms > plan.test_timeout_ms:
                 raise BrowserPolicyError("BROWSER_TIMEOUT_REJECTED")

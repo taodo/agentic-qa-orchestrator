@@ -45,7 +45,7 @@ def ground(app, project_id, campaign_id, preparation_id, item_id, attempt_id):
             if previous.status=="STARTED":raise ApplicationError(Code.GROUNDING_RECONCILIATION_REQUIRED)
             return previous  # Replay reads the durable result; never repeats external work.
         if root.status!="PREPARING" or item.status!="PREPARING":raise ApplicationError(Code.PREPARATION_INVALID_STATE)
-        record=BrowserGroundingRecord(scope=scope,settings=reasoner.settings)
+        record=BrowserGroundingRecord(scope=scope,settings=reasoner.settings,prompt_version="browser-grounder-v2")
         uow.browser_groundings.reserve(record);uow.commit()
     metadata=output=constraints=intent_hash=observation=None
     status,reason,step,browser_error="GROUNDED",None,None,None

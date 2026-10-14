@@ -20,6 +20,7 @@ ACTIONS = [
     {"action": "ASSERT_TEXT", "locator": LOC, "text": "Available"},
     {"action": "ASSERT_VISIBLE", "locator": LOC},
     {"action": "ASSERT_URL", "path": "/courses"},
+    {"action": "ASSERT_PAGE_LOAD", "path": "/courses"},
 ]
 
 
@@ -35,7 +36,7 @@ def test_all_actions_strict_discriminated_and_frozen():
     accepted = BrowserExecutionPlan(steps=tuple(ACTIONS))
     assert BrowserExecutionPolicy().validate(accepted, target()) == accepted
     schema = BrowserExecutionPlan.model_json_schema()
-    assert len(schema["properties"]["steps"]["items"]["discriminator"]["mapping"]) == 10
+    assert set(schema["properties"]["steps"]["items"]["discriminator"]["mapping"]) == {action["action"] for action in ACTIONS}
     with pytest.raises(ValidationError): accepted.test_timeout_ms = 1
     for step in ACTIONS:
         with pytest.raises(ValidationError): plan({**step, "script": "alert(1)"})
@@ -88,7 +89,7 @@ def test_text_and_input_bounds(action, field):
 
 
 @pytest.mark.parametrize("path", ["https://evil.example/path", "//evil.example/path", "file:///tmp/a", "javascript:alert(1)", "data:text/plain,x", "C:/file", "/\\evil.example", "/%2f%2fevil.example", "/%5cevil.example", "/%0aevil", "/bad%ZZ", "/bad path", "/"+"x"*2048])
-@pytest.mark.parametrize("action", ["NAVIGATE", "ASSERT_URL"])
+@pytest.mark.parametrize("action", ["NAVIGATE", "ASSERT_URL", "ASSERT_PAGE_LOAD"])
 def test_navigation_cannot_replace_authority(path, action):
     with pytest.raises((ValidationError, BrowserPolicyError)):
         BrowserExecutionPolicy().validate(plan({"action":action,"path":path}), target())

@@ -126,7 +126,13 @@ class AssertURL(Action):
     path: RelativeURL
 
 
-BrowserAction = Annotated[Navigate | Click | Fill | Select | Check | Press | WaitFor | AssertText | AssertVisible | AssertURL, Field(discriminator="action")]
+class AssertPageLoad(Action):
+    """Load event completed at the sealed destination with a 2xx main response."""
+    action: Literal["ASSERT_PAGE_LOAD"]
+    path: RelativeURL
+
+
+BrowserAction = Annotated[AssertPageLoad | Navigate | Click | Fill | Select | Check | Press | WaitFor | AssertText | AssertVisible | AssertURL, Field(discriminator="action")]
 
 
 class BrowserExecutionPlan(Frozen):

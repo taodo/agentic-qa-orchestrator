@@ -57,7 +57,7 @@ class BrowserPlanGenerator:
         constraints=validated_constraints(record,observation,test,approval)
         context=json.dumps({'prompt_version':'browser-plan-system-grounding-v1',
             'test_hash':input_hash(test,approval),'target_hash':record.scope.target_hash,
-            'approved_test_intent':test_intent(test,record.scope.target),'target':record.scope.target.model_dump(mode='json'),
+            'approved_test_intent':test_intent(test,record.scope.target,semantic=record.prompt_version!='browser-grounder-v1'),'target':record.scope.target.model_dump(mode='json'),
             'system_grounding':constraints.model_dump(mode='json'),
             'capabilities':{'plan_schema':BrowserPlanOutput.model_json_schema(),'redirects':False,'screenshots':False,
                 'inspection':False,'tools':False,'source_access':False}},ensure_ascii=False,sort_keys=True,separators=(',',':'))
@@ -101,6 +101,7 @@ def _validate_with_facts(record,output,policy,facts):
         if action.action=='WAIT_FOR' and action.condition not in inputs:raise ValueError('BROWSER_PLAN_GROUNDING_REJECTED')
         if not action.action.startswith('ASSERT_'):operations[binding-1].append(action.action)
         if action.action.startswith('ASSERT_'):
+            if action.action=='ASSERT_PAGE_LOAD':raise ValueError('BROWSER_PLAN_GROUNDING_REJECTED')
             expected=record.test.steps[binding-1].expected
             literal=action.text if action.action=='ASSERT_TEXT' else action.path if action.action=='ASSERT_URL' else 'VISIBLE' if action.visible else 'HIDDEN'
             if literal!=expected or (action.action=='ASSERT_TEXT' and not action.exact):raise ValueError('BROWSER_PLAN_GROUNDING_REJECTED')
@@ -112,13 +113,19 @@ def _validate_with_facts(record,output,policy,facts):
 
 
 def validate_system_candidate(record,observation,test,approval,output,policy):
-    from types import SimpleNamespace
     from .browser_grounding import validated_constraints
     from qa_sentinel.domain.browser_grounding import GroundingLimitation
     constraints=validated_constraints(record,observation,test,approval)
     if policy!=record.scope.policy:raise GroundingLimitation("POLICY_REJECTED")
-    output=_validate_with_facts(SimpleNamespace(test=test,target=record.scope.target),output,policy,constraints)
-    # Legacy global allowlists are necessary but insufficient for observation-local step mapping.
+    if type(output) is not BrowserPlanOutput:raise GroundingLimitation("INVALID_REFERENCE")
+    output=BrowserPlanOutput.model_validate(output.model_dump())
+    if output.disposition!="CANDIDATE":raise GroundingLimitation("GROUNDING_UNAVAILABLE")
+    try:policy.validate(output.plan,record.scope.target)
+    except ValueError:raise GroundingLimitation("POLICY_REJECTED") from None
+    captures=sum(s.action in {"NAVIGATE","ASSERT_TEXT","ASSERT_VISIBLE","ASSERT_URL","ASSERT_PAGE_LOAD"} for s in output.plan.steps)
+    if output.plan.redirect_limit or output.plan.screenshot_limit or captures>output.plan.evidence_limit:
+        raise GroundingLimitation("POLICY_REJECTED")
+    # The revalidated exact manifest preserves every step; global allowlists cannot justify substitution.
     if output.step_bindings!=constraints.step_bindings or tuple(action.model_dump(exclude={'timeout_ms'}) for action in output.plan.steps)!=tuple(action.model_dump(exclude={'timeout_ms'}) for action in constraints.action_manifest):
         raise GroundingLimitation("INVALID_REFERENCE")
     return output

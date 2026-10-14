@@ -37,23 +37,23 @@ describe('Test Cases current workspace',()=>{
     expect(screen.getByRole('heading',{name:'Test Cases',level:2})).toBeInTheDocument();expect(screen.getByRole('link',{name:'Test Design'})).toHaveAttribute('href',base+'/test-design');
     expect(within(caseRow(ready.title)).getByRole('rowheader')).toHaveTextContent('READYReady case');
     expect(screen.getByText(/Counts, selection and CSV exports cover returned current/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button',{name:'Ready for review (1)'}));expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(1);
-    fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));expect(within(screen.getByRole('table')).getByRole('checkbox')).toBeChecked();
-    fireEvent.click(within(screen.getByRole('heading',{name:'Test Cases',level:2}).closest('section')!).getByRole('button',{name:'Deselect all'}));expect(within(screen.getByRole('table')).getByRole('checkbox')).not.toBeChecked();
-    fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));fireEvent.click(screen.getByRole('button',{name:'Approved (1)'}));expect(within(screen.getByRole('table')).getByRole('checkbox')).not.toBeChecked();expect(screen.getByRole('button',{name:'Export selected CSV'})).toBeDisabled();
+    fireEvent.click(screen.getByRole('button',{name:'Ready for review (1)'}));expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button',{name:'Select all on current page'}));expect(within(screen.getByRole('table')).getByRole('checkbox',{name:'Select READY'})).toBeChecked();
+    fireEvent.click(within(screen.getByRole('heading',{name:'Test Cases',level:2}).closest('section')!).getByRole('button',{name:'Deselect all'}));expect(within(screen.getByRole('table')).getByRole('checkbox',{name:/^Select (READY|PAY)$/})).not.toBeChecked();
+    fireEvent.click(screen.getByRole('button',{name:'Select all on current page'}));fireEvent.click(screen.getByRole('button',{name:'Approved (1)'}));expect(within(screen.getByRole('table')).getByRole('checkbox',{name:/^Select (READY|PAY)$/})).not.toBeChecked();expect(screen.getByRole('button',{name:'Export selected CSV'})).toBeDisabled();
     expect(screen.getByText(/Additional Campaign cases are not included/)).toBeInTheDocument();expect(posts()).toHaveLength(0);
   });
   it.each(['test-import','test-generation'])('keeps the existing #%s action fragment reachable',async fragment=>{
     setup();open('/test-specifications#'+fragment);await screen.findByRole('table');
     expect(document.getElementById(fragment)?.closest('details')).toHaveAttribute('open');expect(posts()).toHaveLength(0);
   });
-  it('opens secondary import/generation explicitly without competing with Traceability',async()=>{
+  it('opens the clear import and generation entry paths explicitly',async()=>{
     setup();open();await screen.findByRole('table');
     const imports=document.getElementById('test-import-actions')!,generation=document.getElementById('test-generation-actions')!;
     expect(imports).not.toHaveAttribute('open');expect(generation).not.toHaveAttribute('open');
-    fireEvent.click(screen.getByRole('link',{name:'Import Existing Tests'}));expect(imports).toHaveAttribute('open');
-    fireEvent.click(screen.getByRole('link',{name:'Secondary generation selection'}));expect(generation).toHaveAttribute('open');
-    expect(screen.getByRole('link',{name:'Design tests in Traceability'})).toHaveAttribute('href',base+'/traceability');expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByRole('link',{name:'Import Test Cases'}));expect(imports).toHaveAttribute('open');
+    fireEvent.click(screen.getByRole('link',{name:'Generate from Specs'}));expect(generation).toHaveAttribute('open');
+    expect(screen.queryByRole('link',{name:'Design tests in Traceability'})).not.toBeInTheDocument();expect(posts()).toHaveLength(0);
   });
   it('broad row click toggles, keyboard works, and controls never double-toggle',async()=>{
     setup();open();await screen.findByRole('table');const row=caseRow(ready.title),detail=row.querySelector('details')!;
@@ -73,7 +73,7 @@ describe('Test Cases current workspace',()=>{
   it('shows a safe local export failure without sending a request',async()=>{
     setup();open();await screen.findByRole('table');const reads=vi.mocked(fetch).mock.calls.length;
     const NativeURL=URL;vi.stubGlobal('URL',class extends NativeURL{static createObjectURL=vi.fn(()=>{throw new Error('PRIVATE_EXPORT_ERROR');});});
-    fireEvent.click(screen.getByRole('button',{name:'Export visible CSV'}));
+    fireEvent.click(screen.getByRole('button',{name:'Export returned filtered CSV'}));
     expect(screen.getByText('CSV export could not be created. No export request was sent.')).toBeInTheDocument();expect(document.body).not.toHaveTextContent('PRIVATE_EXPORT_ERROR');expect(fetch).toHaveBeenCalledTimes(reads);
   });
   it('toggles by focused row Enter/Space while summary remains a native disclosure',async()=>{
@@ -93,7 +93,7 @@ describe('Test Cases current workspace',()=>{
     setup();open();const table=await screen.findByRole('table');
     const summary=screen.getByText('Approve selected Test Cases (0 eligible)'),panel=summary.closest('details')!;
     expect(panel).not.toHaveAttribute('open');expect(screen.getByRole('button',{name:'Export selected CSV'}).compareDocumentPosition(panel)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(panel.compareDocumentPosition(table)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));expect(summary).toHaveTextContent('Approve selected Test Cases (1 eligible)');
+    fireEvent.click(screen.getByRole('button',{name:'Select all on current page'}));expect(summary).toHaveTextContent('Approve selected Test Cases (1 eligible)');
     fireEvent.click(summary);expect(panel).toHaveAttribute('open');expect(within(panel).getByLabelText('Bulk reviewer label')).toBeVisible();expect(within(panel).getByRole('button',{name:'Confirm approval'})).toBeEnabled();
     expect(screen.getAllByRole('form',{name:'Bulk approve Test Cases'})).toHaveLength(1);expect(posts()).toHaveLength(0);
     fireEvent.click(screen.getByRole('button',{name:'Approved (1)'}));expect(summary).toHaveTextContent('(0 eligible)');expect(within(panel).getByRole('button',{name:'Confirm approval'})).toBeDisabled();
@@ -101,14 +101,14 @@ describe('Test Cases current workspace',()=>{
   it('bulk approves eligible selected cases sequentially and discloses individual failures',async()=>{
     const second={...ready,id:'second',key:'SECOND',title:'Second case'},bad={...ready,id:'bad',key:'BAD',title:'Missing evidence',required_evidence:[]};const pending=deferred<Response>();
     setup({cases:[specification,ready,blockedSpecification,second,bad],write:url=>url.endsWith('/ready/review')?pending.promise:response({error:{code:'REVIEW_CONFLICT',message:'Conflict'}},409)});
-    open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));submitBulk();submitBulk();
+    open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Select all on current page'}));submitBulk();submitBulk();
     expect(posts()).toHaveLength(1);expect(await screen.findByText('Recording approval 1 of 2…')).toBeInTheDocument();await act(async()=>pending.resolve(response({review_status:'APPROVED'})));
     const results=await screen.findByRole('list',{name:'Bulk approval results'});expect(results).toHaveTextContent('READY: Approval recorded.');expect(results).toHaveTextContent('SECOND: REVIEW_CONFLICT');
     expect(posts().map(([url])=>String(url))).toEqual([api+'/test-specifications/ready/review',api+'/test-specifications/second/review']);
     expect(vi.mocked(fetch).mock.calls.filter(([url])=>url===api+'/readiness')).toHaveLength(2);
   });
   it.each(['auth','leave'])('stops remaining bulk requests on %s',async mode=>{
-    const pending=deferred<Response>();setup({cases:[ready,{...ready,id:'second'}],write:()=>pending.promise});open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));submitBulk();
+    const pending=deferred<Response>();setup({cases:[ready,{...ready,id:'second'}],write:()=>pending.promise});open();await screen.findByRole('table');fireEvent.click(screen.getByRole('button',{name:'Select all on current page'}));submitBulk();
     if(mode==='leave'){fireEvent.click(screen.getByRole('link',{name:'Leave'}));await screen.findByRole('heading',{name:'Page not found'});}
     await act(async()=>pending.resolve(mode==='auth'?response({error:{code:'HOST_CSRF_REQUIRED',message:'Denied'}},403):response({})));
     if(mode==='auth')expect(await screen.findByRole('list',{name:'Bulk approval results'})).toHaveTextContent('1 remaining requests were not attempted');expect(posts()).toHaveLength(1);
@@ -116,13 +116,13 @@ describe('Test Cases current workspace',()=>{
   it('excludes a selected historical/out-of-list detail from counts, selection, approval and CSV',async()=>{
     setup({cases:[ready],truncated:true});const {blobs,click}=downloads();open('/test-specifications?test_spec_id=historical');
     const audit=await screen.findByRole('region',{name:'Selected Test Case audit detail'});expect(audit).toHaveTextContent('read-only');expect(within(audit).queryByRole('form')).not.toBeInTheDocument();
-    expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(1);fireEvent.click(screen.getByRole('button',{name:'Select all visible'}));fireEvent.click(screen.getByRole('button',{name:'Export selected CSV'}));
+    expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(2);fireEvent.click(screen.getByRole('button',{name:'Select all on current page'}));fireEvent.click(screen.getByRole('button',{name:'Export selected CSV'}));
     const rows=readCsv(await blobText(blobs[0]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe(ready.title);expect(rows.flat()).not.toContain(historical.title);
     expect(fetch).toHaveBeenCalledTimes(6);expect(posts()).toHaveLength(0);click.mockRestore();
   });
   it('exports exactly filtered visible/selected current cases, without extra reads or provider actions',async()=>{
     setup({truncated:true});const {blobs,click}=downloads();open();await screen.findByRole('table');const reads=vi.mocked(fetch).mock.calls.length;
-    fireEvent.click(screen.getByRole('button',{name:'Needs clarification (1)'}));fireEvent.click(screen.getByRole('button',{name:'Export visible CSV'}));
+    fireEvent.click(screen.getByRole('button',{name:'Needs clarification (1)'}));fireEvent.click(screen.getByRole('button',{name:'Export returned filtered CSV'}));
     expect(readCsv(await blobText(blobs[0]))[1][0]).toBe(blockedSpecification.title);
     fireEvent.click(screen.getByRole('button',{name:'All (3)'}));fireEvent.click(screen.getByRole('checkbox',{name:'Select PAY'}));fireEvent.click(screen.getByRole('button',{name:'Export selected CSV'}));
     const rows=readCsv(await blobText(blobs[1]));expect(rows).toHaveLength(2);expect(rows[1][0]).toBe(specification.title);expect(fetch).toHaveBeenCalledTimes(reads);expect(posts()).toHaveLength(0);click.mockRestore();
@@ -142,4 +142,23 @@ describe('Requirements broad row disclosure',()=>{
     row.focus();fireEvent.keyDown(row,{key:'Enter'});expect(detail.open).toBe(false);fireEvent.keyDown(row,{key:' '});expect(detail.open).toBe(true);
     fireEvent.click(within(row).getByText('Add info / Clarify'));await waitFor(()=>expect(row).toHaveAttribute('aria-expanded','false'));expect(posts()).toHaveLength(0);
   });
+});
+
+
+it('pages only returned records and distinguishes current page from returned filtered selection',async()=>{
+  const cases=Array.from({length:23},(_,i)=>({...ready,id:'case-'+i,key:'CASE'+i,title:'Test '+i}));
+  setup({cases,truncated:true});open();await screen.findByRole('table');
+  expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(11);
+  fireEvent.click(screen.getByRole('checkbox',{name:'Select all on current page'}));
+  expect(screen.getByText('Selected: 10 returned filtered Test Cases.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Next page'}));
+  expect(screen.getByRole('checkbox',{name:'Select all on current page'})).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button',{name:'Select all returned filtered records (23)'}));
+  expect(screen.getByText('Selected: 23 returned filtered Test Cases.')).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Rows per page'),{target:{value:'20'}});
+  expect(screen.getByText('Selected: 0 returned filtered Test Cases.')).toBeInTheDocument();
+  expect(within(screen.getByRole('table')).getAllByRole('checkbox')).toHaveLength(21);
+  expect(screen.getByText('Page 1 of 2 within 23 returned filtered records')).toBeInTheDocument();
+  expect(screen.getByText(/Additional Campaign cases are not included/)).toBeInTheDocument();
+  expect(posts()).toHaveLength(0);
 });

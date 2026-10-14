@@ -1,3 +1,4 @@
+import { PageSelection } from './PageSelection';
 import { useBrowserCapability, BrowserRunSelected } from './BrowserRunSelected';
 import { browserReviewable, browserExecutable } from '../api/browserBatches';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -35,8 +36,9 @@ function TestCaseDetails({test,base,reviewable,sourceFree=false,...scope}:{sourc
   </>;
 }
 export function TestCasesWorkspace({projectId,campaignId,base,campaignName,reloadReadiness}:{projectId:string;campaignId:string;base:string;campaignName:string;reloadReadiness:()=>Promise<void>}) {
-  const capability=useBrowserCapability(projectId,campaignId),sourceFree=capability.data?.source_free_review==='AVAILABLE';
+  const capability=useBrowserCapability(projectId,campaignId),sourceFree=capability.data?.source_free_review==='AVAILABLE',localOperator=capability.data?.local_operator_review==='AVAILABLE';
   const [params]=useSearchParams(), selectedId=params.get('test_spec_id'), location=useLocation();
+  const [pageNumber,setPageNumber]=useState(1),[pageSize,setPageSize]=useState(10);
   const [filter,setFilter]=useState('ALL'), [selected,setSelected]=useState<string[]>([]), [feedback,setFeedback]=useState('');
   const [importOpen,setImportOpen]=useState(location.hash==='#test-import'), [generationOpen,setGenerationOpen]=useState(location.hash==='#test-generation');
   useEffect(()=>{
@@ -52,35 +54,39 @@ export function TestCasesWorkspace({projectId,campaignId,base,campaignName,reloa
   useEffect(()=>{if(selectedId && tests.data)document.getElementById(`test-${selectedId}`)?.focus();},[selectedId,tests.data]);
   const current=!tests.loading && !tests.error ? tests.data?.items??[]:[];
   const visible=current.filter(test=>filter==='ALL' || test.review_status===filter);
+  const pages=Math.max(1,Math.ceil(visible.length/pageSize)),currentPage=Math.min(pageNumber,pages);
+  const pageRows=visible.slice((currentPage-1)*pageSize,currentPage*pageSize);
   const chosen=visible.filter(test=>selected.includes(test.id));
+  function togglePage(checked:boolean){setSelected(previous=>checked?[...new Set([...previous,...pageRows.map(row=>row.id)])]:previous.filter(id=>!pageRows.some(row=>row.id===id)));}
   async function changed(){await Promise.all([tests.reload(),reloadReadiness()]);heading.current?.focus();}
   function exportCsv(scope:'visible'|'selected') {
     const cases=scope==='visible'?visible:chosen;if(!cases.length)return;
-    try {downloadTestCases(cases,campaignName,scope);setFeedback(`Exported ${cases.length} ${scope} current Test Case(s). Only returned records were included.`);}
+    try {downloadTestCases(cases,campaignName,scope);setFeedback(`Exported ${cases.length} ${scope==='visible'?'returned filtered':'selected'} current Test Case(s). Only returned records were included.`);}
     catch {setFeedback('CSV export could not be created. No export request was sent.');}
   }
   const reviewScope={projectId,campaignId,changed:async()=>{setFeedback('Approval recorded.');await changed();}};
   return <><p role="status">{feedback}</p><section id="test-specification-results" className="panel"><div className="panel-heading"><h2 ref={heading} tabIndex={-1}>Test Cases</h2><button disabled={tests.loading} onClick={()=>void tests.reload()}>Refresh Test Cases</button></div>
-    <div className="actions"><a href="#test-import" onClick={()=>setImportOpen(true)}>Import Existing Tests</a><Link to={`${base}/traceability`}>Design tests in Traceability</Link><a href="#test-generation" onClick={()=>setGenerationOpen(true)}>Secondary generation selection</a></div>
-    <p className="hint">Executor-neutral Test Cases. Approval is human review, separate from coverage, Campaign readiness and execution results. Traceability is the primary AI generation workbench.</p>
+    <div className="actions"><a href="#test-import" onClick={()=>setImportOpen(true)}>Import Test Cases</a><a href="#test-generation" onClick={()=>{setGenerationOpen(true);document.getElementById('test-generation-actions')?.querySelector<HTMLElement>('summary')?.focus();}}>Generate from Specs</a></div>
+    <p className="hint">Executor-neutral Test Cases. Approval is human review, separate from coverage, Campaign readiness and execution results. Specifications are optional for imported executable browser tests.</p>
     {tests.loading?<LoadingState>Loading Test Cases…</LoadingState>:tests.error?<ErrorState error={tests.error} retry={()=>void tests.reload()}/>:tests.data && <>
       {selectedId && <p>Selected Test Case <Link to={`${base}/test-specifications`}>Clear selection</Link></p>}
-      <div className="actions" aria-label="Test Case status filters">{[['ALL','All'],['NEEDS_CLARIFICATION','Needs clarification'],['READY_FOR_REVIEW','Ready for review'],['APPROVED','Approved']].map(([value,label])=><button key={value} aria-pressed={filter===value} onClick={()=>{setFilter(value);setSelected([]);}}>{label} ({current.filter(test=>value==='ALL' || test.review_status===value).length})</button>)}</div>
+      <div className="actions" aria-label="Test Case status filters">{[['ALL','All'],['NEEDS_CLARIFICATION','Needs clarification'],['READY_FOR_REVIEW','Ready for review'],['APPROVED','Approved']].map(([value,label])=><button key={value} aria-pressed={filter===value} onClick={()=>{setFilter(value);setPageNumber(1);setSelected([]);}}>{label} ({current.filter(test=>value==='ALL' || test.review_status===value).length})</button>)}</div>
       <p className="hint">Counts, selection and CSV exports cover returned current records only, never global Campaign totals. Approved cases can be selected for export but are never resubmitted for approval.</p>
-      <div className="actions"><button onClick={()=>setSelected(visible.map(test=>test.id))}>Select all visible</button><button onClick={()=>setSelected([])}>Deselect all</button><span role="status">Selected: {chosen.length} visible current Test Cases.</span><button disabled={!visible.length} onClick={()=>exportCsv('visible')}>Export visible CSV</button><button disabled={!chosen.length} onClick={()=>exportCsv('selected')}>Export selected CSV</button></div>
+      <div className="actions"><button onClick={()=>togglePage(true)}>Select all on current page</button><button onClick={()=>setSelected(visible.map(test=>test.id))}>Select all returned filtered records ({visible.length})</button><button onClick={()=>setSelected([])}>Deselect all</button><span role="status">Selected: {chosen.length} returned filtered Test Cases.</span><button disabled={!visible.length} onClick={()=>exportCsv('visible')}>Export returned filtered CSV</button><button disabled={!chosen.length} onClick={()=>exportCsv('selected')}>Export selected CSV</button></div>
     </>}
     <BrowserRunSelected p={projectId} c={campaignId} base={base} ids={chosen.filter(browserExecutable).map(test=>test.id)} capability={capability}/>
-    <PreparationBulkApproval {...reviewScope} compact kind="Test Case" rows={visible.map(test=>({id:test.id,key:test.key,eligible:test.review_status==='READY_FOR_REVIEW' && !reviewBlocked(test)}))} selected={chosen.map(test=>test.id)}/>
+    {capability.loading?<p role="status">Checking approval options...</p>:<PreparationBulkApproval {...reviewScope} compact sourceFree={sourceFree} localOperator={localOperator} kind="Test Case" rows={visible.map(test=>({id:test.id,key:test.key,eligible:sourceFree?browserReviewable(test) && ['READY_FOR_REVIEW','NEEDS_CLARIFICATION'].includes(test.review_status):test.review_status==='READY_FOR_REVIEW' && !reviewBlocked(test)}))} selected={chosen.map(test=>test.id)}/>}
     {!tests.loading && !tests.error && tests.data && <>
-      {!visible.length?<EmptyState>No Test Cases in this view.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Cases table" tabIndex={0}><table className="campaign-table test-cases-table"><caption>Test Cases — returned current versions</caption><thead><tr>{['Select','Test Case','Requirement(s)','Type','Priority','Status','Steps','Actions'].map(label=><th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{visible.map(test=><PreparationRow key={test.id} id={`test-${test.id}`} initialOpen={selectedId===test.id}>{({open,setOpen,detailId})=><>
+      {!visible.length?<EmptyState>No Test Cases in this view.</EmptyState>:<div className="campaign-table-scroll" role="region" aria-label="Test Cases table" tabIndex={0}><table className="campaign-table test-cases-table"><caption>Test Cases — returned current versions</caption><thead><tr>{['Select','Test Case','Requirement(s)','Type','Priority','Status','Steps','Actions'].map(label=><th scope="col" key={label}>{label==='Select'?<PageSelection count={pageRows.length} selected={pageRows.filter(row=>selected.includes(row.id)).length} disabled={tests.loading} onChange={togglePage}/>:label}</th>)}</tr></thead><tbody>{pageRows.map(test=><PreparationRow key={test.id} id={`test-${test.id}`} initialOpen={selectedId===test.id}>{({open,setOpen,detailId})=><>
         <td><input type="checkbox" aria-label={`Select ${test.key}`} checked={chosen.some(item=>item.id===test.id)} onChange={event=>setSelected(event.target.checked?[...chosen.map(item=>item.id),test.id]:chosen.filter(item=>item.id!==test.id).map(item=>item.id))}/></td>
         <th scope="row"><span className="record-key">{test.key}</span><h3>{test.title}</h3></th><td>{test.requirement_ids.length} linked</td><td>{test.test_type}</td><td>{test.priority}</td><td><CampaignStatusBadge status={test.review_status}/></td><td>{test.steps.length}</td>
         <td><details id={detailId} open={open} onToggle={event=>setOpen(event.currentTarget.open)}><summary>Review / details</summary><TestCaseDetails {...reviewScope} sourceFree={sourceFree} test={test} base={base} reviewable/></details></td>
       </>}</PreparationRow>)}</tbody></table></div>}
+      <nav className="actions" aria-label="Returned Test Case pages"><label>Rows per page<select value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setPageNumber(1);setSelected([]);}}>{[10,20,50].map(size=><option key={size}>{size}</option>)}</select></label><button disabled={currentPage===1} onClick={()=>setPageNumber(currentPage-1)}>Previous page</button><span>Page {currentPage} of {pages} within {visible.length} returned filtered records</span><button disabled={currentPage===pages} onClick={()=>setPageNumber(currentPage+1)}>Next page</button></nav>
       <TruncationNotice truncated={tests.data.truncated}/>{tests.data.truncated && <p className="notice">CSV exports are bounded to returned visible/selected current Test Cases. Additional Campaign cases are not included.</p>}
       {tests.data.selectedDetail && <section id={`test-${tests.data.selectedDetail.id}`} tabIndex={-1} aria-label="Selected Test Case audit detail"><h3>{tests.data.selectedDetail.title}</h3><p>The selected Test Case is outside the bounded current list and is included through a single detail read. It may be historical; it is read-only and excluded from table counts, selection, approval and CSV.</p><CampaignStatusBadge status={tests.data.selectedDetail.review_status}/><TestCaseDetails {...reviewScope} sourceFree={sourceFree} test={tests.data.selectedDetail} base={base} reviewable={false}/></section>}
     </>}
   </section><details id="test-import-actions" className="panel campaign-section" open={importOpen} onToggle={event=>setImportOpen(event.currentTarget.open)}><summary>Import Existing Tests</summary><PreparationImport projectId={projectId} campaignId={campaignId} changed={changed}/></details>
-    <details id="test-generation-actions" className="panel campaign-section" open={generationOpen} onToggle={event=>setGenerationOpen(event.currentTarget.open)}><summary>Secondary generation selection</summary><PreparationGeneration projectId={projectId} campaignId={campaignId} changed={changed}/></details>
+    <details id="test-generation-actions" className="panel campaign-section" open={generationOpen} onToggle={event=>setGenerationOpen(event.currentTarget.open)}><summary tabIndex={0}>Generate from Specs</summary><PreparationGeneration projectId={projectId} campaignId={campaignId} changed={changed}/></details>
   </>;
 }
