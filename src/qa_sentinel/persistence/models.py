@@ -886,3 +886,68 @@ class BrowserBatchRunItemRow(Base):
 event.listen(BrowserBatchRunItemRow.__table__,"after_create",DDL("CREATE TRIGGER batch_run_item_insert BEFORE INSERT ON browser_batch_run_items WHEN NOT EXISTS (SELECT 1 FROM browser_batch_plans p,qa_run_tests t,qa_runs r WHERE p.id=NEW.plan_receipt_id AND p.project_id=NEW.project_id AND p.campaign_id=NEW.campaign_id AND p.preparation_id=NEW.preparation_id AND p.item_id=NEW.item_id AND t.id=NEW.run_test_id AND t.run_id=NEW.run_id AND t.project_id=NEW.project_id AND t.campaign_id=NEW.campaign_id AND t.original_test_specification_id=p.test_id AND json_extract(t.browser_plan,'$.plan_hash')=p.plan_hash AND r.id=NEW.run_id AND r.preparation_id=NEW.preparation_id) BEGIN SELECT RAISE(ABORT,'Batch Run item must bind the exact sealed plan'); END"))
 event.listen(BrowserBatchRunItemRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_run_items_no_delete BEFORE DELETE ON browser_batch_run_items BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))
 event.listen(BrowserBatchRunItemRow.__table__,"after_create",DDL("CREATE TRIGGER browser_batch_run_items_no_update BEFORE UPDATE ON browser_batch_run_items BEGIN SELECT RAISE(ABORT,'Batch provenance is immutable'); END"))
+
+
+class ExperienceRow(Base):
+    __tablename__ = "experiences"
+    __table_args__ = (
+        UniqueConstraint("id", "campaign_id", "project_id", name="uq_experience_owner"),
+        UniqueConstraint("campaign_id", "idempotency_key", name="uq_experience_idempotency"),
+        ForeignKeyConstraint(["campaign_id", "project_id"], ["qa_campaigns.id", "qa_campaigns.project_id"], name="fk_experience_campaign", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["target_id", "project_id"], ["targets_under_test.id", "targets_under_test.project_id"], name="fk_experience_target", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("state IN ('CANDIDATE','VALIDATED','PROMOTED','SUPERSEDED','RETIRED')", name="ck_experience_state"),
+        CheckConstraint("kind IN ('EVIDENCE_COMPLETENESS','PLAN_SEPARATION','FRESHNESS_PRECONDITION','QA_FAIL_CLASSIFICATION','APPROVAL_PROVENANCE')", name="ck_experience_kind"),
+        CheckConstraint("length(content_hash)=64 AND length(target_snapshot_hash)=64 AND length(idempotency_key)=36 AND freshness_seconds BETWEEN 1 AND 7776000", name="ck_experience_bounds"),
+        CheckConstraint("julianday(created_at) IS NOT NULL AND julianday(expires_at)>julianday(created_at) AND length(CAST(payload AS BLOB))<=8192", name="ck_experience_times"),
+        CheckConstraint("json_extract(payload,'$.schema_version') IS 'experience-v1' AND json_extract(payload,'$.id') IS id AND json_extract(payload,'$.scope.project_id') IS project_id AND json_extract(payload,'$.scope.campaign_id') IS campaign_id AND json_extract(payload,'$.scope.target_id') IS target_id AND json_extract(payload,'$.scope.target_snapshot_hash') IS target_snapshot_hash AND json_extract(payload,'$.state') IS state AND json_extract(payload,'$.kind') IS kind AND json_extract(payload,'$.idempotency_key') IS idempotency_key AND json_extract(payload,'$.content_hash') IS content_hash AND json_extract(payload,'$.freshness_seconds') IS freshness_seconds AND json_array_length(payload,'$.references') BETWEEN 1 AND 4", name="ck_experience_payload"),
+        Index("ix_experience_scope", "project_id", "campaign_id", "target_id", "target_snapshot_hash", "id"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    target_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(36), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(ISODateTime(), nullable=False)
+    freshness_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
+    payload: Mapped[Any] = mapped_column(JSON, nullable=False)
+
+
+class ExperienceSourceRow(Base):
+    __tablename__ = "experience_sources"
+    __table_args__ = (
+        UniqueConstraint("experience_id", "evidence_id", name="uq_experience_source"),
+        ForeignKeyConstraint(["experience_id", "campaign_id", "project_id"], ["experiences.id", "experiences.campaign_id", "experiences.project_id"], name="fk_experience_source_owner", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["run_test_id", "run_id", "campaign_id", "project_id"], ["qa_run_tests.id", "qa_run_tests.run_id", "qa_run_tests.campaign_id", "qa_run_tests.project_id"], name="fk_experience_source_test", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("position BETWEEN 1 AND 4", name="ck_experience_source_position"),
+    )
+    experience_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    campaign_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    evidence_id: Mapped[str] = mapped_column(String(36), ForeignKey("qa_run_evidence.id", name="fk_experience_source_evidence", deferrable=True, initially="DEFERRED"), nullable=False)
+    run_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    run_test_id: Mapped[str] = mapped_column(String(36), nullable=False)
+
+
+_EXPERIENCE_SOURCE_GUARD = (
+    "CREATE TRIGGER experience_source_insert BEFORE INSERT ON experience_sources "
+    "WHEN NOT EXISTS (SELECT 1 FROM experiences x,qa_run_evidence e,json_each(x.payload,'$.references') r "
+    "WHERE x.id=NEW.experience_id AND x.campaign_id=NEW.campaign_id AND x.project_id=NEW.project_id "
+    "AND e.id=NEW.evidence_id AND e.run_id=NEW.run_id AND e.run_test_id=NEW.run_test_id "
+    "AND e.campaign_id=NEW.campaign_id AND e.project_id=NEW.project_id "
+    "AND CAST(r.key AS INTEGER)=NEW.position-1 AND json_extract(r.value,'$.source_type')='QA_RUN_EVIDENCE' "
+    "AND json_extract(r.value,'$.evidence_id')=NEW.evidence_id AND json_extract(r.value,'$.run_id')=NEW.run_id "
+    "AND json_extract(r.value,'$.run_test_id')=NEW.run_test_id) "
+    "BEGIN SELECT RAISE(ABORT,'Experience source identity mismatch'); END"
+)
+event.listen(ExperienceSourceRow.__table__, "after_create", DDL(_EXPERIENCE_SOURCE_GUARD))
+for _table in (ExperienceRow.__table__, ExperienceSourceRow.__table__):
+    for _action in ("UPDATE", "DELETE"):
+        event.listen(_table, "after_create", DDL(
+            f"CREATE TRIGGER {_table.name}_no_{_action.lower()} BEFORE {_action} ON {_table.name} "
+            "BEGIN SELECT RAISE(ABORT,'Experience history is immutable'); END"))

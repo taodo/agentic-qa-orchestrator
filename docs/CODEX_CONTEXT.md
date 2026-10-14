@@ -493,3 +493,14 @@ whole-batch Results and explicit non-retrying interruption acknowledgement. Head
 mode changes only executor launch visibility; observer inspection stays headless.
 Default Playwright cache only; runtime environment overrides remain denied. Public
 hosts stay fake-only. Grounding limits, reserved facts and source/pytest remain intact.
+
+## Phase 6.6 durable Experience Store (dormant stacked foundation)
+
+Read [Experience Store](PHASE_6_EXPERIENCE_STORE.md) for the internal service,
+closed advisory contracts and migration 0019. Exact Project/Campaign/Target snapshot
+scope and actual Run/Test evidence hashes support bounded relational retrieval.
+Normal creation is CANDIDATE only; no promotion/HTTP/agent/host integration exists.
+Eligible fixtures are explicitly unvalidated advisory candidates, never execution
+or approval authority. Current observation integration remains deferred. No raw
+memory/DOM/selector/secret field is accepted. Explicit migration is required; local
+startup still does not migrate. Existing browser/Run/evidence contracts are intact.

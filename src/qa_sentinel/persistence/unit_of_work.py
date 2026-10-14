@@ -1,6 +1,7 @@
 """Explicit commit; otherwise all pending changes roll back on context exit."""
 from sqlalchemy.orm import Session, sessionmaker
 from .read_queries import ReadQueries
+from .experiences import ExperienceRepository
 from .operations import OperationalQueries
 from .execution_jobs import ExecutionJobRepository
 from .qa_runs import QARunRepository
@@ -34,6 +35,7 @@ class UnitOfWork:
         self.campaigns = QACampaignRepository(self.session)
         self.targets = TargetRepository(self.session)
         self.qa_runs = QARunRepository(self.session)
+        self.experiences = ExperienceRepository(self.session)
         self.browser_plans = BrowserPlanRepository(self.session)
         self.browser_preparations = BrowserPreparationRepository(self.session)
         self.browser_groundings = BrowserGroundingRepository(self.session)

@@ -5,7 +5,7 @@ from qa_sentinel.persistence.database import create_engine
 from qa_sentinel.persistence.models import Base
 
 
-EXPECTED={"browser_batch_submissions","browser_batch_plans","browser_batch_run_items","browser_grounding_observations","browser_groundings","browser_preparations","browser_plan_generations","browser_plan_acceptances","campaign_test_edits","targets_under_test","campaign_targets","qa_run_evidence","campaign_clarifications","campaign_requirement_revisions","qa_runs","qa_run_requirements","qa_run_tests","campaign_requirement_reviews","campaign_test_reviews","campaign_test_imports","campaign_test_generations","campaign_test_specifications","campaign_test_requirement_links","campaign_sources","campaign_requirement_extractions","campaign_requirements","qa_campaigns","execution_jobs","projects","tasks","invocations","artifacts","transitions","gate_evaluations","decisions",
+EXPECTED={"experiences","experience_sources","browser_batch_submissions","browser_batch_plans","browser_batch_run_items","browser_grounding_observations","browser_groundings","browser_preparations","browser_plan_generations","browser_plan_acceptances","campaign_test_edits","targets_under_test","campaign_targets","qa_run_evidence","campaign_clarifications","campaign_requirement_revisions","qa_runs","qa_run_requirements","qa_run_tests","campaign_requirement_reviews","campaign_test_reviews","campaign_test_imports","campaign_test_generations","campaign_test_specifications","campaign_test_requirement_links","campaign_sources","campaign_requirement_extractions","campaign_requirements","qa_campaigns","execution_jobs","projects","tasks","invocations","artifacts","transitions","gate_evaluations","decisions",
           "errors","events","audit_records","test_runs","failure_fingerprints",
           "requirements","acceptance_criteria"}
 
@@ -29,7 +29,7 @@ def test_fresh_upgrade_tables_revision_and_schema_match(migrated_factory):
     factory,engine,config=migrated_factory
     assert set(inspect(engine).get_table_names())==EXPECTED|{"alembic_version"}
     with engine.connect() as connection:
-        assert connection.scalar(text("select version_num from alembic_version"))=="0018"
+        assert connection.scalar(text("select version_num from alembic_version"))=="0019"
     reference=create_engine()
     try:
         Base.metadata.create_all(reference)
