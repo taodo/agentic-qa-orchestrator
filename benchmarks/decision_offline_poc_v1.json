@@ -1,0 +1,25 @@
+{
+  "mode": "offline-poc",
+  "version": "decision-routing-v1",
+  "corpus_sha256": "68c9d54a5e5ac029f54234523cebc0db11f3d46207c5693c174d9b8aecedb69d",
+  "samples": 20,
+  "route_correct": 20,
+  "route_accuracy": 1.0,
+  "false_escalation": 0,
+  "missed_escalation": 6,
+  "policy_violations": 0,
+  "invalid_output": 0,
+  "fallback": 8,
+  "provider_requests": 14,
+  "external_requests": 0,
+  "provider_cost_usd": null,
+  "latency_ms_p50": 0.10559998918324709,
+  "latency_ms_p95": 0.4149000160396099,
+  "scope": "Existing stage-role mapping and Investigator escalation only; no LLM quality measurement",
+  "live_provider": "LIVE NOT VERIFIED",
+  "environment": {
+    "python": "3.12.10",
+    "platform": "Windows",
+    "measurement_date": "2026-10-14"
+  }
+}

@@ -1,0 +1,167 @@
+{
+  "version": "decision-routing-v1",
+  "label_semantics": "Role labels follow existing stage mapping. Escalation labels outside Investigator are human safety-review expectations, not current implemented routing.",
+  "cases": [
+    {
+      "id": "research",
+      "state": "RESEARCHING",
+      "expected_route": "RESEARCHER",
+      "expected_escalation": false,
+      "scenario": "bounded"
+    },
+    {
+      "id": "plan",
+      "state": "PLANNING",
+      "expected_route": "PLANNER",
+      "expected_escalation": false,
+      "scenario": "bounded"
+    },
+    {
+      "id": "implement",
+      "state": "IMPLEMENTING",
+      "expected_route": "IMPLEMENTER",
+      "expected_escalation": false,
+      "scenario": "bounded"
+    },
+    {
+      "id": "analyze",
+      "state": "ANALYZING",
+      "expected_route": "TEST_ANALYZER",
+      "expected_escalation": false,
+      "scenario": "bounded"
+    },
+    {
+      "id": "review",
+      "state": "REVIEWING",
+      "expected_route": "REVIEWER",
+      "expected_escalation": false,
+      "scenario": "bounded"
+    },
+    {
+      "id": "investigate",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": false,
+      "investigator": {},
+      "scenario": "investigate"
+    },
+    {
+      "id": "low-confidence",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": true,
+      "investigator": {
+        "confidence": 0.4
+      },
+      "scenario": "low-confidence"
+    },
+    {
+      "id": "repeat",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": true,
+      "investigator": {
+        "confidence": 0.7,
+        "attempt": 2
+      },
+      "scenario": "repeat"
+    },
+    {
+      "id": "conflict",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": true,
+      "investigator": {
+        "evidence_conflict": true
+      },
+      "scenario": "conflict"
+    },
+    {
+      "id": "hypotheses",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": true,
+      "investigator": {
+        "alternative_hypotheses": 3
+      },
+      "scenario": "hypotheses"
+    },
+    {
+      "id": "defect-cycle",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": true,
+      "investigator": {
+        "defect_cycle": 2
+      },
+      "scenario": "defect-cycle"
+    },
+    {
+      "id": "exhausted",
+      "state": "INVESTIGATING",
+      "expected_route": "INVESTIGATOR",
+      "expected_escalation": false,
+      "investigator": {
+        "confidence": 0.3,
+        "escalation_count": 1
+      },
+      "scenario": "exhausted"
+    },
+    {
+      "id": "architecture",
+      "state": "PLANNING",
+      "expected_route": "PLANNER",
+      "expected_escalation": true,
+      "scenario": "architecture"
+    },
+    {
+      "id": "security",
+      "state": "REVIEWING",
+      "expected_route": "REVIEWER",
+      "expected_escalation": true,
+      "scenario": "security"
+    },
+    {
+      "id": "incomplete",
+      "state": "RESEARCHING",
+      "expected_route": "RESEARCHER",
+      "expected_escalation": true,
+      "scenario": "incomplete"
+    },
+    {
+      "id": "approval-required",
+      "state": "IMPLEMENTING",
+      "expected_route": "IMPLEMENTER",
+      "expected_escalation": true,
+      "scenario": "approval-required"
+    },
+    {
+      "id": "untrusted",
+      "state": "RESEARCHING",
+      "expected_route": "RESEARCHER",
+      "expected_escalation": true,
+      "scenario": "untrusted"
+    },
+    {
+      "id": "policy-denied",
+      "state": "PLANNING",
+      "expected_route": "PLANNER",
+      "expected_escalation": true,
+      "scenario": "policy-denied"
+    },
+    {
+      "id": "provider-timeout",
+      "state": "PLANNING",
+      "expected_route": "PLANNER",
+      "expected_escalation": false,
+      "scenario": "provider-timeout"
+    },
+    {
+      "id": "provider-unavailable",
+      "state": "REVIEWING",
+      "expected_route": "REVIEWER",
+      "expected_escalation": false,
+      "scenario": "provider-unavailable"
+    }
+  ]
+}
