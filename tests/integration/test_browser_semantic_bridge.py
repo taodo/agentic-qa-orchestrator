@@ -28,6 +28,16 @@ def smoke(name="Example Domain"):
     return value
 
 
+def manual_smoke():
+    """Exact approved TEST-001 wording from the post-merge operator HAR."""
+    value=smoke()
+    value.update(key="TEST-001",preconditions=["The Example Domain home page is available for access."],
+        required_evidence=['Evidence of the successfully loaded home page with the visible heading "Example Domain".'])
+    value["steps"][1].update(action="Observe the visible page heading.",
+        expected='The heading "Example Domain" is visibly displayed.')
+    return value
+
+
 def output(request):
     context=json.loads(request["input"][0]["content"]);obs=context["observation"];scope=context["scope"]
     name=context["approved_test_intent"]["steps"][1]["semantic_outcome"]["text"]
@@ -90,10 +100,12 @@ def execute(data,test,mode="HEADLESS"):
     return app.get_browser_batch(p.id,c.id,batch.id)
 
 
+@pytest.mark.parametrize("wording",["original","manual-smoke"])
 @pytest.mark.parametrize("generated",[False,True])
 @pytest.mark.parametrize("mode",["HEADLESS","HEADED"])
-def test_exact_smoke_is_runnable_with_same_canonical_sealed_meaning(source_free,mock_openai,generated,mode):
-    data=source_free;test,mock,observer=setup(data,mock_openai,generated=generated)
+def test_exact_smoke_is_runnable_with_same_canonical_sealed_meaning(source_free,mock_openai,generated,mode,wording):
+    value=manual_smoke() if wording=="manual-smoke" else smoke()
+    data=source_free;test,mock,observer=setup(data,mock_openai,generated=generated,value=value)
     assert test.overall_expected_result not in {s.expected for s in test.steps}
     done=execute(data,test,mode);assert done.summary["runnable"]==done.summary["passed"]==1 and done.run is not None
     assert data[0]._browser_executor.calls==[(test.key,mode)]
@@ -107,6 +119,9 @@ def test_exact_smoke_is_runnable_with_same_canonical_sealed_meaning(source_free,
     assert len(mock.calls)==len(observer.calls)==1
     assert bool(test.requirement_ids)==generated
     assert done.run.requirement_count==int(generated)
+    assert done.run.target_snapshot==observer.calls[0].target
+    if not generated:
+        assert app.list_campaign_sources(p.id,c.id).total_returned==0
 
 
 @pytest.mark.parametrize("failure",["missing","duplicate","wrong-role","weakened-load","wrong-assertion","extra-operation"])
@@ -122,10 +137,25 @@ def test_unavailable_ambiguous_or_malformed_grounding_creates_no_run(source_free
         if failure=="wrong-assertion":value["steps"][1]["assertion"]["kind"]="TEXT"
         if failure=="extra-operation":value["steps"][1]["operations"]=[dict(action="NAVIGATE",path_ref="p1",element_ref=None,value_ref=None)]
         return value
-    test,mock,_=setup(source_free,mock_openai,build=build,choose=choose)
+    test,mock,_=setup(source_free,mock_openai,value=manual_smoke(),build=build,choose=choose)
     done=execute(source_free,test)
     assert done.summary["needs_attention"]==1 and done.summary["runnable"]==0 and done.run is None
     assert done.items.items[0].qa_result is None
+
+
+@pytest.mark.parametrize("change",["extra-action","extra-expectation","text-only-visible-action"])
+def test_manual_wording_does_not_admit_extra_claims_or_drop_visibility(source_free,mock_openai,change):
+    value=manual_smoke()
+    if change=="extra-action":value["steps"][1]["action"]="Observe the visible page heading and submit the form."
+    if change=="extra-expectation":value["steps"][1]["expected"]='The heading "Example Domain" is visibly displayed in red.'
+    if change=="text-only-visible-action":
+        value["steps"][1]["expected"]='The heading reads "Example Domain".'
+        value["overall_expected_result"]='The home page loads successfully and The heading reads "Example Domain".'
+    test,mock,observer=setup(source_free,mock_openai,value=value)
+    done=execute(source_free,test)
+    assert done.summary["needs_attention"]==1 and done.summary["runnable"]==0 and done.run is None
+    assert done.items.items[0].reason=="INSUFFICIENT_TEST_INFORMATION"
+    assert not observer.calls and not mock.calls
 
 
 @pytest.mark.parametrize("change",["summary-extra","auth","secret","unsupported","different-page","unnamed-route"])
@@ -165,7 +195,7 @@ def test_real_chromium_load_and_visible_heading_evidence(source_free,mock_openai
     server=ThreadingHTTPServer(("127.0.0.1",0),Handler);thread=Thread(target=server.serve_forever,daemon=True);thread.start()
     site=f"http://127.0.0.1:{server.server_port}"
     try:
-        test,_,_=setup(source_free,mock_openai)
+        test,_,_=setup(source_free,mock_openai,value=manual_smoke())
         app=source_free[0];p,c=source_free[4:6]
         target=app.create_target(p.id,name="Controlled page",environment="LOCAL",configuration={"base_url":site})
         app.associate_campaign_target(p.id,c.id,target_id=target.id)
